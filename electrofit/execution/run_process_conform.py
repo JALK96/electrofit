@@ -21,7 +21,55 @@ project_path = find_project_root(current_dir=script_dir)
 sys.path.append(project_path)
 
 # trunk-ignore(ruff/E402)
-from electrofit.main.process_conform import main_conform_processing
+from electrofit.main.process_conform import process_conform
+from electrofit.helper.file_manipulation import find_file_with_extension, strip_extension
+from electrofit.helper.config_parser import ConfigParser
+
+
+
+def main_conform_processing():
+    """
+    Main function to process initial structure and create GROMACS input.
+    """
+
+
+    # Find current working directory
+    home = os.getcwd()
+    print("Working Directory:", home)
+
+    # Get parent directory 
+    extracted_conforms_dir = os.path.dirname(home)
+    print("Extracted Conform Directory::", extracted_conforms_dir)
+
+    # Go to the parent folder (the extracted_conforms directory) to open the configuration file (.ef) 
+    os.chdir(extracted_conforms_dir)
+
+    input = find_file_with_extension("ef")
+    config = ConfigParser(input)
+
+    # Go back to the home directory
+    os.chdir(home)
+
+    # Define 
+    base_scratch_dir = config.BaseScratchDir
+    residue_name = config.ResidueName
+    net_charge=config.Charge
+
+
+    # Define file and molecule name
+    pdb_file = find_file_with_extension("pdb")
+    molecule_name = strip_extension(pdb_file)
+
+
+    # Process the initial structure
+    process_conform(
+        molecule_name=molecule_name,
+        pdb_file=pdb_file,
+        base_scratch_dir=base_scratch_dir,
+        net_charge=net_charge,
+        residue_name=residue_name
+    )
+
 
 if __name__ == "__main__":
     main_conform_processing()

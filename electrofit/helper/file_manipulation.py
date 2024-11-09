@@ -459,6 +459,65 @@ def pdb_to_mol2(input_file, output_file, residue_name, cwd=None):
     # Write to MOL2 format
     obConversion.WriteFile(mol, output_file)
 
+def mol2_to_pdb_with_bonds(input_file, existing_pdb_file, cwd=None):
+    """
+    Convert a MOL2 file to a PDB format, extract the bond information, 
+    and insert it into an existing PDB file. Inserts bond info before ENDMDL if present;
+    otherwise, inserts before END. Adds a REMARK line documenting the bond information addition.
+
+    Args:
+        input_file (str): Path to the input MOL2 file.
+        existing_pdb_file (str): Path to the existing PDB file to append bond information.
+        cwd (str, optional): Working directory to change to before running. Defaults to None.
+    """
+    if cwd:
+        os.chdir(cwd)
+
+    obConversion = openbabel.OBConversion()
+
+    # Convert MOL2 to PDB
+    obConversion.SetInAndOutFormats("mol2", "pdb")
+    mol = openbabel.OBMol()
+    obConversion.ReadFile(mol, input_file)
+
+    # Write to a temporary PDB file to hold bond information
+    temp_pdb_path = "temp_with_bonds.pdb"
+    obConversion.WriteFile(mol, temp_pdb_path)
+
+    # Extract bond information from temporary PDB file
+    bond_info = []
+    with open(temp_pdb_path, 'r') as pdb_temp:
+        for line in pdb_temp:
+            if line.startswith("CONECT"):
+                bond_info.append(line)
+
+    # Clean up temporary file
+    os.remove(temp_pdb_path)
+
+    # Create the REMARK line to document the added bond information
+    remark_line = f"REMARK   1 EDITED BY electrofit: Added bond information from {os.path.basename(input_file)}\n"
+
+    # Read and modify the existing PDB content
+    modified_pdb_content = [remark_line]  # Add the REMARK line at the beginning
+    endmdl_found = False
+    with open(existing_pdb_file, 'r') as existing_pdb:
+        for line in existing_pdb:
+            # Insert bond info right before ENDMDL or END, based on the first found
+            if not endmdl_found and line.strip() == "ENDMDL":
+                modified_pdb_content.extend(bond_info)
+                endmdl_found = True
+            elif line.strip() == "END" and not endmdl_found:
+                modified_pdb_content.extend(bond_info)
+                endmdl_found = True
+            modified_pdb_content.append(line)  # Add current line
+
+    # Write the modified content back to the PDB file
+    with open(existing_pdb_file, 'w') as existing_pdb:
+        existing_pdb.writelines(modified_pdb_content)
+
+    print(f"Bond information inserted before ENDMDL or END in {existing_pdb_file}")
+    print(f"REMARK added: {remark_line.strip()}")
+
 def parse_mol2(mol2_file):
     """
     Parses the MOL2 file to extract atoms and bonds.

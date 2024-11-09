@@ -13,7 +13,7 @@ PROJECT_ROOT="${SCRIPT_DIR%%electrofit*}electrofit"
 PYTHON_SCRIPT="$PROJECT_ROOT/electrofit/execution/run_process_conform.py"
 
 # Remote server details
-REMOTE_HOST="qcm08"
+REMOTE_HOST="qcm05"
 
 # Execute the command on the remote server via SSH
 ssh "$REMOTE_HOST" "cd \"$SCRIPT_DIR\" && source ~/.bashrc && screen -dmS \"$SCREEN_SESSION\" bash -c \"conda activate AmberTools23; python '$PYTHON_SCRIPT'; exec bash\""

@@ -26,26 +26,32 @@ project_path = find_project_root(current_dir=script_dir)
 
 sys.path.append(project_path)
 
-from electrofit.helper.file_manipulation import find_file_with_extension
+from electrofit.helper.file_manipulation import find_file_with_extension, mol2_to_pdb_with_bonds
 from electrofit.helper.config_parser import ConfigParser
 
 
 
-process_dir = os.path.join(project_path, "old/process")
+process_dir = os.path.join(project_path, "process")
 
 # Path to the bash script you want to copy
 bash_script_path = os.path.join(project_path,"electrofit/bash/pc.sh")
+input_data_dir = os.path.join(project_path,"data/input")
 
 # Iterate over each subdirectory in the process directory
 for sub_dir in os.listdir(process_dir):
 
+
     # Define paths for the run_gmx_simulation directory and extracted_conforms directory
     sim_dir = os.path.join(process_dir, sub_dir, "run_gmx_simulation")
-    input_file_path = os.path.join(sim_dir, find_file_with_extension("ef"))
+    os.chdir(sim_dir)
+    input_file_name = find_file_with_extension("ef")
+    input_file_path = os.path.join(sim_dir, input_file_name)
 
     config=ConfigParser(input_file_path)
     molecule_name = config.MoleculeName
     residue_name = config.ResidueName
+
+    input_mol2_file = os.path.join(input_data_dir, sub_dir, f"{molecule_name}.mol2")
 
     extracted_conforms_dir = os.path.join(process_dir, sub_dir, "extracted_conforms")
 
@@ -58,6 +64,10 @@ for sub_dir in os.listdir(process_dir):
 
     # Create extracted_conforms directory if it doesn't exist
     os.makedirs(extracted_conforms_dir, exist_ok=True)
+
+    
+    # Copy the bash script into the conform_dir
+    shutil.copy(input_file_path, extracted_conforms_dir)
 
     # Load the trajectory
     raw_traj = md.load(traj_path, top=gro_path)
@@ -84,5 +94,9 @@ for sub_dir in os.listdir(process_dir):
         
         # Save the PDB file in its own directory
         c.save_pdb(conform_path)
+
+        mol2_to_pdb_with_bonds(input_file=input_mol2_file, existing_pdb_file=conform_path)
+
+
 
     print(f"Extracted conformations and bash script saved for {sub_dir} in {extracted_conforms_dir}")

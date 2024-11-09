@@ -28,7 +28,7 @@ from electrofit.helper.setup_finalize_scratch import (
     setup_scratch_directory,
 )
 
-def process_conform(molecule_name, pdb_file, base_scratch_dir, net_charge): 
+def process_conform(molecule_name, pdb_file, base_scratch_dir, net_charge, residue_name): 
     """
     Processes the conformers from the simulation output: Antechamber, Gaussian calculation, espgen, RESP fitting.
 
@@ -46,8 +46,6 @@ def process_conform(molecule_name, pdb_file, base_scratch_dir, net_charge):
     try:
 
         # Step 0: Resolve Structure
-        short_molecule_name = molecule_name[0] + molecule_name[2:]  # Molecule Name: IPXXc# - Slice out the second character -> IXXc#
-        residue_name = f"{short_molecule_name}_"
         mol2_file = f"{molecule_name}.mol2"
         pdb_to_mol2(pdb_file, mol2_file, residue_name, cwd=scratch_dir)
 
@@ -99,7 +97,7 @@ def process_conform(molecule_name, pdb_file, base_scratch_dir, net_charge):
         run_command(f"python {edit_resp_script} ANTECHAMBER_RESP1.IN equiv_groups.json ANTECHAMBER_RESP1_MOD.IN", cwd=scratch_dir)
 
         # Re-define the respin1-file
-        respin1_file = os.path.join(scratch_dir, "ANTECHAMBER_RESP1_MOD.IN")
+        respin1_file = "ANTECHAMBER_RESP1_MOD.IN"
 
         # Write symmetry output of alterd RESP1_MOD.IN to check/compare
         run_command(f"python {write_symmetry} {respin1_file} symmetry_resp_MOD.txt", cwd=scratch_dir)
@@ -135,25 +133,3 @@ def process_conform(molecule_name, pdb_file, base_scratch_dir, net_charge):
         finalize_scratch_directory(original_dir, scratch_dir, input_files)
         exit(1)  # Exit the script with a non-zero status
 
-
-def main_conform_processing(net_charge=None):
-    """
-    Main function to process initial structure and create GROMACS input.
-    """
-
-    # Define file paths an molecule name
-    pdb_file = find_file_with_extension("pdb")
-    molecule_name = strip_extension(pdb_file)
-    base_scratch_dir = "/scratch/johannal96/tmp"
-    if net_charge is None: 
-        net_charge = (
-            extract_charge_from_folder_name_conform()
-        )  # Define the net charge of your molecule
-
-    # Process the initial structure
-    process_conform(
-        molecule_name=molecule_name,
-        pdb_file=pdb_file,
-        base_scratch_dir=base_scratch_dir,
-        net_charge=net_charge,
-    )
