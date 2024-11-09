@@ -1,0 +1,299 @@
+import logging
+import os
+
+import matplotlib.pyplot as plt
+import pandas as pd
+
+from electrofit.commands.run_commands import run_command
+from electrofit.helper.file_manipulation import (
+    include_ff,
+    include_ions,
+    include_tip3p,
+    remove_defaults_section_lines,
+    replace_posres_in_file,
+    strip_extension,
+)
+from electrofit.helper.set_logging import setup_logging
+from electrofit.helper.setup_finalize_scratch import (
+    finalize_scratch_directory,
+    setup_scratch_directory,
+)
+
+def plot_svg(svg):
+    # Suppress logging
+    logging.disable(logging.CRITICAL)
+    name = strip_extension(svg)
+
+    df = pd.read_csv(f"{svg}", sep="\s+", header=None, names=["time", f"{name}"])
+
+    plt.figure(figsize=(8, 6))
+    plt.plot(
+        df["time"], df[f"{name}"], color="darkblue", linestyle="-", label=f"{name}"
+    )
+    plt.xlabel("time (s)", fontsize=14)
+    plt.ylabel(f"{name}", fontsize=14)
+    plt.axhline(
+        0, color="black", linewidth=0.8, linestyle="--"
+    )
+    plt.tight_layout()
+    plt.savefig(f"{name}.pdf", format="pdf")
+    plt.close()
+
+    # Re-enable logging if needed (optional)
+    logging.disable(logging.NOTSET)
+
+
+def set_up_production(m_gro, MDP_dir, base_scratch_dir, box_type="dodecahedron", cation="NA", anion="CL", d="1.2" ,conc="0.15"):
+    """
+    Set up and execute a production molecular dynamics (MD) simulation using GROMACS following input generation by acpype.
+
+    This function automates the preparation and execution of a molecular dynamics simulation by performing the following steps:
+
+    1. **File Preparation**:
+       - Strips the extension from the provided `.gro` file to derive base filenames for topology (`.itp` and `.top`) files.
+       - Modifies the topology file by replacing position restraints (`POSRES_LIG` with `POSRES`).
+       - Includes TIP3P water and ion parameters into the topology file.
+
+    2. **Scratch Directory Setup**:
+       - Creates a scratch directory for processing data and running simulations, copying necessary input files into it.
+
+    3. **System Configuration**:
+       - Defines a simulation box with the ligand at the center, ensuring sufficient distance (`d`) from the edges. The box type can be specified (default is `'dodecahedron'`).
+       - Solvates the system with water molecules.
+       - Adds ions to neutralize the system and set the specified ion concentration (`conc`).
+
+    4. **Energy Minimization and Equilibration**:
+       - Performs energy minimization to relieve any steric clashes or unfavorable interactions.
+       - Conducts NVT (constant Number of particles, Volume, and Temperature) and NPT (constant Number of particles, Pressure, and Temperature) equilibration steps to stabilize the system.
+
+    5. **Production Run**:
+       - Prepares input files for the production MD run.
+       - Executes the production MD simulation.
+
+    6. **Post-processing**:
+       - Centers the molecule in the simulation box.
+       - Calculates the minimum distance between the molecule and its periodic images.
+       - Computes the radius of gyration to assess the compactness of the molecule.
+
+    7. **Cleanup**:
+       - Finalizes the scratch directory by moving or copying output files back to the original directory and cleaning up temporary files.
+
+    Args:
+        m_gro (str):
+            Path to the GROMACS `.gro` input file after RESP fitting.
+            Example: `"input.gro"`
+
+        MDP_dir (str):
+            Path to the directory containing GROMACS MDP (Molecular Dynamics Parameter) files.
+            Example: `"/path/to/MDP"`
+
+        base_scratch_dir (str):
+            Base directory for creating a scratch space where data will be processed and simulations will be performed.
+            Example: `"/scratch/user/tmp"`
+
+        box_type (str, optional):
+            Type of the simulation box to use. Default is `"dodecahedron"`.
+            Examples include `"cubic"`, `"triclinic"`, etc.
+
+        cation (str, optional):
+            The cation to add to the system to neutralize the charge. Default is `"NA"`.
+            Ensure that the cation name matches the force field parameters.
+
+        anion (str, optional):
+            The anion to add to the system to neutralize the charge. Default is `"CL"`.
+            Ensure that the anion name matches the force field parameters.
+
+        d (str or float, optional):
+            Distance (in nanometers) from the molecule to the edge of the simulation box.
+            Default is `"1.2"`. This defines the minimum distance between any atom of the molecule and the box edge.
+
+        conc (str or float, optional):
+            Ion concentration (in mol/L) to add to the system.
+            Default is `"0.15"`. This sets the molar concentration of ions in the simulation.
+
+    Raises:
+        FileNotFoundError:
+            If any of the specified input files (`m_gro`, MDP files) or directories (`MDP_dir`, `base_scratch_dir`) do not exist.
+
+        RuntimeError:
+            If any of the GROMACS commands executed within the function fail. This includes errors during box definition, solvation, ion addition, energy minimization, equilibration, or production runs.
+
+        Exception:
+            For any other unforeseen errors that may occur during the execution of the function.
+
+    Returns:
+        None
+
+    Example:
+        ```python
+        set_up_production(
+            m_gro="IP_010101_resp_GMX.gro",
+            MDP_dir="/path/to/MDP",
+            base_scratch_dir="/scratch/user/tmp",
+            box_type="dodecahedron",
+            cation="NA",
+            anion="CL",
+            d="1.2",
+            conc="0.15"
+        )
+        ```
+
+    Notes:
+        - Ensure that all GROMACS executables (`gmx`) are accessible in the system's PATH.
+        - The `MDP_dir` must contain the necessary MDP files for each simulation step (`em_steep.mdp`, `NVT.mdp`, `NPT.mdp`, `Production.mdp`).
+        - The parameters `box_type`, `cation`, `anion`, `d`, and `conc` allow customization of the simulation setup, including the box geometry, ion types, box size, and ion concentration.
+        - The ion names (`cation`, `anion`) should match the names used in your force field files (`ions.itp`) and the GROMACS library.
+        - The function generates several intermediate files (e.g., `ions.tpr`, `em_steep.tpr`, `nvt.tpr`, `npt.tpr`, `md.tpr`) which are essential for the simulation workflow.
+        - Ensure that the input files and directories exist and have the correct permissions before running the function.
+    ```
+    """
+    fullpath = os.getcwd()
+    # Initialize logging with log file in cwd
+    log_file_path = os.path.join(fullpath, "process.log")
+    setup_logging(log_file_path)
+    logging.info(f"Logging initialized. Log file: {log_file_path}")
+
+    # Exptract name of your input
+    m_gro_name = strip_extension(m_gro)
+    m_itp = f"{m_gro_name}.itp"
+    m_top = f"{m_gro_name}.top"
+    m_posres = f"posre_{m_gro_name.replace('_GMX', '')}.itp"
+
+    if not os.path.isfile(m_itp):
+        raise FileNotFoundError(f"The file {m_itp} does not exist.")
+    if not os.path.isfile(m_top):
+        raise FileNotFoundError(f"The file {m_top} does not exist.")
+    if not os.path.isfile(m_posres):
+        raise FileNotFoundError(f"The file {m_posres} does not exist.")
+
+    # Replace "POSRES_LIG" with "POSRES" in topology
+    replace_posres_in_file(m_top)
+
+    # Add parameters for tip3p and ions to the topology file (include atomtypes.itp/tip3p.itp/ions.itp)
+    include_ff(m_top)
+    include_tip3p(m_top)
+    include_ions(m_top)
+    remove_defaults_section_lines(m_top)
+
+    # Setup scratch directory
+    input_files = [
+        m_gro,
+        m_itp,
+        m_top,
+        m_posres,
+        MDP_dir,
+    ]  # Only include existing input files/directories
+    scratch_dir, original_dir = setup_scratch_directory(input_files, base_scratch_dir)
+
+    # Go to scratch to call the xvg-files with pandas for plotting
+    os.chdir(scratch_dir)
+
+    # Define dodecahedron box with ligand at center, > d nm to edge and rotate the system to the principal axes (-princ)
+    run_command(
+        f"echo 0 | gmx editconf -f {m_gro} -o {m_gro_name}_box.gro -bt {box_type} -d {d} -c -princ -nobackup",
+        cwd=scratch_dir,
+    )
+
+    # Solvate the system
+    run_command(
+        f"gmx solvate -cp {m_gro_name}_box.gro -cs spc216 -o {m_gro_name}_tip3p.gro -p {m_gro_name}.top -nobackup",
+        cwd=scratch_dir,
+    )
+
+    # Visualize changes made to topology
+    run_command(f"tail {m_gro_name}.top", cwd=scratch_dir)
+
+    # Create empty ions.mdp file (neccessary in order to generate ions.tpr file)
+    run_command("touch ions.mdp", cwd=scratch_dir)
+
+    # Add Ions
+    run_command(
+        f"gmx grompp -f ions.mdp -c {m_gro_name}_tip3p.gro -p {m_gro_name}.top -o ions.tpr",
+        cwd=scratch_dir,
+    )
+
+    # Replace Solvent with Ions (i.e. NA, CL)
+    run_command(
+        f'echo "SOL" | gmx genion -s ions.tpr -o {m_gro_name}_tip3p_ions.gro -conc {conc} -p {m_gro_name}.top -pname {cation} -nname {anion} -neutral',
+        cwd=scratch_dir,
+    )
+
+    # Visualize changes made to topology
+    run_command(f"tail {m_gro_name}.top", cwd=scratch_dir)
+
+    # Energy minimization
+    run_command(
+        f"gmx grompp -f MDP/em_steep.mdp -c {m_gro_name}_tip3p_ions.gro -p {m_gro_name}.top -o em_steep.tpr",
+        cwd=scratch_dir,
+    )
+    run_command("gmx mdrun -deffnm em_steep -nobackup", cwd=scratch_dir)
+
+    # Visualize energy convergence
+    run_command(
+        'echo "Potential\n0\n" | gmx energy -f em_steep.edr -o potential.xvg -xvg none',
+        cwd=scratch_dir,
+    )
+    plot_svg("potential.xvg")
+
+    # Equilibrate the system
+    # NVT Equilibration
+    run_command(
+        f"gmx grompp -f MDP/NVT.mdp -c em_steep.gro -r em_steep.gro -p {m_gro_name}.top -o nvt.tpr -nobackup",
+        cwd=scratch_dir,
+    )
+    run_command("gmx mdrun -deffnm nvt -nt 16 -pin on -nobackup", cwd=scratch_dir)
+    run_command(
+        'echo "Temperature" | gmx energy -f nvt.edr -o temperature.xvg -xvg none -b 20',
+        cwd=scratch_dir,
+    )
+    plot_svg("temperature.xvg")
+
+    # NPT Equilibration
+    run_command(
+        f"gmx grompp -f MDP/NPT.mdp -c nvt.gro -r nvt.gro -p {m_gro_name}.top -o npt.tpr -nobackup",
+        cwd=scratch_dir,
+    )
+    run_command("gmx mdrun -deffnm npt -nt 16 -pin on -nobackup", cwd=scratch_dir)
+    run_command(
+        'echo "Pressure" | gmx energy -f npt.edr -o pressure.xvg -xvg none',
+        cwd=scratch_dir,
+    )
+    plot_svg("pressure.xvg")
+
+    # Production: create input for production run
+    run_command(
+        f"gmx grompp -f MDP/Production.mdp -c npt.gro -t npt.cpt -p {m_gro_name}.top -o md.tpr",
+        cwd=scratch_dir,
+    )
+
+    # Production run
+    run_command(
+        "gmx mdrun -deffnm md -nt 16 -pin on -nobackup", cwd=scratch_dir
+    )  # -v makes gmx verbose (prints out intermediat steps or chunks of information, for the inpatient)
+
+    # Center molecule
+    run_command(
+        'echo "1\n0\n" | gmx trjconv -s md.tpr -f md.xtc -o md_center.xtc -center -pbc mol',
+        cwd=scratch_dir,
+    )
+
+    # Alternativly center molecule and strip solvent
+    # run_command('echo "1\n1\n" | gmx trjconv -s md.tpr -f md.xtc -o md_center.xtc -center -pbc mol', cwd=scratch_dir)
+
+    # Calculate distance between molecule and its periodic image
+    run_command(
+        'echo "1\n" | gmx mindist -s md.tpr -f md_center.xtc -pi -od mindist.xvg',
+        cwd=scratch_dir,
+    )
+
+    # Radius of gyration (compactness)
+    run_command(
+        'echo "1" | gmx gyrate -f md_center.xtc -s md.tpr -o gyrate.xvg -xvg none',
+        cwd=scratch_dir,
+    )
+    plot_svg("gyrate.xvg")
+
+    # Finalize scratch directory
+    finalize_scratch_directory(original_dir, scratch_dir, input_files)
+
+

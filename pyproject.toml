@@ -1,0 +1,14 @@
+[tool.poetry]
+name = "electrofit"
+version = "0.1.0"
+description = "package for multi RESP fitting for subsequent MD simulations"
+authors = ["JALK96 <johannarthurlaux@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

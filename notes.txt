@@ -1,0 +1,10 @@
+NOTES:
+-----
+
+for debugging: look for """System has non-zero total charge:""" in old simulation data to identify if the charge do not match the actual charge of the molecule!!!
+
+gromacs says that behrendsen is better suited compared to Parrinello (pcoupl)
+
+gromacs topology location: 
+
+/home/johannal96/miniconda3/envs/AmberTools23/share/gromacs/top
