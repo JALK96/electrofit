@@ -117,7 +117,7 @@ def process_initial_structure(molecule_name, mol2_file, base_scratch_dir, additi
         )
         logging.info("RESP fitting stage 2 completed.")
 
-        # Step 6: Generate mol2 file with RESP charges (comment: the above step 5 is no longer necesary with this step)
+        # Step 6: Generate mol2 file with RESP charges
         mol2_resp = f"{molecule_name}_resp.mol2"
 
         update_mol2 = os.path.join(project_path, "electrofit/execution/update_mol2.py")

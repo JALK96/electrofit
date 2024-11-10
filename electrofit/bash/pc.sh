@@ -4,7 +4,7 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Name of the screen session: parent of parent directory basename and current directory basename
-SCREEN_SESSION="$(basename "$(dirname "$(dirname "$SCRIPT_DIR")")")_$(basename "$SCRIPT_DIR")"
+SCREEN_SESSION="$(basename "$(dirname "$SCRIPT_DIR")")_$(basename "$SCRIPT_DIR")"
 
 # Extract the path up to and including 'electrofit' from SCRIPT_DIR
 PROJECT_ROOT="${SCRIPT_DIR%%electrofit*}electrofit"

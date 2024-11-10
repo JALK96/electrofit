@@ -53,7 +53,8 @@ def main_conform_processing():
     # Define 
     base_scratch_dir = config.BaseScratchDir
     residue_name = config.ResidueName
-    net_charge=config.Charge
+    net_charge = config.Charge
+    adjust_sym = config.AdjustSymmetry
 
 
     # Define file and molecule name
@@ -67,7 +68,8 @@ def main_conform_processing():
         pdb_file=pdb_file,
         base_scratch_dir=base_scratch_dir,
         net_charge=net_charge,
-        residue_name=residue_name
+        residue_name=residue_name,
+        adjust_symm=adjust_sym
     )
 
 

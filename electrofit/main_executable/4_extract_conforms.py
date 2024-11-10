@@ -43,13 +43,24 @@ for sub_dir in os.listdir(process_dir):
 
     # Define paths for the run_gmx_simulation directory and extracted_conforms directory
     sim_dir = os.path.join(process_dir, sub_dir, "run_gmx_simulation")
+    pis_dir = os.path.join(process_dir, sub_dir, "run_gau_create_gmx_in")
     os.chdir(sim_dir)
     input_file_name = find_file_with_extension("ef")
     input_file_path = os.path.join(sim_dir, input_file_name)
 
+    
+
     config=ConfigParser(input_file_path)
     molecule_name = config.MoleculeName
     residue_name = config.ResidueName
+    adjust_sym = config.AdjustSymmetry
+
+    if adjust_sym:
+        respin1_file = os.path.join(pis_dir, "ANTECHAMBER_RESP1_MOD.IN")
+    else:
+        respin1_file = os.path.join(pis_dir, "ANTECHAMBER_RESP1.IN")
+    
+    respin2_file = os.path.join(pis_dir, "ANTECHAMBER_RESP2.IN")
 
     input_mol2_file = os.path.join(input_data_dir, sub_dir, f"{molecule_name}.mol2")
 
@@ -66,7 +77,7 @@ for sub_dir in os.listdir(process_dir):
     os.makedirs(extracted_conforms_dir, exist_ok=True)
 
     
-    # Copy the bash script into the conform_dir
+    # Copy the config file into the conform_dir
     shutil.copy(input_file_path, extracted_conforms_dir)
 
     # Load the trajectory
@@ -87,6 +98,10 @@ for sub_dir in os.listdir(process_dir):
 
         # Copy the bash script into the conform_dir
         shutil.copy(bash_script_path, conform_dir)
+
+        # Copy the respin files to the conform dir
+        shutil.copy(respin1_file, conform_dir)
+        shutil.copy(respin2_file, conform_dir)
 
         # Define the path for the PDB file
         conform_name = f"{molecule_name}c{i}.pdb"
