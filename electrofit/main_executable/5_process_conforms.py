@@ -1,4 +1,5 @@
 import os
+import time 
 import sys
 
 def find_project_root(current_dir, project_name="electrofit"):
@@ -23,12 +24,31 @@ from electrofit.commands.run_commands import run_command
 
 dst = os.path.join(project_path, "process")
 
-
-# Walk through the dst directory and its subdirectories
+# Step 1: Collect all pc.sh script paths
+all_scripts = []
 for root, dirs, files in os.walk(dst):
     for item in files:
         if item == "pc.sh":
-            # Construct the full path to the script
-            script_path = os.path.join(root, item)
-            # Run the script using bash
-            run_command(f'bash {script_path}')
+            all_scripts.append(os.path.join(root, item))
+
+# Step 2: Run scripts in batches of 20 every 10 minutes
+batch_size = 20
+executed_scripts = set()  # Track executed scripts
+
+while len(executed_scripts) < len(all_scripts):
+    # Select the next 20 scripts that haven't been executed yet
+    scripts_to_run = [script for script in all_scripts if script not in executed_scripts][:batch_size]
+    
+    # Run each script in the batch
+    for script_path in scripts_to_run:
+        run_command(f'bash {script_path}')
+        executed_scripts.add(script_path)  # Mark this script as executed
+    
+    # Check if there are more scripts left to run
+    remaining_scripts = len(all_scripts) - len(executed_scripts)
+    if remaining_scripts == 0:
+        print("All scripts have been executed.")
+        break
+
+    print(f"Executed {len(executed_scripts)} scripts so far. Waiting 10 minutes before running the next batch of {batch_size}.")
+    time.sleep(600)  # Wait 10 minutes before running the next batch
