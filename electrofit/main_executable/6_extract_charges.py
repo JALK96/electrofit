@@ -16,16 +16,6 @@ def find_project_root(current_dir, project_name="electrofit"):
             return root  # Return the outermost match found
         current_dir = parent_dir
 
-script_dir = os.path.dirname(os.path.abspath(__file__))
-project_path = find_project_root(current_dir=script_dir)
-
-
-sys.path.append(project_path)
-
-from electrofit.helper.file_manipulation import find_file_with_extension, mol2_to_pdb_with_bonds
-from electrofit.helper.config_parser import ConfigParser
-
-
 def parse_mol2(mol2_file):
     """
     Parses the MOL2 file to extract atom names and charges.
@@ -144,9 +134,9 @@ def plot_charges(atoms_dict, base_dir):
     #plt.show()
 
 
-
-
-
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_path = find_project_root(current_dir=script_dir)
+sys.path.append(project_path)
 process_dir = os.path.join(project_path, "process")
 
 
