@@ -41,7 +41,7 @@ input_data_dir = os.path.join(project_path,"data/input")
 for sub_dir in os.listdir(process_dir):
 
 
-    # Define paths for the run_gmx_simulation directory and extracted_conforms directory
+    # Define paths 
     sim_dir = os.path.join(process_dir, sub_dir, "run_gmx_simulation")
     pis_dir = os.path.join(process_dir, sub_dir, "run_gau_create_gmx_in")
     os.chdir(sim_dir)
