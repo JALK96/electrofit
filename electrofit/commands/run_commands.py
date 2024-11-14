@@ -229,7 +229,7 @@ def run_acpype(mol2_file, net_charge, scratch_dir, atom_type="gaff2"):
     - scratch_dir (str): Directory where the command is executed.
     """
 
-    command = f"acpype -i {mol2_file} -n {net_charge} -a {atom_type} -c user"
+    command = f"acpype -i {mol2_file} -n {net_charge} -a {atom_type} -c user -o gmx"
     run_command(command, cwd=scratch_dir)
     logging.info("acpype processing completed.")
 

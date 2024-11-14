@@ -23,11 +23,10 @@ from electrofit.commands.run_commands import run_command
 
 dst = os.path.join(project_path, "process")
 
-
 # Walk through the dst directory and its subdirectories
 for root, dirs, files in os.walk(dst):
     for item in files:
-        if item == "gmx.sh"and os.path.basename(root) == "run_gmx_simulation":
+        if item == "gmx.sh" and os.path.basename(root) == "run_final_gmx_simulation":
             # Construct the full path to the script
             script_path = os.path.join(root, item)
             # Run the script using bash

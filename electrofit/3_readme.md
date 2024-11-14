@@ -2,6 +2,11 @@
 
 This document provides an abstracted overview of the operations performed during the execution process of the `set_up_production` function located in the main package. Each step is generalized to avoid explicit file naming.
 
+  **Functionality Overview**:
+
+- *Automates the setup and execution of a molecular dynamics simulation workflow using GROMACS.*
+- *Streamlines process from system preparation to simulation execution and analysis.*
+
 ---
 
 1. **Initialize Logging and Set Up Scratch Directory**
@@ -17,129 +22,167 @@ This document provides an abstracted overview of the operations performed during
 
 3. **Define Simulation Box and Center Molecule**
    - **Command:**  
+
      ```bash
      gmx editconf -f input_structure.gro -o boxed_structure.gro -bt box_type -d distance -c -princ -nobackup
      ```
+
    - *Defines a simulation box of specified type (e.g., dodecahedron) with the solute centered and at least a certain distance from the box edges.*
    - *Rotates the system to align along the principal axes.*
 
 4. **Solvate the System**
    - **Command:**  
+
      ```bash
      gmx solvate -cp boxed_structure.gro -cs spc216 -o solvated_structure.gro -p topology.top -nobackup
      ```
+
    - *Adds water molecules to solvate the system.*
    - *Updates the topology file to reflect the added solvent.*
 
 5. **Prepare for Ion Addition**
    - **Command:**  
+
      ```bash
      touch ions.mdp
      ```
+
    - *Creates an empty MDP file required for preprocessing before ion addition.*
 
 6. **Add Ions to Neutralize the System and Set Ion Concentration**
    - **Command:**  
+
      ```bash
      gmx grompp -f ions.mdp -c solvated_structure.gro -p topology.top -o ions.tpr
      ```
+
    - *Preprocesses the input files to generate a portable binary run input file (`ions.tpr`) for ion addition.*
    - **Command:**  
+
      ```bash
      echo "SOL" | gmx genion -s ions.tpr -o ionized_structure.gro -conc concentration -p topology.top -pname cation -nname anion -neutral
      ```
+
    - *Replaces solvent molecules with ions to neutralize the system and achieve the specified ion concentration.*
    - *Updates the topology file to reflect the added ions.*
 
 7. **Perform Energy Minimization**
    - **Command:**  
+
      ```bash
      gmx grompp -f em_steep.mdp -c ionized_structure.gro -p topology.top -o em.tpr
      ```
+
    - *Preprocesses input files for energy minimization using the steepest descent algorithm.*
    - **Command:**  
+
      ```bash
      gmx mdrun -deffnm em -nobackup
      ```
+
    - *Runs the energy minimization simulation.*
 
 8. **Extract Potential Energy and Plot**
    - **Command:**  
+
      ```bash
      echo "Potential\n0\n" | gmx energy -f em.edr -o potential.xvg -xvg none
      ```
+
    - *Extracts potential energy data from the energy minimization output for analysis.*
    - *Plots the potential energy data to visualize the minimization progress.*
 
 9. **Equilibrate the System under NVT Ensemble**
    - **Command:**  
+
      ```bash
      gmx grompp -f NVT.mdp -c em.gro -r em.gro -p topology.top -o nvt.tpr -nobackup
      ```
+
    - *Preprocesses input files for NVT equilibration, using the minimized structure and position restraints.*
    - **Command:**  
+
      ```bash
      gmx mdrun -deffnm nvt -nt 16 -pin on -nobackup
      ```
+
    - *Runs the NVT equilibration simulation using multiple threads and CPU pinning for performance optimization.*
    - **Command:**  
+
      ```bash
      echo "Temperature" | gmx energy -f nvt.edr -o temperature.xvg -xvg none -b 20
      ```
+
    - *Extracts temperature data, starting after an initial period to exclude transient effects.*
    - *Plots the temperature data to verify that the system has reached the target temperature.*
 
 10. **Equilibrate the System under NPT Ensemble**
     - **Command:**  
+
       ```bash
       gmx grompp -f NPT.mdp -c nvt.gro -r nvt.gro -p topology.top -o npt.tpr -nobackup
       ```
+
     - *Preprocesses input files for NPT equilibration, continuing from the NVT equilibrated structure.*
     - **Command:**  
+
       ```bash
       gmx mdrun -deffnm npt -nt 16 -pin on -nobackup
       ```
+
     - *Runs the NPT equilibration simulation.*
     - **Command:**  
+
       ```bash
       echo "Pressure" | gmx energy -f npt.edr -o pressure.xvg -xvg none
       ```
+
     - *Extracts pressure data from the NPT equilibration output.*
     - *Plots the pressure data to verify that the system has stabilized at the target pressure.*
 
 11. **Prepare and Run Production MD Simulation**
     - **Command:**  
+
       ```bash
       gmx grompp -f Production.mdp -c npt.gro -t npt.cpt -p topology.top -o md.tpr
       ```
+
     - *Preprocesses input files for the production MD run, using the final structure and checkpoint from NPT equilibration.*
     - **Command:**  
+
       ```bash
       gmx mdrun -deffnm md -nt 16 -pin on -nobackup
       ```
+
     - *Runs the production MD simulation.*
 
 12. **Process Trajectory for Analysis**
     - **Command:**  
+
       ```bash
       echo "1\n0\n" | gmx trjconv -s md.tpr -f md.xtc -o md_center.xtc -center -pbc mol
       ```
+
     - *Centers the trajectory on the molecule of interest and corrects for periodic boundary conditions by making molecules whole.*
     - *Outputs the processed trajectory for further analysis.*
 
 13. **Calculate Minimum Distance Between Periodic Images**
     - **Command:**  
+
       ```bash
       echo "1" | gmx mindist -s md.tpr -f md_center.xtc -pi -od mindist.xvg
       ```
+
     - *Calculates the minimum distance between the molecule and its periodic images to ensure the simulation box is sufficiently large.*
     - *Outputs the distance data for verification.*
 
 14. **Calculate Radius of Gyration**
     - **Command:**  
+
       ```bash
       echo "1" | gmx gyrate -f md_center.xtc -s md.tpr -o gyrate.xvg -xvg none
       ```
+
     - *Computes the radius of gyration over time to assess the structural stability and compactness of the molecule.*
     - *Plots the radius of gyration data for analysis.*
 
@@ -173,10 +216,6 @@ This document provides an abstracted overview of the operations performed during
 - **Prerequisites**:
   - *GROMACS must be installed and accessible in the system's PATH.*
   - *MDP files for each simulation step must be prepared in the specified `MDP_dir` directory.*
-
-- **Functionality Overview**:
-  - *Automates the setup and execution of a molecular dynamics simulation workflow using GROMACS.*
-  - *Streamlines processes from system preparation to simulation execution and analysis.*
 
 ---
 

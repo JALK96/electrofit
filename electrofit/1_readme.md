@@ -3,7 +3,9 @@
 This document provides an abstracted overview of the operations performed during the execution process of `process_initial_structure` script located in the main package. Each step is generalized to avoid explicit file naming.
 
 ---
+
 0. **Resolve Structure**
+   - *The input MOL2 file is converted to a PDB and back by open babel to ensure correct file formatting for subsequent steps.*
 
 1. **Create Scratch Directory**
    - *Initializes a temporary working directory for processing intermediate files, without interfering with regular update protocols.*
@@ -208,14 +210,19 @@ This document provides an abstracted overview of the operations performed during
 
 ## **Notes**
 
-- **Temporary Workspace Management**: Establishes and cleans up a dedicated environment to ensure that intermediate processing does not interfere with the main directories.
+- **Temporary Workspace Management**:
+  - *Establishes and cleans up a dedicated environment to ensure that intermediate processing does not interfere with the main directories.*
 
-- **Input and Output Handling**: Ensures secure transfer of necessary files for processing and safely returns generated outputs without overwriting existing files.
+- **Input and Output Handling**:
+  - *Ensures secure transfer of necessary files for processing and safely returns generated outputs without overwriting existing files.*
 
-- **Computational Chemistry Tools Execution**: Utilizes specialized tools (`espgen`, `antechamber`, `bondtype`, `atomtype`, `respgen`, `resp`, `prepgen`, `acpype`) for charge parameterization and fitting essential for accurate simulations.
+- **Custom Scripting for Data Processing**:
+  - *Employs user-defined Python scripts to handle specific tasks like symmetry information extraction, RESP input modification, and MOL2 file updates.*
 
-- **Custom Scripting for Data Processing**: Employs user-defined Python scripts to handle specific tasks like symmetry information extraction, RESP input modification, and MOL2 file updates, ensuring tailored processing steps.
+- **Logging and Verification**:
+  - *Maintains detailed logs throughout the process for transparency, debugging, and verification of each step's successful execution.*
 
-- **Logging and Verification**: Maintains detailed logs throughout the process for transparency, debugging, and verification of each step's successful execution.
+- **Prerequisites**:
+  - *AmberTools23 must be installed as a conda-environment, and within the environment `antechamber` and `acpype` must be installed. The environment must be named AmberTools23 and accessible in the system's PATH.*
 
 ---
