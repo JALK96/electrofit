@@ -4,7 +4,11 @@ import matplotlib.pyplot as plt
 import sys
 import re
 import shutil
+import glob
 import fnmatch
+import matplotlib.colors as mcolors
+import json
+
 
 def find_project_root(current_dir, project_name="electrofit"):
     root = None
@@ -19,6 +23,56 @@ def find_project_root(current_dir, project_name="electrofit"):
             return root  # Return the outermost match found
         current_dir = parent_dir
 
+
+
+def adjust_atom_names(atoms_dict):
+    """
+    Adjusts atom names in the provided dictionary by appending a count to each unique element symbol.
+    
+    Parameters:
+        atoms_dict (dict): Dictionary where keys are atom names and values are properties associated with each atom.
+    
+    Returns:
+        dict: New dictionary with adjusted atom names.
+    """
+    
+    # Get the list of atom names from the dictionary keys
+    atom_names = list(atoms_dict.keys())
+
+    # Initialize a dictionary to keep track of counts for each element
+    counts = {}
+    adjusted_atom_names = []
+    
+    for name in atom_names:
+        # Extract the element symbol (handles one or two-letter symbols)
+        match = re.match(r'^([A-Z][a-z]?)(\d*)', name)
+        if match:
+            element = match.group(1)
+        else:
+            # If the name doesn't match the pattern, keep it unchanged
+            adjusted_atom_names.append(name)
+            continue
+
+        # Update the count for the element
+        counts.setdefault(element, 0)
+        counts[element] += 1
+
+        # Adjust the name with the element symbol and its count
+        adjusted_name = f"{element}{counts[element]}"
+        adjusted_atom_names.append(adjusted_name)
+
+    # Create a mapping from old names to adjusted names
+    name_mapping = dict(zip(atom_names, adjusted_atom_names))
+
+    # Update atoms_dict keys with adjusted names
+    adjusted_atoms_dict = {new_name: atoms_dict[old_name] for old_name, new_name in name_mapping.items()}
+    
+    return adjusted_atoms_dict
+
+# Example usage:
+# atoms_dict = {"H1": {}, "O1": {}, "H2": {}, "O2": {}}
+# adjusted_atoms_dict = adjust_atom_names(atoms_dict)
+# print(adjusted_atoms_dict)
 
 def parse_mol2(mol2_file):
     """
@@ -97,38 +151,7 @@ def extract_charges_from_subdirectories(base_dir, results_dir):
         charges = atom_data['charges']
         atom_data['average_charge'] = np.mean(charges) if charges else 0
     
-    # Adjust the atom names
-    atom_names = list(atoms_dict.keys())
-
-    # Initialize a dictionary to keep track of counts for each element
-    counts = {}
-
-    adjusted_atom_names = []
-    for name in atom_names:
-        # Extract the element symbol (handles one or two-letter symbols)
-        match = re.match(r'^([A-Z][a-z]?)(\d*)', name)
-        if match:
-            element = match.group(1)
-        else:
-            # If the name doesn't match the pattern, keep it unchanged
-            adjusted_atom_names.append(name)
-            continue
-
-        # Update the count for the element
-        counts.setdefault(element, 0)
-        counts[element] += 1
-
-        # Adjust the name with the element symbol and its count
-        adjusted_name = f"{element}{counts[element]}"
-        adjusted_atom_names.append(adjusted_name)
-
-    # Create a mapping from old names to adjusted names
-    name_mapping = dict(zip(atom_names, adjusted_atom_names))
-
-    # Update atoms_dict keys with adjusted names
-    adjusted_atoms_dict = {}
-    for old_name, new_name in name_mapping.items():
-        adjusted_atoms_dict[new_name] = atoms_dict[old_name]
+    adjusted_atoms_dict = adjust_atom_names(atoms_dict)
 
     # Write the average charges to the output file
     output_file = os.path.join(results_dir, "average_charges.txt")
@@ -143,7 +166,7 @@ def extract_charges_from_subdirectories(base_dir, results_dir):
 
     return adjusted_atoms_dict
 
-def plot_charges(atoms_dict, base_dir):
+def plot_charges_old(atoms_dict, initial_charges_dict, base_dir):
     """
     Plot the charges of atoms along with their average charges.
 
@@ -154,6 +177,8 @@ def plot_charges(atoms_dict, base_dir):
     min_charges = [min(atoms_dict[atom]['charges']) for atom in atom_names]
     max_charges = [max(atoms_dict[atom]['charges']) for atom in atom_names]
     avg_charges = [atoms_dict[atom]['average_charge'] for atom in atom_names]
+    init_charges = [initial_charges_dict[atom]['charges'] for atom in atom_names]
+    print(init_charges)
     avg_sum = sum(avg_charges)
 
 
@@ -165,8 +190,11 @@ def plot_charges(atoms_dict, base_dir):
     for i, atom_name in enumerate(atom_names):
         ax.plot([i, i], [min_charges[i], max_charges[i]], color="darkblue", linewidth=2)
     
-    # Add red dots for the average charge
+    # Add blue triangels for the average charge
     ax.scatter(range(len(atom_names)), avg_charges, color="darkblue", marker='^', label="Average Charge", zorder=5)
+
+    # Add red dots for the initial charge
+    ax.scatter(range(len(atom_names)), init_charges, color="darkred", marker='o', label="Average Charge", zorder=5)
 
     # Labeling
     ax.set_xticks(range(len(atom_names)))
@@ -185,6 +213,338 @@ def plot_charges(atoms_dict, base_dir):
         for i in avg_charges:
             output.write(str(round(i,4)) + '\n')
     #plt.show()
+
+
+def plot_charges_old2(atoms_dict, initial_charges_dict, base_dir):
+    """
+    Plot the charge distributions of atoms along with their average and initial charges.
+
+    Parameters:
+    - atoms_dict: Dictionary of atoms and their charges.
+    - initial_charges_dict: Dictionary of initial charges for each atom.
+    - base_dir: Directory to save the plot and charges.
+    """
+    atom_names = list(atoms_dict.keys())
+    charges_data = [atoms_dict[atom]['charges'] for atom in atom_names]
+    avg_charges = [atoms_dict[atom]['average_charge'] for atom in atom_names]
+    init_charges = [initial_charges_dict[atom]['charges'] for atom in atom_names]
+    avg_sum = sum(avg_charges)
+
+    # Plotting
+    fig, ax = plt.subplots(figsize=(12, 6))
+    
+    # Plot violin plots for each atom's charge distribution
+    vp = ax.violinplot(charges_data, positions=range(len(atom_names)), widths=0.6, showmeans=True, showmedians=False,)
+    color= "blue" # Hydrogen (all atoms with O in its name)
+    color= "red" # Oxygen 
+    color= "orange" # Phosphor atoms 
+    color= "grey" # Carbon
+    for body in vp['bodies']:
+        body.set_facecolor(f'dark{color}')
+        body.set_edgecolor(f'dark{color}')
+        body.set_alpha(0.7)
+    vp['cmeans'].set_edgecolor(f'dark{color}')
+    vp['cmeans'].set_linewidth(2)
+
+    # Set the color of the vertical lines (sticks) and min/max markers (caps) to dark blue
+    for partname in ('cbars', 'cmins', 'cmaxes'):
+        if partname in vp:
+            vp[partname].set_edgecolor(f'dark{color}')
+            vp[partname].set_linewidth(1.5)
+            if partname == 'cbars':
+                vp[partname].set_alpha(0.7)
+    
+
+    
+    # Add blue triangles for the average charge
+    #ax.scatter(range(len(atom_names)), avg_charges, color="darkblue", marker='^', label="Average Charge", zorder=5, alpha=0.5)
+
+    # Add red dots for the initial charge
+    ax.scatter(range(len(atom_names)), init_charges, color="red", marker='o', label="Initial Charge", zorder=5, alpha=1, s=5)
+
+    # Labeling
+    ax.set_xticks(range(len(atom_names)))
+    ax.set_xticklabels(atom_names, rotation=90)
+    ax.set_xlabel('Atom Names')
+    ax.set_ylabel('Atomic Partial Charge (e)')
+    ax.set_title(f'Charge Distribution for Each Atom (Average Sum: {round(avg_sum, 4)})')
+    ax.legend()
+
+    # Save and close the plot
+    plt.tight_layout()
+    figure_path = os.path.join(base_dir, "charges.pdf")
+    plt.savefig(figure_path)
+    plt.close(fig)  # Close the figure to free up memory
+
+    # Save average charges to a file
+    charges_path = os.path.join(base_dir, "average_charges.chg")
+    with open(charges_path, "w") as output:
+        for i in avg_charges:
+            output.write(str(round(i,4)) + '\n')
+
+
+def plot_charges_by_atom(atoms_dict, initial_charges_dict, base_dir):
+    """
+    Plot the charge distributions of atoms along with their average and initial charges,
+    coloring the violin plots based on atom types.
+
+    Parameters:
+    - atoms_dict: Dictionary of atoms and their charges.
+    - initial_charges_dict: Dictionary of initial charges for each atom.
+    - base_dir: Directory to save the plot and charges.
+    """
+    atom_names = list(atoms_dict.keys())
+    charges_data = [atoms_dict[atom]['charges'] for atom in atom_names]
+    avg_charges = [atoms_dict[atom]['average_charge'] for atom in atom_names]
+    init_charges = [initial_charges_dict[atom]['charges'] for atom in atom_names]
+    avg_sum = sum(avg_charges)
+
+    # Define a color mapping for each atom type
+    color_map = {
+        'H': 'royalblue',     # Hydrogen
+        'O': 'darkred',      # Oxygen
+        'P': 'darkorange',   # Phosphorus
+        'C': 'darkblue',     # Carbon
+        # Add more elements and colors as needed
+    }
+
+    # Plotting
+    fig, ax = plt.subplots(figsize=(12, 6))
+
+    # Plot violin plots for each atom's charge distribution
+    vp = ax.violinplot(
+        charges_data,
+        positions=range(len(atom_names)),
+        widths=0.6,
+        showmeans=True,
+        showmedians=False,
+        showextrema=True,
+    )
+
+    # Iterate over each violin plot and set colors based on atom type
+    for i, body in enumerate(vp['bodies']):
+        atom_name = atom_names[i]
+
+        # Extract the element symbol from the atom name
+        match = re.match(r'^([A-Z][a-z]?)(\d*)', atom_name)
+        if match:
+            element = match.group(1)
+        else:
+            element = 'Unknown'  # Default value if no match is found
+
+        # Get the color for this element from the color map
+        color = color_map.get(element, 'black')  # Default to black if element not in color_map
+
+        # Set the face and edge color of the violin body
+        body.set_facecolor(color)
+        body.set_edgecolor(color)
+
+    # Customize the mean lines
+    if 'cmeans' in vp:
+        means = vp['cmeans']
+        # Prepare a list of colors for the mean lines
+        mean_colors = []
+        for i in range(len(atom_names)):
+            atom_name = atom_names[i]
+            match = re.match(r'^([A-Z][a-z]?)(\d*)', atom_name)
+            if match:
+                element = match.group(1)
+            else:
+                element = 'Unknown'
+            color = color_map.get(element, 'black')
+            mean_colors.append(color)
+        # Set the colors and linewidths for the mean lines
+        vp['cmeans'].set_color(mean_colors)
+        vp['cmeans'].set_linewidth(2)
+
+    # Set the color of the vertical lines and caps
+    for partname in ('cbars', 'cmins', 'cmaxes'):
+        if partname in vp:
+            items = vp[partname]
+            if isinstance(items, list):
+                # For older versions of Matplotlib where items are lists
+                for i, item in enumerate(items):
+                    atom_name = atom_names[i]
+                    match = re.match(r'^([A-Z][a-z]?)(\d*)', atom_name)
+                    if match:
+                        element = match.group(1)
+                    else:
+                        element = 'Unknown'
+                    color = color_map.get(element, 'black')
+                    item.set_edgecolor(color)
+                    item.set_linewidth(1.5)
+                    if partname == 'cbars':
+                        item.set_alpha(0.7)
+            else:
+                # For newer versions where items is a LineCollection
+                # Prepare a list of colors
+                line_colors = []
+                for i in range(len(atom_names)):
+                    atom_name = atom_names[i]
+                    match = re.match(r'^([A-Z][a-z]?)(\d*)', atom_name)
+                    if match:
+                        element = match.group(1)
+                    else:
+                        element = 'Unknown'
+                    color = color_map.get(element, 'black')
+                    line_colors.append(color)
+                items.set_color(line_colors)
+                items.set_linewidth(1.5)
+
+    # Add scatter points for average and initial charges
+    #ax.scatter(range(len(atom_names)), avg_charges, color="black", marker='^', label="Average Charge", zorder=5)
+    ax.scatter(range(len(atom_names)), init_charges, color="black", marker='o', label="Initial Charge", zorder=5, s=5)
+
+    # Labeling
+    ax.set_xticks(range(len(atom_names)))
+    ax.set_xticklabels(atom_names, rotation=90)
+    ax.set_xlabel('Atom Names')
+    ax.set_ylabel('Atomic Partial Charge (e)')
+    ax.set_title(f'Charge Distribution for Each Atom (Average Sum: {round(avg_sum, 4)})')
+
+    # Create custom legend
+    handles = [
+        plt.Line2D([], [], color='royalblue', marker='None', linestyle='-', markersize=10, label='Hydrogen'),
+        plt.Line2D([], [], color='darkred', marker='None', linestyle='-', markersize=10, label='Oxygen'),
+        plt.Line2D([], [], color='darkorange', marker='None', linestyle='-', markersize=10, label='Phosphorus'),
+        plt.Line2D([], [], color='darkblue', marker='None', linestyle='-', markersize=10, label='Carbon'),
+
+        plt.Line2D([], [], color='black', marker='o', linestyle='None', markersize=5, label='Initial Charge'),
+    ]
+    ax.legend(handles=handles, title='Average Charges', frameon=False)
+
+    # Save and close the plot
+    plt.tight_layout()
+    figure_path = os.path.join(base_dir, "charges.pdf")
+    plt.savefig(figure_path)
+    plt.close(fig)  # Close the figure to free up memory
+
+    # Save average charges to a file
+    charges_path = os.path.join(base_dir, "average_charges.chg")
+    with open(charges_path, "w") as output:
+        for i in avg_charges:
+            output.write(str(round(i,4)) + '\n')
+
+
+
+def create_atom_color_mapping(atom_names, symmetry_groups):
+    # List of colors to use for the groups
+    group_colors_list = ['darkred', 'darkgreen', 'darkorange', 'purple', 'royalblue', 'lightcoral', 'deepskyblue', 'mediumvioletred']
+    group_colors = {}
+
+    # Map each group to a color
+    for i, (group_representative, group_atoms) in enumerate(symmetry_groups.items()):
+        color = group_colors_list[i % len(group_colors_list)]  # Cycle through colors if needed
+        # Include the representative atom in the group
+        group = [group_representative] + group_atoms
+        for atom in group:
+            group_colors[atom] = color
+
+    # Assign 'darkblue' to atoms not in any group
+    atom_to_color = {}
+    for atom in atom_names:
+        color = group_colors.get(atom, 'darkblue')
+        atom_to_color[atom] = color
+
+    return atom_to_color
+
+def plot_charges_by_symmetry(atoms_dict, initial_charges_dict, base_dir, symmetry_groups):
+    """
+    Plot the charge distributions of atoms, coloring the violin plots based on symmetry groups.
+
+    Parameters:
+    - atoms_dict: Dictionary of atoms and their charges.
+    - initial_charges_dict: Dictionary of initial charges for each atom.
+    - base_dir: Directory to save the plot and charges.
+    - symmetry_groups: Dictionary mapping representative atoms to lists of equivalent atoms.
+    """
+    import os
+    import matplotlib.pyplot as plt
+
+    atom_names = list(atoms_dict.keys())
+    charges_data = [atoms_dict[atom]['charges'] for atom in atom_names]
+    avg_charges = [atoms_dict[atom]['average_charge'] for atom in atom_names]
+    init_charges = [initial_charges_dict[atom]['charges'] for atom in atom_names]
+    avg_sum = sum(avg_charges)
+
+    # Create atom-to-color mapping
+    atom_to_color = create_atom_color_mapping(atom_names, symmetry_groups)
+
+    # Plotting
+    fig, ax = plt.subplots(figsize=(12, 6))
+
+    # Plot violin plots for each atom's charge distribution
+    vp = ax.violinplot(
+        charges_data,
+        positions=range(len(atom_names)),
+        widths=0.6,
+        showmeans=True,
+        showmedians=False,
+        showextrema=True,
+    )
+
+    # Customize the violin plots
+    for i, body in enumerate(vp['bodies']):
+        atom_name = atom_names[i]
+        color = atom_to_color[atom_name]
+        body.set_facecolor(color)
+        body.set_edgecolor(color)
+        #body.set_alpha(0.7)
+
+    # Customize the mean lines
+    if 'cmeans' in vp:
+        mean_colors = [atom_to_color[atom_names[i]] for i in range(len(atom_names))]
+        vp['cmeans'].set_color(mean_colors)
+        vp['cmeans'].set_linewidth(2)
+
+    # Set the color of the vertical lines and min/max markers (caps)
+    for partname in ('cbars', 'cmins', 'cmaxes'):
+        if partname in vp:
+            items = vp[partname]
+            colors = [atom_to_color[atom_names[i]] for i in range(len(atom_names))]
+            items.set_color(colors)
+            items.set_linewidth(1.5)
+
+    # Add red dots for the initial charge
+    ax.scatter(
+        range(len(atom_names)),
+        init_charges,
+        color="black",
+        marker='o',
+        label="Initial Charge",
+        zorder=5,
+        alpha=1,
+        s=5
+    )
+
+    # Labeling
+    ax.set_xticks(range(len(atom_names)))
+    ax.set_xticklabels(atom_names, rotation=90)
+    ax.set_xlabel('Atom Names')
+    ax.set_ylabel('Atomic Partial Charge (e)')
+    ax.set_title(f'Charge Distribution for Each Atom (Average Sum: {round(avg_sum, 4)})')
+    ax.legend(frameon=False)
+
+    # Save and close the plot
+    plt.tight_layout()
+    figure_path = os.path.join(base_dir, "charges_by_symmetry.pdf")
+    plt.savefig(figure_path)
+    plt.close(fig)  # Close the figure to free up memory
+
+    # Save average charges to a file
+    charges_path = os.path.join(base_dir, "average_charges.chg")
+    with open(charges_path, "w") as output:
+        for i in avg_charges:
+            output.write(str(round(i, 4)) + '\n')
+
+
+
+# Load symmetry groups from a JSON file
+def load_symmetry_groups(json_path):
+    with open(json_path, 'r') as file:
+        symmetry_groups = json.load(file)
+    return symmetry_groups
+
 
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -207,23 +567,21 @@ for sub_dir in os.listdir(process_dir):
     # Initial processing directory 
     pis_dir = os.path.join(process_dir, sub_dir, "run_gau_create_gmx_in")
 
+    # Acpype directory
+    abstract_ac_dir = os.path.join(pis_dir, "*.acpype")
+
+
+    # Use glob to find all matching files or directories
+    ac_files = glob.glob(abstract_ac_dir)
+
+    ac_dir = ac_files[0]
+
     results_dir = os.path.join(process_dir, sub_dir, "results")
     os.makedirs(results_dir, exist_ok=True)
 
     log_file_path = os.path.join(results_dir, "results.log")
 
     
-    
-    mol2_file_pattern = "*_resp.mol2"
-
-
-    for file_name in os.listdir(pis_dir):
-        if fnmatch.fnmatch(file_name, mol2_file_pattern):
-            source_file_path = os.path.join(pis_dir, file_name)
-            mol2_file_name = file_name
-            # Copy the file to the destination directory
-            #shutil.copy(source_file_path, results_dir)
-            #print(f"Copied {file_name} to {results_dir}")
 
     # Change to base directory containig configuration file (.ef) and copy it into the results directory
     os.chdir(base_dir)
@@ -236,22 +594,44 @@ for sub_dir in os.listdir(process_dir):
 
     charge = config.Charge
     atom_type = config.AtomType
+    molecule_name = config.MoleculeName
+    adjust_sym = config.AdjustSymmetry
+    print(adjust_sym)
 
-    mol2_file = os.path.join(results_dir, mol2_file_name)
+    updated_mol2_file = os.path.join(results_dir, f"averaged_{molecule_name}.mol2")
 
-    updated_mol2_file = os.path.join(results_dir, f"averaged_{mol2_file_name}")
+    
+    mol2_file_pattern = f"*{atom_type}.mol2"
 
+
+    for file_name in os.listdir(ac_dir):
+        if fnmatch.fnmatch(file_name, mol2_file_pattern):
+            mol2_source_file_path = os.path.join(ac_dir, file_name)
+            mol2_file_name = file_name
+            # Copy the file to the destination directory
+            #shutil.copy(source_file_path, results_dir)
+            #print(f"Copied {file_name} to {results_dir}")
+
+    # Extract the initial charges
+    initial_charges_dict = adjust_atom_names(parse_mol2(mol2_source_file_path))
+  
 
     # Extract charges from all subdirectories
     atoms_dict = extract_charges_from_subdirectories(base_dir, results_dir)
 
-    # Plot the charges and average charges
-    plot_charges(atoms_dict, results_dir)
+    if adjust_sym == True:
+        os.chdir(pis_dir)
+        equiv_group_path = os.path.join(pis_dir, find_file_with_extension("json"))
+        equiv_group = load_symmetry_groups(equiv_group_path)
 
+        # Plot the charges and average charges
+        plot_charges_by_symmetry(atoms_dict, initial_charges_dict, results_dir, equiv_group)
+
+    plot_charges_by_atom(atoms_dict, initial_charges_dict, results_dir)
     setup_logging(log_file_path)
     average_charges = os.path.join(results_dir, "average_charges.chg")
     update_mol2 = os.path.join(project_path, "electrofit/execution/update_mol2.py")
-    run_command(f"python {update_mol2} {source_file_path} {average_charges} {updated_mol2_file}")
+    run_command(f"python {update_mol2} {mol2_source_file_path} {average_charges} {updated_mol2_file}")
     run_acpype(updated_mol2_file, charge, results_dir, atom_type)
 
     reset_logging()
