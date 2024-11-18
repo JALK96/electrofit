@@ -32,7 +32,8 @@ class ConfigParser:
             'Cation': 'NA',             # Default cation
             'Anion': 'CL',              # Default anion
             'Multiplicity': 1,          # Default spin multiplicity
-            'IonConcentration': 0.15    # Default ion concentration for simulation 
+            'IonConcentration': 0.15,   # Default ion concentration for simulation
+            'Protocol': 'bcc'
         }
 
     def _parse_file(self):

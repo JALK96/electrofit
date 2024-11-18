@@ -44,7 +44,7 @@ def main_processing(net_charge=None):
     additional_input = [] 
 
     # Delet later - just for debugging:
-    additional_input.extend([find_file_with_extension("ef"), find_file_with_extension("gcrt.log"), find_file_with_extension("gcrt"), find_file_with_extension("gesp"), find_file_with_extension("chk")])
+    #additional_input.extend([find_file_with_extension("ef"), find_file_with_extension("gcrt.log"), find_file_with_extension("gcrt"), find_file_with_extension("gesp"), find_file_with_extension("chk")])
     
     if adjust_sym==True:
         additional_input.extend([find_file_with_extension("json")])

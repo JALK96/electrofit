@@ -2,7 +2,7 @@ import glob
 import logging
 import os
 import shutil
-import openbabel
+from openbabel import openbabel
 import json
 import sys
 import re

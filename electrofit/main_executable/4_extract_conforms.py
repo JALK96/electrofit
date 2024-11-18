@@ -54,13 +54,16 @@ for sub_dir in os.listdir(process_dir):
     molecule_name = config.MoleculeName
     residue_name = config.ResidueName
     adjust_sym = config.AdjustSymmetry
+    protocol = config.Protocol # New entry
 
-    if adjust_sym:
-        respin1_file = os.path.join(pis_dir, "ANTECHAMBER_RESP1_MOD.IN")
-    else:
-        respin1_file = os.path.join(pis_dir, "ANTECHAMBER_RESP1.IN")
-    
-    respin2_file = os.path.join(pis_dir, "ANTECHAMBER_RESP2.IN")
+
+    if protocol == "opt":
+        if adjust_sym:
+            respin1_file = os.path.join(pis_dir, "ANTECHAMBER_RESP1_MOD.IN")
+        else:
+            respin1_file = os.path.join(pis_dir, "ANTECHAMBER_RESP1.IN")
+        
+        respin2_file = os.path.join(pis_dir, "ANTECHAMBER_RESP2.IN")
 
     input_mol2_file = os.path.join(input_data_dir, sub_dir, f"{molecule_name}.mol2")
 
@@ -99,9 +102,11 @@ for sub_dir in os.listdir(process_dir):
         # Copy the bash script into the conform_dir
         shutil.copy(bash_script_path, conform_dir)
 
-        # Copy the respin files to the conform dir
-        shutil.copy(respin1_file, conform_dir)
-        shutil.copy(respin2_file, conform_dir)
+        if protocol == "opt":
+            # Copy the respin files to the conform dir
+            shutil.copy(respin1_file, conform_dir)
+            shutil.copy(respin2_file, conform_dir)
+
 
         # Define the path for the PDB file
         conform_name = f"{molecule_name}c{i}.pdb"

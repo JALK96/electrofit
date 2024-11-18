@@ -5,7 +5,6 @@ import glob
 import fnmatch
 import json
 
-
 def find_project_root(current_dir, project_name="electrofit"):
     root = None
     while True:
@@ -19,19 +18,17 @@ def find_project_root(current_dir, project_name="electrofit"):
             return root  # Return the outermost match found
         current_dir = parent_dir
 
-
-
 script_dir = os.path.dirname(os.path.abspath(__file__))
 project_path = find_project_root(current_dir=script_dir)
 sys.path.append(project_path)
 process_dir = os.path.join(project_path, "process")
-
 
 from electrofit.commands.run_commands import run_command, run_acpype
 from electrofit.helper.file_manipulation import find_file_with_extension, parse_charges_from_mol2, extract_charges_from_subdirectories, adjust_atom_names, load_symmetry_groups
 from electrofit.helper.config_parser import ConfigParser
 from electrofit.helper.set_logging import setup_logging, reset_logging
 from electrofit.helper.plotting import plot_charges_by_atom, plot_charges_by_symmetry
+
 # Iterate over each subdirectory in the process directory
 for sub_dir in os.listdir(process_dir):
 
@@ -94,9 +91,9 @@ for sub_dir in os.listdir(process_dir):
     atoms_dict = extract_charges_from_subdirectories(base_dir, results_dir)
 
     # Save dictionary to a JSON file
-    with open(os.path.join(results_dir, "charges_dict"), "w") as file:
+    with open(os.path.join(results_dir, "charges_dict.json"), "w") as file:
         json.dump(atoms_dict, file, indent=4)  # 'indent=4' makes the file human-readable
-    with open(os.path.join(results_dir, "initial_charges_dict"), "w") as file:
+    with open(os.path.join(results_dir, "initial_charges_dict.json"), "w") as file:
         json.dump(initial_charges_dict, file, indent=4)  
 
     if adjust_sym == True:
