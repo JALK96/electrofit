@@ -6,6 +6,7 @@ import openbabel
 import json
 import sys
 import re
+import numpy as np
 
 def find_project_root(current_dir, project_name="electrofit"):
     root = None
@@ -251,7 +252,6 @@ binary_to_ip = {
     "111101": "IP61"
 }
 
-
 def copy_and_rename_folders(source, destination, bash_script_source=f"{project_path}/electrofit/bash/pis.sh", python_script_source=f"{project_path}/electrofit/execution/check_symmetry_and_write.py", nested_folder="run_gau_create_gmx_in"):
     """
     Copy folders from the source directory to the destination with an additional nested folder.
@@ -306,8 +306,6 @@ def copy_and_rename_folders(source, destination, bash_script_source=f"{project_p
             except Exception as e:
                 print(f"Error copying file: {e}")
 
-
-
 def rename_mol2_binary(base_dir, binary):
     """
     Rename .mol2 files in the specified folder according to a binary-to-IP mapping.
@@ -346,7 +344,6 @@ def rename_mol2_binary(base_dir, binary):
     else:
         print(f"Folder '{folder_path}' does not exist or does not match the binary name in mapping.")
 
-
 def find_file_with_extension(extension):
 
     cwd = os.getcwd()
@@ -361,7 +358,6 @@ def find_file_with_extension(extension):
         print(f"No files with .{extension} extension found in {cwd}")
         return None
 
-
 def get_parent_folder_name():
     current_dir = os.getcwd()
     parent_dir = os.path.dirname(current_dir)
@@ -374,7 +370,6 @@ def get_parent_parent_folder_name():
     parent_parent_dir = os.path.dirname(parent_dir)
     parent_parent_folder_name = os.path.basename(parent_parent_dir)
     return parent_parent_folder_name
-
 
 def extract_charge_from_folder_name():
     folder_name = get_parent_folder_name()
@@ -404,14 +399,12 @@ def extract_charge_from_folder_name_conform():
     print(f"Calculated net charge of IP6: {charge}")
     return charge
 
-
 def strip_extension(file_name):
     # Split the file name into the name and the extension
     name, extension = os.path.splitext(file_name)
 
     print(f"Molecule name: {name}")
     return name
-
 
 def mol2_to_pdb_and_back(input_file, output_file, residue_name, cwd=None):
 
@@ -689,7 +682,6 @@ def write_equivalence_groups(equiv_groups, output_file):
         json.dump(equiv_groups, f, indent=4)
     print(f"Equivalence groups successfully written to '{output_file}'.")
 
-
 def generate_atom_labels(atom_numbers):
     element_symbols = {
         1: 'H', 6: 'C', 7: 'N', 8: 'O', 15: 'P',
@@ -817,3 +809,144 @@ def modify_gaussian_input(file_path):
     except Exception as e:
         logging.error(f"Error modifying Gaussian input file: {e}")
         raise
+
+def parse_charges_from_mol2(mol2_file):
+    """
+    Parses the MOL2 file to extract atom names and charges.
+    
+    Parameters:
+    - mol2_file: Path to the MOL2 file.
+    
+    Returns:
+    - atoms: Dictionary mapping atom names to a list of charges.
+    """
+    atoms = {}
+    with open(mol2_file, 'r') as f:
+        lines = f.readlines()
+
+    section = None
+    for line in lines:
+        line = line.strip()
+        if line.startswith('@<TRIPOS>ATOM'):
+            section = 'ATOM'
+            continue
+        elif line.startswith('@<TRIPOS>'):
+            section = None
+            continue
+
+        if section == 'ATOM':
+            if not line:
+                continue
+            parts = line.split()
+            if len(parts) < 9:
+                continue  # Incomplete atom line
+            atom_name = parts[1]
+            atom_charge = float(parts[8]) 
+            if atom_name not in atoms:
+                atoms[atom_name] = {'charges': []}
+            atoms[atom_name]['charges'].append(atom_charge)
+        else:
+            continue
+
+    return atoms
+
+def adjust_atom_names(atoms_dict):
+    """
+    Adjusts atom names in the provided dictionary by appending a count to each unique element symbol.
+    
+    Parameters:
+        atoms_dict (dict): Dictionary where keys are atom names and values are properties associated with each atom.
+    
+    Returns:
+        dict: New dictionary with adjusted atom names.
+    """
+    
+    # Get the list of atom names from the dictionary keys
+    atom_names = list(atoms_dict.keys())
+
+    # Initialize a dictionary to keep track of counts for each element
+    counts = {}
+    adjusted_atom_names = []
+    
+    for name in atom_names:
+        # Extract the element symbol (handles one or two-letter symbols)
+        match = re.match(r'^([A-Z][a-z]?)(\d*)', name)
+        if match:
+            element = match.group(1)
+        else:
+            # If the name doesn't match the pattern, keep it unchanged
+            adjusted_atom_names.append(name)
+            continue
+
+        # Update the count for the element
+        counts.setdefault(element, 0)
+        counts[element] += 1
+
+        # Adjust the name with the element symbol and its count
+        adjusted_name = f"{element}{counts[element]}"
+        adjusted_atom_names.append(adjusted_name)
+
+    # Create a mapping from old names to adjusted names
+    name_mapping = dict(zip(atom_names, adjusted_atom_names))
+
+    # Update atoms_dict keys with adjusted names
+    adjusted_atoms_dict = {new_name: atoms_dict[old_name] for old_name, new_name in name_mapping.items()}
+    
+    return adjusted_atoms_dict
+
+def extract_charges_from_subdirectories(base_dir, results_dir):
+    """
+    Walk through subdirectories of the base_dir and extract charges from mol2 files.
+    
+    Parameters:
+    - base_dir: Path to the directory containing subdirectories with mol2 files.
+    
+    Returns:
+    - adjusted_atoms_dict: Dictionary of atoms with adjusted names and charges collected from all subdirectories.
+    """
+    atoms_dict = {}
+    # Traverse each subdirectory in 'base_dir'
+    subdirs = [f for f in os.listdir(base_dir) if os.path.isdir(os.path.join(base_dir, f))]
+    
+    for subdir in subdirs:
+        subdir_path = os.path.join(base_dir, subdir)
+        for file_name in os.listdir(subdir_path):
+            if file_name.endswith("_resp.mol2"):
+                mol2_path = os.path.join(subdir_path, file_name)
+                atoms = parse_charges_from_mol2(mol2_path)
+                
+                # If it's the first subdirectory, initialize the atom names
+                if not atoms_dict:
+                    # Initialize atoms_dict with atom names and empty charge lists
+                    for atom_name, atom_data in atoms.items():
+                        atoms_dict[atom_name] = {'charges': []}
+
+                # Collect the charges for the atoms in the atoms_dict
+                for atom_name, atom_data in atoms.items():
+                    atoms_dict[atom_name]['charges'].extend(atom_data['charges'])
+
+    # Calculate the mean charge for each atom
+    for atom_name, atom_data in atoms_dict.items():
+        charges = atom_data['charges']
+        atom_data['average_charge'] = np.mean(charges) if charges else 0
+    
+    adjusted_atoms_dict = adjust_atom_names(atoms_dict)
+
+    # Write the average charges to the output file
+    output_file = os.path.join(results_dir, "average_charges.txt")
+    try:
+        with open(output_file, 'w') as f:
+            f.write("#Atom_Name\tAverage_Charge\n")
+            for atom_name, atom_data in adjusted_atoms_dict.items():
+                f.write(f"{atom_name}\t{atom_data['average_charge']:.4f}\n")
+        print(f"Average charges successfully written to {output_file}")
+    except Exception as e:
+        print(f"An error occurred while writing to {output_file}: {e}")
+
+    return adjusted_atoms_dict
+
+# Load symmetry groups from a JSON file
+def load_symmetry_groups(json_path):
+    with open(json_path, 'r') as file:
+        symmetry_groups = json.load(file)
+    return symmetry_groups
