@@ -33,7 +33,9 @@ class ConfigParser:
             'Anion': 'CL',              # Default anion
             'Multiplicity': 1,          # Default spin multiplicity
             'IonConcentration': 0.15,   # Default ion concentration for simulation
-            'Protocol': 'bcc'
+            'Protocol': 'bcc',
+            'CalculateGroupAverage': False,
+            'IgnoreSymmetry': False
         }
 
     def _parse_file(self):
@@ -90,7 +92,10 @@ class ConfigParser:
             'cation': 'Cation',
             'anion': 'Anion',
             'multiplicity': 'Multiplicity',
-            'ionconcentration': 'IonConcentration'
+            'ionconcentration': 'IonConcentration',
+            'protocol': 'Protocol',
+            'calculategroupaverage': 'CalculateGroupAverage',
+            'ignoresymmetry': 'IgnoreSymmetry'
         }
 
         key_lower = key.lower()
@@ -101,6 +106,10 @@ class ConfigParser:
                 if actual_key == 'Charge':
                     self.parameters[actual_key] = int(value)
                 elif actual_key == 'AdjustSymmetry':
+                    self.parameters[actual_key] = self._str_to_bool(value)
+                elif actual_key == 'IgnoreSymmetry':
+                    self.parameters[actual_key] = self._str_to_bool(value)
+                elif actual_key == 'CalculateGroupAverage':
                     self.parameters[actual_key] = self._str_to_bool(value)
                 elif actual_key == 'BoxEdgeDistance':
                     self.parameters[actual_key] = float(value)

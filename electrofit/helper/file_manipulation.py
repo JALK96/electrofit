@@ -704,7 +704,7 @@ def load_equivalence_groups(equiv_groups_file):
         print(f"Error loading equivalence groups: {e}")
         sys.exit(1)
 
-def edit_resp_input(input_file, equiv_groups_file, output_file):
+def edit_resp_input(input_file, equiv_groups_file, output_file, ignore_sym=False):
     try:
         with open(input_file, 'r') as f:
             lines = f.readlines()
@@ -744,6 +744,10 @@ def edit_resp_input(input_file, equiv_groups_file, output_file):
     label_to_index = {label: idx + 1 for idx, label in enumerate(atom_labels)}
 
     equivalence_groups_labels = load_equivalence_groups(equiv_groups_file)
+    
+    if ignore_sym:
+        equivalence_groups_labels = {}
+
     equivalence_groups = {}
     for central_label, equiv_labels in equivalence_groups_labels.items():
         central_idx = label_to_index.get(central_label)

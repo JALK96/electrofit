@@ -1,5 +1,6 @@
 import sys
 import os
+import argparse
 
 def find_project_root(current_dir, project_name="electrofit"):
     root = None
@@ -22,8 +23,29 @@ sys.path.append(project_path)
 
 from electrofit.helper.file_manipulation import edit_resp_input
 
+def main():
+    # Initialize the argument parser
+    parser = argparse.ArgumentParser(description='Edit RESP input file with equivalence groups.')
+    
+    # Define required positional arguments
+    parser.add_argument('input_RESP_file', help='Path to the input RESP file')
+    parser.add_argument('equiv_groups_file', help='Path to the equivalence groups JSON file')
+    parser.add_argument('output_RESP_file', help='Path to save the output RESP file')
+    
+    # Define optional arguments
+    parser.add_argument('--ignore_sym', action='store_true', 
+                        help='Ignore symmetry groups when editing RESP file')
+    
+    # Parse the arguments
+    args = parser.parse_args()
+    
+    # Call the edit_resp_input function with parsed arguments
+    edit_resp_input(
+        input_file=args.input_RESP_file,
+        equiv_groups_file=args.equiv_groups_file,
+        output_file=args.output_RESP_file,
+        ignore_sym=args.ignore_sym
+    )
+
 if __name__ == "__main__":
-    if len(sys.argv) != 4:
-        print("Usage: python edit_resp.py <input_RESP_file> <equiv_groups_file> <output_RESP_file>")
-        sys.exit(1)
-    edit_resp_input(sys.argv[1], sys.argv[2], sys.argv[3])
+    main()

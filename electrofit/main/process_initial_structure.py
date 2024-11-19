@@ -29,7 +29,7 @@ from electrofit.helper.setup_finalize_scratch import (
     setup_scratch_directory,
 )
 
-def process_initial_structure(molecule_name, mol2_file, base_scratch_dir, additional_input, net_charge, residue_name, adjust_sym=False, atom_type="gaff2", exit_screen=False, opt_protocol=False): #delet later additional_input
+def process_initial_structure(molecule_name, mol2_file, base_scratch_dir, additional_input, net_charge, residue_name, adjust_sym=False, ignore_sym=False, atom_type="gaff2", exit_screen=False, protocol="bcc"): #delet later additional_input
     """
     Processes the initial optimized structure: Antechamber, Gaussian optimization, espgen, RESP fitting.
 
@@ -49,7 +49,7 @@ def process_initial_structure(molecule_name, mol2_file, base_scratch_dir, additi
     
     scratch_dir, original_dir = setup_scratch_directory(input_files, base_scratch_dir)
 
-    if opt_protocol:
+    if protocol == "opt":
         try:
 
             # Step 1: Generate Gaussian input file
@@ -89,7 +89,7 @@ def process_initial_structure(molecule_name, mol2_file, base_scratch_dir, additi
             write_symmetry = os.path.join(project_path, "electrofit/execution/write_symmetry.py")
             run_command(f"python {write_symmetry} {respin1_file} symmetry_resp.txt", cwd=scratch_dir)
 
-            if adjust_sym:
+            if adjust_sym and not ignore_sym:
                 # Find self defined symmetry file
                 json_symmetry_file = find_file_with_extension("json")
                 # Edit symmetry in "ANTECHAMBER_RESP1.IN"
@@ -101,6 +101,19 @@ def process_initial_structure(molecule_name, mol2_file, base_scratch_dir, additi
 
                 # Write symmetry output of alterd RESP1_MOD.IN to check/compare
                 run_command(f"python {write_symmetry} {respin1_file} symmetry_resp_MOD.txt", cwd=scratch_dir)
+
+            if adjust_sym and ignore_sym:
+                # Find self defined symmetry file
+                json_symmetry_file = find_file_with_extension("json")
+                # Edit symmetry in "ANTECHAMBER_RESP1.IN"
+                edit_resp_script = os.path.join(project_path, "electrofit/execution/edit_resp.py")
+                run_command(f"python {edit_resp_script} ANTECHAMBER_RESP1.IN {json_symmetry_file} ANTECHAMBER_RESP1_MOD.IN", cwd=scratch_dir)
+
+                # Re-define the respin1-file
+                respin1_file = os.path.join(scratch_dir, "ANTECHAMBER_RESP1_MOD.IN")
+
+                # Write symmetry output of alterd RESP1_MOD.IN to check/compare
+                run_command(f"python {write_symmetry} {respin1_file} symmetry_resp_MOD.txt --ignore_sym", cwd=scratch_dir)
 
 
             # Step 5: Run RESP fitting stages
@@ -145,7 +158,7 @@ def process_initial_structure(molecule_name, mol2_file, base_scratch_dir, additi
             finalize_scratch_directory(original_dir, scratch_dir, input_files)
             exit(1)  # Exit the script with a non-zero status
     
-    else:
+    elif protocol == "bcc":
         try:
             # Step 1: Run acpype to generate GROMACS input using bcc charges (.itp/.gro/.top)
             run_acpype(mol2_file, net_charge, scratch_dir, atom_type, charges="bcc")

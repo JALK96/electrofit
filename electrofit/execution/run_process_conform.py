@@ -50,17 +50,25 @@ def main_conform_processing():
     # Go back to the home directory
     os.chdir(home)
 
-    # Define 
-    base_scratch_dir = config.BaseScratchDir
-    residue_name = config.ResidueName
-    net_charge = config.Charge
-    adjust_sym = config.AdjustSymmetry
-    protocol = config.Protocol
-
-
     # Define file and molecule name
     pdb_file = find_file_with_extension("pdb")
     molecule_name = strip_extension(pdb_file)
+    print("Processing conform:", molecule_name)
+
+    # Define 
+    base_scratch_dir = config.BaseScratchDir
+    print("Scratch directory set to:", base_scratch_dir)
+    residue_name = config.ResidueName
+    print("Residue Name:", residue_name)
+    net_charge = config.Charge
+    print("Charge set to:", net_charge)
+    adjust_sym = config.AdjustSymmetry
+    print("AdjustSymmetry set to:", adjust_sym)
+    protocol = config.Protocol
+    print("Charge fit protocol set to:", protocol)
+    ignore_sym = config.IgnoreSymmetry
+    print("IgnoreSymmetry set to:", ignore_sym)
+
 
 
     # Process the initial structure
@@ -70,8 +78,9 @@ def main_conform_processing():
         base_scratch_dir=base_scratch_dir,
         net_charge=net_charge,
         residue_name=residue_name,
-        adjust_symm=adjust_sym,
-        protocol=protocol
+        adjust_sym=adjust_sym,
+        protocol=protocol,
+        ignore_sym=ignore_sym
     )
 
 

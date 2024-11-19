@@ -41,6 +41,8 @@ def main_processing(net_charge=None):
     residue_name = config.ResidueName
     adjust_sym=config.AdjustSymmetry
     atom_type=config.AtomType
+    protocol=config.Protocol
+    ignore_sym=config.IgnoreSymmetry
     additional_input = [] 
 
     # Delet later - just for debugging:
@@ -60,7 +62,9 @@ def main_processing(net_charge=None):
         net_charge=net_charge,
         adjust_sym=adjust_sym,
         atom_type=atom_type,
-        exit_screen=True # Set this to True if u execute via pis.sh, else set this to False or delete 
+        exit_screen=True, # Set this to True if u execute via pis.sh, else set this to False or delete
+        protocol=protocol,
+        ignore_sym=ignore_sym
     )
 
 

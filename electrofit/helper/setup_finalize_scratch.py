@@ -59,7 +59,7 @@ def setup_scratch_directory(input_files, base_scratch_dir="/scratch/johannal96/t
 
     return scratch_dir, fullpath
 
-def finalize_scratch_directory(
+def finalize_scratch_directory_old(
     original_dir, scratch_dir, input_files, output_files=None
 ):
     """
@@ -134,13 +134,13 @@ def finalize_scratch_directory(
     except Exception as e:
         logging.error(f"Failed to remove scratch directory '{scratch_dir}': {e}")
 
-# New finalize scratch directory: rename to finalize_scratch and delete old function. After all calculations running are done.  
+# New finalize scratch directory: rename to finalize_scratch and delete old function. 
 import os
 import shutil
 import logging
 import filecmp
 
-def finalize_scratch_directory_new(
+def finalize_scratch_directory(
     original_dir, scratch_dir, input_files, output_files=None 
 ):
     """

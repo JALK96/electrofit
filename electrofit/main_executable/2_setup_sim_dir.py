@@ -32,10 +32,10 @@ bash_script_source = os.path.join(project_path, "electrofit/bash/gmx.sh")
 
 # File patterns to search for
 file_patterns = [
-    '*_resp_GMX.gro',
-    '*_resp_GMX.itp',
-    '*_resp_GMX.top',
-    'posre_*_resp.itp'
+    '*GMX.gro',
+    '*GMX.itp',
+    '*GMX.top',
+    'posre_*.itp'
 ]
 
 # Loop through each subdirectory in the process directory

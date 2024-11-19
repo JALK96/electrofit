@@ -36,7 +36,7 @@ from electrofit.helper.setup_finalize_scratch import (
     setup_scratch_directory,
 )
 
-def process_conform(molecule_name, pdb_file, base_scratch_dir, net_charge, residue_name, adjust_symm=False, exit_screen=True, protocol="bcc"): 
+def process_conform(molecule_name, pdb_file, base_scratch_dir, net_charge, residue_name, adjust_sym=False, ignore_sym=False, exit_screen=True, protocol="bcc"): 
     """
     Processes the conformers from the simulation output: Antechamber, Gaussian calculation, espgen, RESP fitting.
 
@@ -47,7 +47,7 @@ def process_conform(molecule_name, pdb_file, base_scratch_dir, net_charge, resid
     - net_charge (int): Net charge of the molecule.
     """
     # Define RESP input
-    if adjust_symm:
+    if adjust_sym:
         respin1_file = "ANTECHAMBER_RESP1_MOD.IN"
     else:
         respin1_file = "ANTECHAMBER_RESP1.IN"
@@ -59,7 +59,7 @@ def process_conform(molecule_name, pdb_file, base_scratch_dir, net_charge, resid
         input_files = [pdb_file, respin1_file, respin2_file]  # Only include existing input files
     
     if protocol == "bcc":
-        if adjust_symm:
+        if adjust_sym:
             # Setup scratch directory with pdb input file, and equiv_groups.json
             input_files = [pdb_file, find_file_with_extension("json")]
         else:
@@ -68,7 +68,7 @@ def process_conform(molecule_name, pdb_file, base_scratch_dir, net_charge, resid
 
     scratch_dir, original_dir = setup_scratch_directory(input_files, base_scratch_dir)
     
-    print("Following {protocol} protocol.")
+    print(f"Following {protocol} protocol.")
 
     try:
 
@@ -115,7 +115,7 @@ def process_conform(molecule_name, pdb_file, base_scratch_dir, net_charge, resid
                 logging.info("RESP input files generated successfully.")
             
 
-            if adjust_symm:
+            if adjust_sym and not ignore_sym:
                 # Find self defined symmetry file
                 json_symmetry_file = find_file_with_extension("json")
                 # Edit symmetry in "ANTECHAMBER_RESP1.IN"
@@ -125,9 +125,19 @@ def process_conform(molecule_name, pdb_file, base_scratch_dir, net_charge, resid
                 # Re-define the respin1-file
                 respin1_file = os.path.join(scratch_dir, "ANTECHAMBER_RESP1_MOD.IN")
 
+            if adjust_sym and ignore_sym:
+                # Find self defined symmetry file
+                json_symmetry_file = find_file_with_extension("json")
+                # Edit symmetry in "ANTECHAMBER_RESP1.IN"
+                edit_resp_script = os.path.join(project_path, "electrofit/execution/edit_resp.py")
+                run_command(f"python {edit_resp_script} ANTECHAMBER_RESP1.IN {json_symmetry_file} ANTECHAMBER_RESP1_MOD.IN --ignore_sym", cwd=scratch_dir)
+
+                # Re-define the respin1-file
+                respin1_file = os.path.join(scratch_dir, "ANTECHAMBER_RESP1_MOD.IN")
+
 
         # Step 4: Prepare/Define RESP input files
-        if adjust_symm:
+        if adjust_sym:
             respin1_file = os.path.join(scratch_dir, "ANTECHAMBER_RESP1_MOD.IN")
         else:
             respin1_file = os.path.join(scratch_dir, "ANTECHAMBER_RESP1.IN")
@@ -149,7 +159,7 @@ def process_conform(molecule_name, pdb_file, base_scratch_dir, net_charge, resid
         # Write symmetry output to check
         write_symmetry = os.path.join(project_path, "electrofit/execution/write_symmetry.py")
 
-        if adjust_symm:
+        if adjust_sym:
             # Write symmetry output of alterd RESP1_MOD.IN to check/compare
             run_command(f"python {write_symmetry} {respin1_file} symmetry_resp_MOD.txt", cwd=scratch_dir)
 

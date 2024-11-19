@@ -75,15 +75,18 @@ for sub_dir in os.listdir(process_dir):
 
     # Define molecule parameters
     config = ConfigParser(config_file_path)
-
-    charge = config.Charge
-    atom_type = config.AtomType
     molecule_name = config.MoleculeName
+    print(f"Processing: {molecule_name}")
+    charge = config.Charge
+    print(f"Charge set to: {charge}")
+    atom_type = config.AtomType
+    print(f"AtomType set to: {atom_type}")
     adjust_sym = config.AdjustSymmetry
     print("AdjustSymmetry set to:", adjust_sym)
+    calc_group_average=config.CalculateGroupAverage # ether true or false (bool)
+    print("CalculateGroupAverage set to:", calc_group_average)
 
     updated_mol2_file = os.path.join(results_dir, f"averaged_{molecule_name}.mol2")
-
     
     mol2_file_pattern = f"*{atom_type}.mol2"
 
