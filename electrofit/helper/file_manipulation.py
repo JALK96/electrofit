@@ -444,10 +444,12 @@ def pdb_to_mol2(input_file, output_file, residue_name, cwd=None):
     obConversion.SetInAndOutFormats("pdb", "mol2")
     mol = openbabel.OBMol()
     obConversion.ReadFile(mol, input_file)
+    print("Converting ", input_file, " to ", output_file, "...")
     
     # Set the residue name
     for residue in openbabel.OBResidueIter(mol):
         residue.SetName(residue_name)
+    print("Changed Residue Name to:", residue_name)
     
     # Write to MOL2 format
     obConversion.WriteFile(mol, output_file)

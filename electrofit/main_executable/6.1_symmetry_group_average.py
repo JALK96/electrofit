@@ -89,7 +89,7 @@ for sub_dir in os.listdir(process_dir):
 
     # Specify the input to calculate the symmetric group average
     charges_dict_file = os.path.join(results_dir, "charges_dict.json")
-    equivalent_groups_file = os.path.join(results_dir, "symmetry_groups.json")
+    equivalent_groups_file = os.path.join(results_dir, "equiv_groups.json")
 
     # Calculate updated charges with symmetric group averages
     updated_charges_dict = calculate_symmetric_group_averages(charges_dict_file, equivalent_groups_file)
@@ -99,7 +99,7 @@ for sub_dir in os.listdir(process_dir):
     with open(os.path.join(results_dir, "group_average_charges_dict.json"), "w") as file:
         json.dump(updated_charges_dict, file, indent=4)  # 'indent=4' makes the file human-readable
 
-        # Write the average charges to the output file
+    # Write the average charges to the output file
     output_file = os.path.join(results_dir, "group_average_charges.txt")
     try:
         with open(output_file, 'w') as f:
