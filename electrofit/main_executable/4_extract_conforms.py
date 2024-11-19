@@ -64,6 +64,11 @@ for sub_dir in os.listdir(process_dir):
             respin1_file = os.path.join(pis_dir, "ANTECHAMBER_RESP1.IN")
         
         respin2_file = os.path.join(pis_dir, "ANTECHAMBER_RESP2.IN")
+    
+    if protocol == "bcc":
+        if adjust_sym:
+            os.chdir(pis_dir)
+            equiv_groups_file = os.path.join(pis_dir, find_file_with_extension("json"))
 
     input_mol2_file = os.path.join(input_data_dir, sub_dir, f"{molecule_name}.mol2")
 
@@ -90,8 +95,14 @@ for sub_dir in os.listdir(process_dir):
     ipl = raw_traj.top.select(f"resname {residue_name}")  # Use "MOL" for legacy data
     traj = raw_traj.atom_slice(ipl)
 
-    # Each frame is 100 ps, select frames at intervals of 1000 ps
-    configs = [c for c, t in zip(traj, traj.time) if t % 1000 == 0]
+    # Total number of frames in the trajectory
+    num_frames = len(traj)
+
+    # Generate 100 indices evenly spaced from 0 to num_frames - 1
+    indices = np.linspace(0, num_frames - 1, num=100, dtype=int)
+
+    # Select configurations at these indices
+    configs = [traj[i] for i in indices]
 
     # Save each conformation in its own directory 
     for i, c in enumerate(configs):
@@ -106,6 +117,10 @@ for sub_dir in os.listdir(process_dir):
             # Copy the respin files to the conform dir
             shutil.copy(respin1_file, conform_dir)
             shutil.copy(respin2_file, conform_dir)
+        
+        if protocol == "bcc":
+            # Copy the symmetry file to the conform dir
+            shutil.copy(equiv_groups_file, conform_dir)
 
 
         # Define the path for the PDB file

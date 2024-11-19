@@ -26,11 +26,23 @@ from electrofit.helper.file_manipulation import load_symmetry_groups
 from electrofit.helper.plotting import plot_charges_by_atom, plot_charges_by_symmetry
 
 
+import sys
+import os
+import argparse
+import json
+import matplotlib.pyplot as plt
+import re
+import numpy as np
+
+# Ensure that the functions are accessible
+# from your_module import plot_charges_by_atom, plot_charges_by_symmetry, create_atom_color_mapping, load_symmetry_groups
+
 def main():
     # Set up the argument parser
     parser = argparse.ArgumentParser(description='Plot charges by atom or symmetry.')
     parser.add_argument('-ic', '--initial_charges', required=True, help='Path to initial_charges_dict.json')
     parser.add_argument('-c', '--charges', required=True, help='Path to charges_dict.json')
+    parser.add_argument('-c2', '--charges2', help='Path to second charges_dict.json for comparison (optional)')
     parser.add_argument('-s', '--symmetry_groups', help='Path to symmetry_groups.json (optional)')
     parser.add_argument('-d', '--directory', default='.', help='Directory to save the plot (optional)')
 
@@ -41,9 +53,16 @@ def main():
     with open(args.initial_charges, 'r') as f:
         initial_charges_dict = json.load(f)
 
-    # Load the charges dictionary
+    # Load the first charges dictionary
     with open(args.charges, 'r') as f:
-        atoms_dict = json.load(f)
+        atoms_dict1 = json.load(f)
+
+    # Load the second charges dictionary if provided
+    if args.charges2:
+        with open(args.charges2, 'r') as f:
+            atoms_dict2 = json.load(f)
+    else:
+        atoms_dict2 = None
 
     # Ensure the output directory exists
     base_dir = args.directory
@@ -54,10 +73,10 @@ def main():
         # Load symmetry groups if provided
         symmetry_groups = load_symmetry_groups(args.symmetry_groups)
         # Plot charges by symmetry
-        plot_charges_by_symmetry(atoms_dict, initial_charges_dict, base_dir, symmetry_groups)
+        plot_charges_by_symmetry(atoms_dict1, initial_charges_dict, base_dir, symmetry_groups, atoms_dict2)
     else:
         # Plot charges by atom
-        plot_charges_by_atom(atoms_dict, initial_charges_dict, base_dir)
+        plot_charges_by_atom(atoms_dict1, initial_charges_dict, base_dir, atoms_dict2)
 
 if __name__ == '__main__':
     main()

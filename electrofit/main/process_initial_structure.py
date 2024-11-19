@@ -83,14 +83,15 @@ def process_initial_structure(molecule_name, mol2_file, base_scratch_dir, additi
             else:
                 logging.info("RESP input files generated successfully.")
 
-            # Create json file containing symmetry information for phosphate groups
-            json_symmetry_file = find_file_with_extension("json")
+
             
             # Write symmetry output to check
             write_symmetry = os.path.join(project_path, "electrofit/execution/write_symmetry.py")
             run_command(f"python {write_symmetry} {respin1_file} symmetry_resp.txt", cwd=scratch_dir)
 
             if adjust_sym:
+                # Find self defined symmetry file
+                json_symmetry_file = find_file_with_extension("json")
                 # Edit symmetry in "ANTECHAMBER_RESP1.IN"
                 edit_resp_script = os.path.join(project_path, "electrofit/execution/edit_resp.py")
                 run_command(f"python {edit_resp_script} ANTECHAMBER_RESP1.IN {json_symmetry_file} ANTECHAMBER_RESP1_MOD.IN", cwd=scratch_dir)

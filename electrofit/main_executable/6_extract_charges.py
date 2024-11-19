@@ -31,6 +31,12 @@ from electrofit.helper.plotting import plot_charges_by_atom, plot_charges_by_sym
 
 # Iterate over each subdirectory in the process directory
 for sub_dir in os.listdir(process_dir):
+    sub_dir_path = os.path.join(process_dir, sub_dir)
+    
+    # **Check if sub_dir is a directory**
+    if not os.path.isdir(sub_dir_path):
+        print(f"Skipping '{sub_dir_path}' as it is not a directory.")
+        continue  # Skip to the next item in the loop
 
     # Base directory containing the subdirectories with mol2 files
     base_dir = os.path.join(process_dir, sub_dir, "extracted_conforms")
@@ -44,6 +50,13 @@ for sub_dir in os.listdir(process_dir):
 
     # Use glob to find all matching files or directories
     ac_files = glob.glob(abstract_ac_dir)
+
+    # **Check if any .acpype directories/files are found**
+    if not ac_files:
+        print(f"No '.acpype' directories/files found in '{pis_dir}'. Skipping '{sub_dir_path}'.")
+        continue  # Skip to the next subdirectory
+
+    print(f"Acpype files found in {pis_dir}: {ac_files}")
 
     ac_dir = ac_files[0]
 
