@@ -12,7 +12,7 @@ def calculate_symmetric_group_averages(charges_dict_file, equivalent_groups_file
 
     Parameters:
     - charges_dict_file: Path to the JSON file containing charges data for atoms.
-        Example:
+        Example JSON:
         {
             "H1": {"average_charge": 0.12, "charges": [...]},
             "H3": {"average_charge": 0.11, "charges": [...]},
@@ -28,6 +28,13 @@ def calculate_symmetric_group_averages(charges_dict_file, equivalent_groups_file
 
     Returns:
     - updated_charges_dict: Dictionary with updated average charges for symmetric groups.
+        Example:
+        {
+            "H1": {"average_charge": 0.12, "charges": [...]},
+            "H3": {"average_charge": 0.12, "charges": [...]},
+            "H6": {"average_charge": 0.12, "charges": [...]},
+            ...
+        }
     """
     # Load equivalent groups from the JSON file
     with open(equivalent_groups_file, "r") as f:
@@ -59,7 +66,6 @@ def calculate_symmetric_group_averages(charges_dict_file, equivalent_groups_file
                     updated_charges_dict[atom]["average_charge"] = group_average
 
     return updated_charges_dict
-
 
 
 def find_project_root(current_dir, project_name="electrofit"):
