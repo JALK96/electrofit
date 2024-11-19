@@ -32,10 +32,10 @@ bash_script_source = os.path.join(project_path, "electrofit/bash/gmx.sh")
 
 # File patterns to search for
 file_patterns = [
-    '*_resp_GMX.gro',
-    '*_resp_GMX.itp',
-    '*_resp_GMX.top',
-    'posre_*_resp.itp'
+    '*_GMX.gro',
+    '*_GMX.itp',
+    '*_GMX.top',
+    'posre_*.itp'
 ]
 
 # Loop through each subdirectory in the process directory
@@ -69,7 +69,7 @@ for folder_name in os.listdir(process_dir):
 
             # Find the acpype subdirectory within 'results'
             for subfolder_name in os.listdir(run_gau_dir):
-                if subfolder_name.endswith('_resp.acpype'):
+                if subfolder_name.endswith('.acpype'):
                     acpype_folder_path = os.path.join(run_gau_dir, subfolder_name)
 
                     # Copy files that match the patterns from the acpype folder
