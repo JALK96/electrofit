@@ -11,7 +11,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Define the log file
-LOG_FILE="$SCRIPT_DIR/execute_run_process_conform.log"
+LOG_FILE="$SCRIPT_DIR/process.log"
 
 # Function to log messages with timestamps
 log() {
