@@ -3,6 +3,7 @@ import os
 
 import matplotlib.pyplot as plt
 import pandas as pd
+import subprocess
 
 from electrofit.commands.run_commands import run_command
 from electrofit.helper.file_manipulation import (
@@ -43,7 +44,7 @@ def plot_svg(svg):
     logging.disable(logging.NOTSET)
 
 
-def set_up_production(m_gro, MDP_dir, base_scratch_dir, box_type="dodecahedron", cation="NA", anion="CL", d="1.2" ,conc="0.15"):
+def set_up_production(m_gro, MDP_dir, base_scratch_dir, molecule_name, box_type="dodecahedron", cation="NA", anion="CL", d="1.2" , conc="0.15", exit_screen=True):
     """
     Set up and execute a production molecular dynamics (MD) simulation using GROMACS following input generation by acpype.
 
@@ -295,5 +296,10 @@ def set_up_production(m_gro, MDP_dir, base_scratch_dir, box_type="dodecahedron",
 
     # Finalize scratch directory
     finalize_scratch_directory(original_dir, scratch_dir, input_files)
+
+    if exit_screen:
+        os.chdir(original_dir)
+        # Send the 'quit' command to the specified screen session
+        subprocess.run(["screen", "-S", molecule_name, "-X", "quit"])
 
 

@@ -195,12 +195,30 @@ def process_conform(molecule_name, pdb_file, base_scratch_dir, net_charge, resid
 
         # Exit screen session (close detached session)
         if exit_screen:
-            os.chdir(original_dir)
-            # Send the 'quit' command to the specified screen session
-            subprocess.run(["screen", "-S", molecule_name, "-X", "quit"])
+            try:
+                # Change back to the original directory
+                os.chdir(original_dir)
+                logging.info(f"Changed directory to '{original_dir}'.")
+            except Exception as e:
+                logging.error(f"Failed to change directory to '{original_dir}': {e}")
+                sys.exit(1)
 
+            # Retrieve the current Screen session name from the environment
+            sty = os.environ.get('STY')
+            
+            if sty:
+                try:
+                    # Send the 'quit' command to the current Screen session
+                    subprocess.run(["screen", "-S", sty, "-X", "quit"], check=True)
+                    logging.info(f"Successfully exited Screen session: {sty}")
+                except subprocess.CalledProcessError as e:
+                    logging.error(f"Failed to send quit command to Screen session '{sty}': {e}")
+                    sys.exit(1)
+            else:
+                logging.warning("The 'STY' environment variable was not found. This script may not be running inside a Screen session.")
+                sys.exit(1)
+                
     except Exception as e:
         logging.error(f"Error processing conform: {e}")
         finalize_scratch_directory(original_dir, scratch_dir, input_files)
-        exit(1)  # Exit the script with a non-zero status
-
+        exit(1)

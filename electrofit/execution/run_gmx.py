@@ -43,6 +43,7 @@ def main_production():
     anion=config.Anion
     distance=config.BoxEdgeDistance
     conc=config.IonConcentration
+    molecule_name=config.MoleculeName
 
     m_gro = find_file_with_extension("gro")
     MDP_dir = "MDP"
@@ -54,7 +55,7 @@ def main_production():
             print(f"The path {path} does not exist.")
             return
 
-    set_up_production(m_gro=m_gro, MDP_dir=MDP_dir, base_scratch_dir=base_scratch_dir, box_type=box_type, cation=cation, anion=anion, d=distance, conc=conc)
+    set_up_production(m_gro=m_gro, MDP_dir=MDP_dir, base_scratch_dir=base_scratch_dir, molecule_name=molecule_name, box_type=box_type, cation=cation, anion=anion, d=distance, conc=conc)
 
 
 if __name__ == "__main__":
