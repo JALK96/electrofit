@@ -1,5 +1,6 @@
 import os
 import sys
+import logging
 
 def find_project_root(current_dir, project_name="electrofit"):
     root = None
@@ -24,6 +25,7 @@ sys.path.append(project_path)
 from electrofit.main.process_conform import process_conform
 from electrofit.helper.file_manipulation import find_file_with_extension, strip_extension
 from electrofit.helper.config_parser import ConfigParser
+from electrofit.helper.set_logging import setup_logging
 
 
 
@@ -35,16 +37,24 @@ def main_conform_processing():
 
     # Find current working directory
     home = os.getcwd()
-    print("Working Directory:", home)
+
+    # Initialize logging with log file in home
+    log_file_path = os.path.join(home, "process.log")
+    setup_logging(log_file_path)
+
+
+    logging.info(f"Working Directory: {home}")
 
     # Get parent directory 
     extracted_conforms_dir = os.path.dirname(home)
-    print("Extracted Conform Directory::", extracted_conforms_dir)
+    logging.info(f"Extracted Conform Directory: {extracted_conforms_dir}")
 
     # Go to the parent folder (the extracted_conforms directory) to open the configuration file (.ef) 
     os.chdir(extracted_conforms_dir)
 
+    
     input = find_file_with_extension("ef")
+    logging.info(f"=== Reading parameter from configuration file: {input} in {extracted_conforms_dir} ===")
     config = ConfigParser(input)
 
     # Go back to the home directory
@@ -53,23 +63,25 @@ def main_conform_processing():
     # Define file and molecule name
     pdb_file = find_file_with_extension("pdb")
     molecule_name = strip_extension(pdb_file)
-    print("Processing conform:", molecule_name)
+    logging.info(f"Processing conform: {molecule_name}")
+    logging.info("------------------------------------------")
 
     # Define 
     base_scratch_dir = config.BaseScratchDir
-    print("Scratch directory set to:", base_scratch_dir)
+    logging.info(f"Scratch directory set to: {base_scratch_dir}")
     residue_name = config.ResidueName
-    print("Residue Name:", residue_name)
+    logging.info(f"Residue Name: {residue_name}")
     net_charge = config.Charge
-    print("Charge set to:", net_charge)
+    logging.info(f"Charge set to: {net_charge}")
     adjust_sym = config.AdjustSymmetry
-    print("AdjustSymmetry set to:", adjust_sym)
+    logging.info(f"AdjustSymmetry set to: {adjust_sym}")
     protocol = config.Protocol
-    print("Charge fit protocol set to:", protocol)
+    logging.info(f"Charge fit protocol set to: {protocol}")
     ignore_sym = config.IgnoreSymmetry
-    print("IgnoreSymmetry set to:", ignore_sym)
+    logging.info(f"IgnoreSymmetry set to: {ignore_sym}")
 
 
+    logging.info("=== Executing script 'process_conform'! ===")
 
     # Process the initial structure
     process_conform(
