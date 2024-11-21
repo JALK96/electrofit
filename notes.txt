@@ -1,11 +1,6 @@
 NOTES:
 -----
 
-gromacs says that behrendsen is better suited compared to Parrinello (pcoupl)
-
 gromacs topology location: 
 
 /home/johannal96/miniconda3/envs/AmberTools23/share/gromacs/top
-
-
-make sure to chage the process_initial_structure modules and connected components to run gaussian!!!
