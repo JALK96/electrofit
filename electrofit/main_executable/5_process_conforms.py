@@ -31,7 +31,7 @@ for root, dirs, files in os.walk(dst):
         if item == "pc.sh":
             all_scripts.append(os.path.join(root, item))
 
-# Step 2: Run scripts in batches of 20 every 10 minutes
+# Step 2: Run scripts in batches of 20 every 15 minutes
 batch_size = 20
 executed_scripts = set()  # Track executed scripts
 
@@ -51,4 +51,4 @@ while len(executed_scripts) < len(all_scripts):
         break
 
     print(f"Executed {len(executed_scripts)} scripts so far. Waiting 10 minutes before running the next batch of {batch_size}.")
-    time.sleep(600)  # Wait 10 minutes before running the next batch
+    time.sleep(900)  # Wait 15 minutes before running the next batch
