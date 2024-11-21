@@ -581,7 +581,7 @@ CalculateGroupAverage: True
 
 - **GROMACS** (Open-source MD simulation software)
 
-- **ACPYPE**
+- **ACPYPE** (to generate GROMACS input)
 
 - **Open Babel**  (for file conversions)
 
@@ -599,7 +599,7 @@ CalculateGroupAverage: True
 
 ## Acknowledgments
 
-This package was developed to automate and streamline the complex process of molecular parameterization and simulation. Special thanks to all contributors and the developers of the underlying tools integrated into Electrofit.
+This package was developed to automate and streamline the process of molecular parameterization and simulation. Special thanks to all contributors and the developers of the underlying tools integrated into Electrofit.
 
 - **AmberTools:** For Antechamber and RESP.
 - **Gaussian:** For quantum chemical calculations.

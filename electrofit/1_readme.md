@@ -34,6 +34,7 @@ This document provides a comprehensive overview of the operations performed duri
 ## Conditional Workflow Based on Protocol
 
 The workflow diverges based on the `Protocol` specified in `input.ef`. The two supported protocols are:
+
 - **`bcc`**: Uses AM1-BCC charges assigned by Antechamber.
 - **`opt`**: Performs full Gaussian optimization followed by RESP fitting.
 
