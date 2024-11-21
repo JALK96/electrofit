@@ -210,7 +210,7 @@ This document provides an abstracted overview of the operations performed during
   - *Uses custom plotting functions to generate PDFs of the analyzed data.*
 
 - **Temporary Workspace Management**:
-  - *A scratch directory is used to isolate the simulation environment and prevent interference with the main working directory and update procedure attached to it.*
+  - *A scratch directory is used to isolate the simulation environment and prevent interference with the main working directory and backup procedure attached to it.*
   - *Ensures that intermediate files do not clutter the main workspace and are appropriately managed.*
 
 - **Prerequisites**:

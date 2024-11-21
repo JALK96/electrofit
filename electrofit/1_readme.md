@@ -1,228 +1,170 @@
+
 # Summary of Executed Operations Performed by Processing the Initial Structure
 
-This document provides an abstracted overview of the operations performed during the execution process of `process_initial_structure` script located in the main package. Each step is generalized to avoid explicit file naming.
+This document provides a comprehensive overview of the operations performed during the execution of the `process_initial_structure` script in the **Electrofit** package. The steps are generalized to avoid explicit file naming and include all functionalities, options, and conditions based on protocol and symmetry adjustments.
 
 ---
 
-0. **Resolve Structure**
-   - *The input MOL2 file is converted to a PDB and back by open babel to ensure correct file formatting for subsequent steps.*
+## Preliminary Steps
 
-1. **Create Scratch Directory**
-   - *Initializes a temporary working directory for processing intermediate files, without interfering with regular update protocols.*
+1. **Resolve Structure**
+   - **Function:** `mol2_to_pdb_and_back()`
+   - Converts the input MOL2 file to a PDB format and back to MOL2 using Open Babel to ensure correct file formatting and atom labeling.
+   - Addresses potential issues with atom ordering and file inconsistencies.
 
-2. **Copy Input Files to Scratch Directory**
-   - *Transfers necessary input files (e.g., molecular structure file `input_file.mol2` and symmetry information file `equiv_groups.json`) to the scratch directory for isolated processing.*
+2. **Find Project Root Directory**
+   - **Function:** `find_project_root()`
+   - Locates the root directory of the Electrofit project to ensure relative paths and imports work correctly.
+   - Essential for accessing modules and scripts in different directories.
 
-3. **Verify Scratch Directory Contents**
-   - *Lists and logs all files and directories in the scratch directory to confirm successful copying of input files.*
+3. **Parse Configuration and Set Up Logging**
+   - **Imports:**
+     - `from electrofit.helper.config_parser import ConfigParser`
+     - `from electrofit.helper.set_logging import setup_logging`
+   - Parses the `input.ef` configuration file to retrieve parameters like `Protocol`, `AdjustSymmetry`, `IgnoreSymmetry`, etc.
+   - Sets up logging for process tracking and debugging.
 
-4. **Run `antechamber` to Generate Gaussian Input**
+4. **Create Scratch Directory**
+   - **Functions:** `setup_scratch_directory()`, `finalize_scratch_directory()`
+   - Initializes a temporary working directory for intermediate file processing.
+   - Prevents clutter in the main directory and isolates the workflow.
+
+---
+
+## Conditional Workflow Based on Protocol
+
+The workflow diverges based on the `Protocol` specified in `input.ef`. The two supported protocols are:
+- **`bcc`**: Uses AM1-BCC charges assigned by Antechamber.
+- **`opt`**: Performs full Gaussian optimization followed by RESP fitting.
+
+### Protocol: `bcc`
+
+1. **Run ACPYPE to Generate GROMACS Input with AM1-BCC Charges**
+   - **Function:** `run_acpype()`
+   - **Command:**
+
+     ```bash
+     acpype -i input_file.mol2 -n <charge> -a <atom_type> -c bcc
+     ```
+
+   - Generates GROMACS-compatible topology and coordinate files using AM1-BCC charges.
+   - Specifies the net charge and atom types (e.g., gaff, gaff2).
+
+2. **Finalize Scratch Directory**
+   - Copies output files back to the original directory.
+   - Cleans up the scratch directory.
+
+### Protocol: `opt`
+
+1. **Run Antechamber to Generate Gaussian Input**
    - **Command:**
 
      ```bash
      antechamber -i input_file.mol2 -fi mol2 -nc <charge> -at <atom_type> -o gau_input.gcrt -fo gcrt -gv 1 -ge output.gesp
      ```
 
-   - *Generates `gau_input.gcrt` and specifies in that input file that Gaussian should generate a `.gesp` file as output along the other output files.*
+   - Prepares the molecule for Gaussian optimization without assigning charges.
 
-5. **Run Gaussian Optimization**
+2. **Run Gaussian Optimization**
+   - **Function:** `run_gaussian_calculation()`
    - **Command:**
 
      ```bash
      rung16 gau_input.gcrt
      ```
 
-   - *Generates `input_log_file.gcrt.log`, `molecule.chk`, and `input_file.gesp`, providing the necessary input to derive the electrostatic potential data for subsequent RESP fitting.*
+   - Performs full geometry optimization using Gaussian.
 
-6. **Execute `espgen`**
+3. **Execute ESPGEN**
+   - **Function:** `run_espgen()`
    - **Command:**
 
      ```bash
      espgen -i input_file.gesp -o output_file.esp
      ```
 
-   - *Generates electrostatic potential data from Gaussian output files, essential for charge fitting.*
+   - Converts the Gaussian ESP output into a format suitable for RESP fitting.
 
-7. **Report `espgen` Output**
-   - *Logs the creation of new electrostatic potential files and confirms the completion of `espgen` processing.*
-
-8. **Execute `antechamber` to Generate RESP Input Files for Subsequent Manual Fitting**
+4. **Generate RESP Input Files**
+   - **Function:** `gaussian_out_to_prepi()`
    - **Command:**
 
      ```bash
-     antechamber -i input_log_file.gcrt.log -fi gout -o output_file.prepi -fo prepi -c resp -s 2
+     antechamber -i gau_input.gcrt.log -fi gout -o output_file.prepi -fo prepi -c resp -s 2
      ```
 
-   - *Processes Gaussian output to generate prepi file (output_file.prepi).*
-   - *Executing antechamber will lead to automated RESP fitting, where antechamber guesses symmetry based on connectivity.*
-   - *During this, it generates input files for symmetry-aware RESP fitting, i.e., `resp_input1.IN` and `resp_input2.IN`.*
-   - *These files are later used and modified to account for user-defined symmetry (which were specified in the equiv_groups.json file).*
-   - *All other files generated in this step are not used for further processing.*
+   - Processes Gaussian output to generate RESP input files (ANTECHAMBER_RESP1.IN, ANTECHAMBER_RESP2.IN).
 
-   ---
-
-   - **Substeps Executed by Antechamber:**
-
-     8.1 **Assign Bond Types with `bondtype`**
-     - **Command:**
+5. **Adjust Symmetry (If Applicable)**
+   - **Parameters:**
+     - `AdjustSymmetry`
+     - `IgnoreSymmetry`
+   - **Scripts:** `edit_resp.py`, `write_symmetry.py`
+   - Commands vary based on parameter values:
+     - **AdjustSymmetry = True, IgnoreSymmetry = False:**
 
        ```bash
-       bondtype -j full -i bond_type_input.ac0 -o bond_type_output.ac -f ac
+       python edit_resp.py ANTECHAMBER_RESP1.IN equiv_groups.json ANTECHAMBER_RESP1_MOD.IN
        ```
 
-     - *Determines bond types based on input data to facilitate accurate charge fitting.*
-
-     8.2 **Assign Atom Types with `atomtype`**
-     - **Command:**
+     - **AdjustSymmetry = True, IgnoreSymmetry = True:**
 
        ```bash
-       atomtype -i atomtype_input.ac0 -o atomtype_output.inf -p gaff
+       python edit_resp.py ANTECHAMBER_RESP1.IN equiv_groups.json ANTECHAMBER_RESP1_MOD.IN --ignore_sym
        ```
 
-     - *Assigns atom types using the GAFF force field, necessary for consistent parameterization.*
-
-     8.3 **Generate RESP Input Files with `espgen`**
-     - **Command:**
+     - **Verification:**  
 
        ```bash
-       espgen -o antechamber_output_file.ESP -i input_log_file.gcrt.log
+       python write_symmetry.py ANTECHAMBER_RESP1_MOD.IN symmetry_resp_MOD.txt
        ```
 
-     - *Creates RESP (Restrained ElectroStatic Potential) input files from Gaussian log data for charge fitting.*
-
-     8.4 **Execute `respgen` for RESP Fitting**
-     - **Commands:**
+6. **Run RESP Charge Fitting**
+   - **Functions:** `run_resp()`
+   - **Commands:**
+     - **Stage 1:**
 
        ```bash
-       respgen -i resp_input.ac -o resp_input1.IN -f resp1 -e 1
-       respgen -i resp_input.ac -o resp_input2.IN -f resp2 -e 1
+       resp -O -i ANTECHAMBER_RESP1.IN -o resp_output1.OUT -p resp_pch1.pch -t resp_chg1.chg -e output_file.esp
        ```
 
-     - *Generates RESP fitting input files for charge assignment.*
-
-     8.5 **Run RESP Charge Fitting - Stage 1**
-     - **Command:**
+     - **Stage 2:**
 
        ```bash
-       resp -O -i resp_input1.IN -o antechamber_resp_output1.OUT -e antechamber_output_file.ESP -t qout
+       resp -O -i ANTECHAMBER_RESP2.IN -o resp_output2.OUT -p resp_pch2.pch -t resp_chg2.chg -e output_file.esp -q resp_chg1.chg
        ```
 
-     - *Performs the first stage of RESP charge fitting to assign partial atomic charges.*
-
-     8.6 **Run RESP Charge Fitting - Stage 2**
-     - **Command:**
-
-       ```bash
-       resp -O -i resp_input2.IN -o antechamber_resp_output2.OUT -e antechamber_output_file.ESP -q qout -t QOUT
-       ```
-
-     - *Completes the second stage of RESP charge fitting for refined charge assignments.*
-
-     8.7 **Generate PrePI Files with `prepgen`**
-     - **Command:**
-
-       ```bash
-       prepgen -i prep_input.ac -f int -o output_file.prepi -rn "MOL" -rf molecule.res
-       ```
-
-     - *Creates PrePI (Pre-parameter Input) files required for parameter generation based on RESP fitting results.*
-
-   ---
-
-9. **Write Symmetry Information**
+7. **Update MOL2 File with New RESP Charges**
+   - **Function:** `update_mol2_charges()`
+   - **Script:** `update_mol2.py`
    - **Command:**
 
      ```bash
-     python write_symmetry.py resp_input1.IN symmetry_output.txt
+     python update_mol2.py input_file.mol2 resp_chg2.chg output_file_resp.mol2
      ```
 
-   - *Extracts and writes symmetry information from RESP input files and outputs them in a human-readable format to assist in accurate charge assignments that consider symmetry correctly.*
+8. **Run ACPYPE for Topology and Parameter Generation**
+   - **Function:** `run_acpype()`
+   - **Command:**
 
-10. **Edit RESP Input Files Based on Equivalence Groups**
-    - **Command:**
+     ```bash
+     acpype -i output_file_resp.mol2 -n <charge> -a <atom_type> -c user
+     ```
 
-      ```bash
-      python edit_resp.py resp_input1.IN equiv_groups.json resp_input1_MOD.IN
-      ```
-
-    - *Modifies RESP input files using equivalence groups to ensure consistent and accurate charge assignment based on predefined symmetry.*
-    - *The script enforces symmetry constraints based on user-defined equivalence groups to improve the accuracy of the RESP fitting, thereby accounting for unidentified or falsely assigned symmetry through antechamber.*
-
-11. **Write Modified Symmetry Information**
-    - **Command:**
-
-      ```bash
-      python write_symmetry.py resp_input1_MOD.IN symmetry_resp_MOD.txt
-      ```
-
-    - *Writes symmetry information based on modified RESP input files.*
-
-12. **Run RESP Charge Fitting with Modified Inputs - Stage 1**
-    - **Command:**
-
-      ```bash
-      resp -O -i resp_input1_MOD.IN -o resp_output1.OUT -p output_file.pch -t output_file1.chg -e output_file.esp
-      ```
-
-    - *Performs RESP charge fitting using modified input files for initial charge assignment.*
-
-13. **Run RESP Charge Fitting with Modified Inputs - Stage 2**
-    - **Command:**
-
-      ```bash
-      resp -O -i resp_input2.IN -o resp_output2.OUT -p output_file2.pch -t output_file2.chg -e output_file.esp -q output_file1.chg
-      ```
-
-    - *Completes RESP charge fitting with modified inputs for refined charge assignments.*
-
-14. **Update MOL2 File with New Charges**
-    - **Command:**
-
-      ```bash
-      python update_mol2.py input_file.mol2 charges_file.chg output_file_resp.mol2
-      ```
-
-    - *Incorporates newly fitted RESP charges into the MOL2 molecular structure file.*
-
-15. **Execute `acpype` for Topology and Parameter Generation**
-    - **Command:**
-
-      ```bash
-      acpype -i output_file_resp.mol2 -n <charge> -a <atom_type> -c user
-      ```
-
-    - *Generates comprehensive topology and parameter files compatible with the `<atom_type>` force field, specifying net charge and user-defined charge assignments.*
-    - *Here, `-a <atom_type>` specifies the atom type (e.g., `gaff`, `gaff2`) and `-c user` tells `acpype` to use user-provided charges instead of calculating new ones.*
-
-16. **Report `acpype` Output**
-    - *Logs the creation of new topology and parameter files and confirms the completion of `acpype` processing.*
-
-17. **Identify Output Files for Transfer**
-    - *Lists all output files generated in the scratch directory for copying back to the original directory.*
-
-18. **Copy Output Files Back to Original Directory**
-    - *Transfers generated output files from the scratch directory back to the original working directory, ensuring that existing files are not overwritten by renaming originals if necessary.*
-
-19. **Remove Scratch Directory**
-    - *Cleans up by deleting the temporary scratch directory and all its contents after processing is complete.*
+9. **Finalize Scratch Directory**
+   - Copies output files back to the original directory.
+   - Cleans up the scratch directory.
 
 ---
 
-## **Notes**
+## Common Steps (Regardless of Protocol)
 
-- **Temporary Workspace Management**:
-  - *Establishes and cleans up a dedicated environment to ensure that intermediate processing does not interfere with the main directories.*
+1. **Handle Screen Session (If Applicable)**
+   - **Parameter:** `exit_screen`
+   - Closes the detached screen session after processing if `exit_screen` is `True`.
 
-- **Input and Output Handling**:
-  - *Ensures secure transfer of necessary files for processing and safely returns generated outputs without overwriting existing files.*
-
-- **Custom Scripting for Data Processing**:
-  - *Employs user-defined Python scripts to handle specific tasks like symmetry information extraction, RESP input modification, and MOL2 file updates.*
-
-- **Logging and Verification**:
-  - *Maintains detailed logs throughout the process for transparency, debugging, and verification of each step's successful execution.*
-
-- **Prerequisites**:
-  - *AmberTools23 must be installed as a conda-environment, and within the environment `antechamber` and `acpype` must be installed. The environment must be named AmberTools23 and accessible in the system's PATH.*
+2. **Error Handling and Logging**
+   - Logs errors using Python’s logging module.
+   - Ensures scratch directory is finalized to prevent data loss in case of errors.
 
 ---
