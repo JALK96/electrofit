@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "electrofit"
-version = "0.1.0"
-description = "package for multi RESP fitting for subsequent MD simulations"
+version = "0.0.1"
+description = "Package for multi RESP fitting for subsequent MD simulations"
 authors = ["JALK96 <johannarthurlaux@gmail.com>"]
 readme = "README.md"
 
