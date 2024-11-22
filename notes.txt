@@ -4,3 +4,5 @@ NOTES:
 gromacs topology location: 
 
 /home/johannal96/miniconda3/envs/AmberTools23/share/gromacs/top
+
+you might want to look into the the antechamber -j option if things fail dramatically. 
