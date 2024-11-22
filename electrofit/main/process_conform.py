@@ -97,7 +97,7 @@ def process_conform(molecule_name, pdb_file, base_scratch_dir, net_charge, resid
             # Step 4: Prepare RESP input files
             g_out = f"{gaussian_input}.log"
             #gaussian_out_to_prepi(g_out, scratch_dir) # needs to be changed. use: "bondtype -i input.mol2 -o input_bondtype.ac -f mol2 -j part"
-            run_command(f"bondtype -i {mol2_file} -o {molecule_name}.ac -f mol2 -j part -nc {net_charge}", cwd=scratch_dir)
+            run_command(f"bondtype -i {mol2_file} -o {molecule_name}.ac -f mol2 -j part", cwd=scratch_dir)
             replace_charge_in_ac_file(file_path=f"{molecule_name}.ac", new_charge_float=net_charge, cwd=scratch_dir)
             run_command(f"respgen -i {molecule_name}.ac -o ANTECHAMBER_RESP1.IN -f resp1", cwd=scratch_dir)
             run_command(f"respgen -i {molecule_name}.ac -o ANTECHAMBER_RESP2.IN -f resp2", cwd=scratch_dir)
