@@ -176,7 +176,7 @@ def plot_charges_by_atom(atoms_dict1, initial_charges_dict, base_dir, atoms_dict
 
 def create_atom_color_mapping(atom_names, symmetry_groups):
     # List of colors to use for the groups
-    group_colors_list = ['darkred', 'darkgreen', 'darkorange', 'purple', 'royalblue', 'lightcoral', 'deepskyblue', 'mediumvioletred']
+    group_colors_list = ['darkred', 'darkgreen', 'darkorange', 'purple', 'royalblue', 'lightcoral', 'deepskyblue', 'mediumvioletred', 'orange', 'olive', 'teal', 'dodgerblue', 'darkkhaki', 'salmon', 'firebrick', 'olivedrab', 'palevioletred']
     group_colors = {}
 
     # Map each group to a color
