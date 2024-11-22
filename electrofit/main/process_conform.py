@@ -30,7 +30,7 @@ from electrofit.commands.run_commands import (
     run_resp,
     gaussian_out_to_prepi
 )
-from electrofit.helper.file_manipulation import pdb_to_mol2, modify_gaussian_input, find_file_with_extension
+from electrofit.helper.file_manipulation import pdb_to_mol2, modify_gaussian_input, find_file_with_extension, replace_charge_in_ac_file
 from electrofit.helper.setup_finalize_scratch import (
     finalize_scratch_directory,
     setup_scratch_directory,
@@ -76,7 +76,6 @@ def process_conform(molecule_name, pdb_file, base_scratch_dir, net_charge, resid
         mol2_file = f"{molecule_name}.mol2"
         pdb_to_mol2(pdb_file, mol2_file, residue_name, cwd=scratch_dir)
 
-
         # Step 1: Generate Gaussian input file
         create_gaussian_input(mol2_file, molecule_name, net_charge, scratch_dir)
 
@@ -97,7 +96,11 @@ def process_conform(molecule_name, pdb_file, base_scratch_dir, net_charge, resid
         if protocol == "bcc":
             # Step 4: Prepare RESP input files
             g_out = f"{gaussian_input}.log"
-            gaussian_out_to_prepi(g_out, scratch_dir)
+            #gaussian_out_to_prepi(g_out, scratch_dir) # needs to be changed. use: "bondtype -i input.mol2 -o input_bondtype.ac -f mol2 -j part"
+            run_command(f"bondtype -i {mol2_file} -o {molecule_name}.ac -f mol2 -j part -nc {net_charge}", cwd=scratch_dir)
+            replace_charge_in_ac_file(file_path=f"{molecule_name}.ac", new_charge_float=net_charge, cwd=scratch_dir)
+            run_command(f"respgen -i {molecule_name}.ac -o ANTECHAMBER_RESP1.IN -f resp1", cwd=scratch_dir)
+            run_command(f"respgen -i {molecule_name}.ac -o ANTECHAMBER_RESP2.IN -f resp2", cwd=scratch_dir)
 
             # At this point, antechamber should have generated RESP input files in scratch_dir
             respin1_file = os.path.join(scratch_dir, "ANTECHAMBER_RESP1.IN")

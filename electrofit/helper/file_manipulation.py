@@ -956,3 +956,40 @@ def load_symmetry_groups(json_path):
     with open(json_path, 'r') as file:
         symmetry_groups = json.load(file)
     return symmetry_groups
+
+
+def replace_charge_in_ac_file(file_path, new_charge_float, cwd=None):
+    """
+    Replaces all CHARGE lines in the file with the new charge value.
+    """
+    if cwd:
+        home = os.getcwd()
+        os.chdir(cwd)
+
+    new_charge_int = int(round(new_charge_float))
+    new_charge_line = f"CHARGE     {new_charge_float:.2f} ( {new_charge_int} )\n"
+
+    with open(file_path, 'r') as file:
+        lines = file.readlines()
+
+    charge_replaced = False
+    updated_lines = []
+    for line in lines:
+        if line.startswith('CHARGE'):
+            updated_lines.append(new_charge_line)
+            charge_replaced = True
+            print(f"Replaced line:\nOld: {line.strip()}\nNew: {new_charge_line.strip()}")
+        else:
+            updated_lines.append(line)
+
+    if not charge_replaced:
+        print("No CHARGE line found in the file.")
+        return
+
+    with open(file_path, 'w') as file:
+        file.writelines(updated_lines)
+    
+    if cwd:
+        os.chdir(home)
+
+    print(f"All CHARGE entries have been updated to {new_charge_float:.2f} ({new_charge_int}).")
