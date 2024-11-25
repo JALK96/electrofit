@@ -32,134 +32,7 @@ def create_atom_color_mapping(atom_names, symmetry_groups):
 
     return atom_to_color
 
-def plot_histograms(df_original, df_adjusted, title, filename, adjusted_average_charges=None, symmetric_atoms=None, atom_to_color=None, symmetric_groups=None):
-    """
-    Plot histograms of the DataFrame and save the plot.
-
-    Parameters:
-        df_original (pd.DataFrame): Original charges data.
-        df_adjusted (pd.DataFrame): Adjusted charges data.
-        title (str): Title of the plot.
-        filename (str): Filename to save the plot.
-        adjusted_average_charges (dict, optional): Dictionary of adjusted average charges.
-        symmetric_atoms (set, optional): Set of atom names that are symmetric.
-        atom_to_color (dict, optional): Mapping of atom names to colors.
-        symmetric_groups (dict, optional): Dictionary of symmetry groups.
-    """
-    num_atoms = len(df_original.columns)
-    num_cols = min(4, num_atoms)
-    num_rows = (num_atoms + num_cols - 1) // num_cols  # Calculate rows needed
-
-    fig, axes = plt.subplots(num_rows, num_cols, figsize=(4*num_cols, 3*num_rows))
-    axes = axes.flatten()
-
-    for i, col in enumerate(df_original.columns):
-        ax = axes[i]
-        data_original = df_original[col].dropna()  # Original data
-        data_adjusted = df_adjusted[col].dropna()  # Adjusted data
-
-        # Determine if the atom is symmetric
-        is_symmetric = symmetric_atoms is not None and col in symmetric_atoms
-        # Get the color for the atom
-        if atom_to_color is not None:
-            color = atom_to_color.get(col, 'darkblue')
-        else:
-            color = 'darkblue'
-
-        # Plot original histogram in background with alpha=0.5
-        ax.hist(data_original, bins=20, color=color, alpha=0.3, edgecolor='black', label='Original')
-
-        if is_symmetric and symmetric_groups is not None:
-                    # Find the symmetry group this atom belongs to
-                    group_found = False
-                    for rep, group in symmetric_groups.items():
-                        group_atoms = [rep] + group
-                        if col in group_atoms:
-                            # Combine charges for the group
-                            combined_data_adjusted = pd.Series(dtype=float)
-                            for atom in group_atoms:
-                                # Use pd.concat instead of append
-                                combined_data_adjusted = pd.concat(
-                                    [combined_data_adjusted, df_adjusted[atom].dropna()],
-                                    ignore_index=True
-                                )
-                            # Plot combined adjusted histogram
-                            ax.hist(
-                                combined_data_adjusted,
-                                bins=20,
-                                color=color,
-                                alpha=0.7,
-                                edgecolor='black',
-                                label='Combined Adjusted'
-                            )
-                            group_found = True
-                            break
-                    if not group_found:
-                        # Atom is symmetric but not found in groups (shouldn't happen)
-                        ax.hist(
-                            data_adjusted,
-                            bins=20,
-                            color=color,
-                            alpha=0.7,
-                            edgecolor='black',
-                            label='Adjusted'
-                        )
-        else:
-            # Non-symmetric atom
-            # Plot adjusted histogram in foreground
-            ax.hist(
-                data_adjusted,
-                bins=20,
-                color=color,
-                alpha=0.7,
-                edgecolor='black',
-                label='Adjusted'
-            )
-
-        ax.set_title(col)
-        ax.set_xlabel('Charge')
-        ax.set_ylabel('Frequency')
-
-        if adjusted_average_charges is not None:
-            # For symmetric atoms, use the group average charge
-            if is_symmetric:
-                mean_value = adjusted_average_charges.get(col, None)
-            else:
-                # For non-symmetric atoms, use their individual mean
-                mean_value = data_adjusted.mean()
-        else:
-            # Calculate the mean of the adjusted data
-            mean_value = data_adjusted.mean()
-
-        if mean_value is not None:
-            # Set line color based on symmetry
-            line_color = 'red' if is_symmetric else 'black'
-            # Plot a vertical dashed line at the mean
-            ax.axvline(mean_value, color=line_color, linestyle='dashed', linewidth=1)
-            # Add a text label with the mean value
-            ax.text(
-                0.95, 0.95,
-                f'{mean_value:.2f}',
-                color=line_color,
-                fontsize=10,
-                ha='right', va='top',
-                transform=ax.transAxes
-            )
-
-        # Add legend
-        ax.legend()
-
-    # Remove any unused subplots
-    for j in range(i+1, len(axes)):
-        fig.delaxes(axes[j])
-
-    plt.suptitle(title, fontsize=16)
-    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-    plt.savefig(filename)
-    plt.close()
-
-
-def plot_histograms(df_original, df_adjusted, title, filename, adjusted_average_charges=None, symmetric_atoms=None, atom_to_color=None, symmetric_groups=None, combine_original_data=False):
+def plot_histograms(df_original, df_adjusted, title, filename, adjusted_average_charges=None, symmetric_atoms=None, atom_to_color=None, symmetric_groups=None, combine_original_data=False, remove_outlier=False):
     """
     Plot histograms of the DataFrame and save the plot.
 
@@ -204,7 +77,6 @@ def plot_histograms(df_original, df_adjusted, title, filename, adjusted_average_
                     combined_data_adjusted = pd.Series(dtype=float)
                     combined_data_original = pd.Series(dtype=float)
 
-
                     for atom in group_atoms:
                         combined_data_adjusted = pd.concat(
                             [combined_data_adjusted, df_adjusted[atom].dropna()],
@@ -214,15 +86,29 @@ def plot_histograms(df_original, df_adjusted, title, filename, adjusted_average_
                             [combined_data_original, df_original[atom].dropna()],
                             ignore_index=True
                         )
-                    # Use combined data to calculate bins
-                    data_combined = pd.concat([combined_data_original, combined_data_adjusted], ignore_index=True)
-                    bins = np.histogram_bin_edges(data_combined, bins=20)
-                    # Plot original histogram in background
-                    ax.hist(combined_data_original, bins=bins, color=color, alpha=0.5, edgecolor='black', label='Original')
-                    # Plot combined adjusted histogram
-                    ax.hist(combined_data_adjusted, bins=bins, color=color, alpha=0.9, edgecolor='black', label='Combined Adjusted')
-                    group_found = True
-                    break
+
+                    if combine_original_data == False:
+                        combined_data_original = data_original
+                         # Use combined data to calculate bins
+                        data_combined = pd.concat([combined_data_original, combined_data_adjusted], ignore_index=True)
+                        bins = np.histogram_bin_edges(data_combined, bins=20)
+                        # Plot original histogram in background
+                        ax.hist(combined_data_original, bins=bins, color=color, alpha=0.9, edgecolor='black', label='Original')
+                        # Plot combined adjusted histogram
+                        ax.hist(combined_data_adjusted, bins=bins, color=color, alpha=0.5, edgecolor='black', label='Combined')
+                        group_found = True
+                        break
+
+                    else:
+                        # Use combined data to calculate bins
+                        data_combined = pd.concat([combined_data_original, combined_data_adjusted], ignore_index=True)
+                        bins = np.histogram_bin_edges(data_combined, bins=20)
+                        # Plot original histogram in background
+                        ax.hist(combined_data_original, bins=bins, color=color, alpha=0.5, edgecolor='black', label='Comb. Original')
+                        # Plot combined adjusted histogram
+                        ax.hist(combined_data_adjusted, bins=bins, color=color, alpha=0.9, edgecolor='black', label='Comb. Clipped')
+                        group_found = True
+                        break
             if not group_found:
                 # Atom is symmetric but not found in groups (shouldn't happen)
                 # Use data from the individual atom
@@ -230,7 +116,8 @@ def plot_histograms(df_original, df_adjusted, title, filename, adjusted_average_
                 bins = np.histogram_bin_edges(data_combined, bins=20)
                 # Plot original and adjusted histograms
                 ax.hist(data_original, bins=bins, color=color, alpha=0.5, edgecolor='black', label='Original')
-                ax.hist(data_adjusted, bins=bins, color=color, alpha=0.9, edgecolor='black', label='Adjusted')
+                if remove_outlier:
+                    ax.hist(data_adjusted, bins=bins, color=color, alpha=0.9, edgecolor='black', label='Clipped')
         else:
             # Non-symmetric atom
             # Use data from the individual atom
@@ -238,7 +125,8 @@ def plot_histograms(df_original, df_adjusted, title, filename, adjusted_average_
             bins = np.histogram_bin_edges(data_combined, bins=20)
             # Plot original and adjusted histograms
             ax.hist(data_original, bins=bins, color=color, alpha=0.5, edgecolor='black', label='Original')
-            ax.hist(data_adjusted, bins=bins, color=color, alpha=0.9, edgecolor='black', label='Adjusted')
+            if remove_outlier:
+                ax.hist(data_adjusted, bins=bins, color=color, alpha=0.9, edgecolor='black', label='Clipped')
 
         ax.set_title(col)
         ax.set_xlabel('Charge')
@@ -259,16 +147,16 @@ def plot_histograms(df_original, df_adjusted, title, filename, adjusted_average_
             # Set line color based on symmetry
             line_color = 'red' if is_symmetric else 'black'
             # Plot a vertical dashed line at the mean
-            ax.axvline(mean_value, color=line_color, linestyle='dashed', linewidth=1)
+            ax.axvline(mean_value, color=line_color, linestyle='dashed', linewidth=1, label=f'{mean_value:.2f}')
             # Add a text label with the mean value
-            ax.text(
-                0.95, 0.95,
-                f'{mean_value:.2f}',
-                color=line_color,
-                fontsize=10,
-                ha='right', va='top',
-                transform=ax.transAxes
-            )
+            #ax.text(
+            #    0.95, 0.95,
+            #    f'{mean_value:.2f}',
+            #    color=line_color,
+            #    fontsize=10,
+            #    ha='right', va='top',
+            #    transform=ax.transAxes
+            #)
 
         # Add legend
         ax.legend()
@@ -281,128 +169,6 @@ def plot_histograms(df_original, df_adjusted, title, filename, adjusted_average_
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
     plt.savefig(filename)
     plt.close()
-
-
-def plot_histograms(df_original, df_adjusted, title, filename, adjusted_average_charges=None,
-                    symmetric_atoms=None, atom_to_color=None, symmetric_groups=None,
-                    combine_adjusted_data=False):
-    """
-    Plot histograms of the DataFrame and save the plot.
-
-    Parameters:
-        df_original (pd.DataFrame): Original charges data.
-        df_adjusted (pd.DataFrame): Adjusted charges data.
-        title (str): Title of the plot.
-        filename (str): Filename to save the plot.
-        adjusted_average_charges (dict, optional): Dictionary of adjusted average charges.
-        symmetric_atoms (set, optional): Set of atom names that are symmetric.
-        atom_to_color (dict, optional): Mapping of atom names to colors.
-        symmetric_groups (dict, optional): Dictionary of symmetry groups.
-        combine_adjusted_data (bool, optional): Whether to combine adjusted data for symmetric atoms.
-    """
-    num_atoms = len(df_original.columns)
-    num_cols = min(4, num_atoms)
-    num_rows = (num_atoms + num_cols - 1) // num_cols  # Calculate rows needed
-
-    fig, axes = plt.subplots(num_rows, num_cols, figsize=(4*num_cols, 3*num_rows))
-    axes = axes.flatten()
-
-    for i, col in enumerate(df_original.columns):
-        ax = axes[i]
-        data_original = df_original[col].dropna()  # Original data
-        data_adjusted = df_adjusted[col].dropna()  # Adjusted data
-
-        # Determine if the atom is symmetric
-        is_symmetric = symmetric_atoms is not None and col in symmetric_atoms
-        # Get the color for the atom
-        if atom_to_color is not None:
-            color = atom_to_color.get(col, 'darkblue')
-        else:
-            color = 'darkblue'
-
-        # Calculate common bins for both datasets
-        if is_symmetric and symmetric_groups is not None and combine_adjusted_data:
-            # For symmetric atoms, combine adjusted data from the symmetry group
-            group_found = False
-            for rep, group in symmetric_groups.items():
-                group_atoms = [rep] + group
-                if col in group_atoms:
-                    # Combine adjusted charges for the group
-                    combined_data_adjusted = pd.Series(dtype=float)
-                    for atom in group_atoms:
-                        combined_data_adjusted = pd.concat(
-                            [combined_data_adjusted, df_adjusted[atom].dropna()],
-                            ignore_index=True
-                        )
-                    # Use individual original data
-                    combined_data_original = data_original
-                    # Use combined data to calculate bins
-                    data_combined = pd.concat([combined_data_original, combined_data_adjusted], ignore_index=True)
-                    bins = np.histogram_bin_edges(data_combined, bins=20)
-                    # Plot original histogram in background
-                    ax.hist(combined_data_original, bins=bins, color=color, alpha=0.5, edgecolor='black', label='Original')
-                    # Plot combined adjusted histogram
-                    ax.hist(combined_data_adjusted, bins=bins, color=color, alpha=0.9, edgecolor='black', label='Combined Adjusted')
-                    group_found = True
-                    break
-            if not group_found:
-                # Atom is symmetric but not found in groups (shouldn't happen)
-                # Plot individual adjusted data
-                data_combined = pd.concat([data_original, data_adjusted], ignore_index=True)
-                bins = np.histogram_bin_edges(data_combined, bins=20)
-                ax.hist(data_original, bins=bins, color=color, alpha=0.5, edgecolor='black', label='Original')
-                ax.hist(data_adjusted, bins=bins, color=color, alpha=0.9, edgecolor='black', label='Adjusted')
-        else:
-            # Non-symmetric atom or not combining adjusted data
-            # Use data from the individual atom
-            data_combined = pd.concat([data_original, data_adjusted], ignore_index=True)
-            bins = np.histogram_bin_edges(data_combined, bins=20)
-            # Plot original and adjusted histograms
-            ax.hist(data_original, bins=bins, color=color, alpha=0.5, edgecolor='black', label='Original')
-            ax.hist(data_adjusted, bins=bins, color=color, alpha=0.9, edgecolor='black', label='Adjusted')
-
-        ax.set_title(col)
-        ax.set_xlabel('Charge')
-        ax.set_ylabel('Frequency')
-
-        if adjusted_average_charges is not None:
-            # For symmetric atoms, use the group average charge
-            if is_symmetric and combine_adjusted_data:
-                mean_value = adjusted_average_charges.get(col, None)
-            else:
-                # For non-symmetric atoms or when not combining adjusted data, use their individual mean
-                mean_value = data_adjusted.mean()
-        else:
-            # Calculate the mean of the adjusted data
-            mean_value = data_adjusted.mean()
-
-        if mean_value is not None:
-            # Set line color based on symmetry
-            line_color = 'red' if (is_symmetric and combine_adjusted_data) else 'black'
-            # Plot a vertical dashed line at the mean
-            ax.axvline(mean_value, color=line_color, linestyle='dashed', linewidth=1)
-            # Add a text label with the mean value
-            ax.text(
-                0.95, 0.95,
-                f'{mean_value:.2f}',
-                color=line_color,
-                fontsize=10,
-                ha='right', va='top',
-                transform=ax.transAxes
-            )
-
-        # Add legend
-        ax.legend()
-
-    # Remove any unused subplots
-    for j in range(i+1, len(axes)):
-        fig.delaxes(axes[j])
-
-    plt.suptitle(title, fontsize=16)
-    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-    plt.savefig(filename)
-    plt.close()
-
 
 def find_project_root(current_dir, project_name="electrofit"):
     root = None
@@ -462,6 +228,11 @@ process_dir = os.path.join(project_path, "process")
 from electrofit.helper.file_manipulation import find_file_with_extension, parse_charges_from_mol2, extract_charges_from_subdirectories, adjust_atom_names, load_symmetry_groups
 from electrofit.helper.config_parser import ConfigParser
 from electrofit.helper.plotting import plot_charges_by_atom, plot_charges_by_symmetry
+
+# ------ Interact --------------
+# Remove outlier functionality
+remove_outlier = True  # Set to True to perform outlier removal based on 1.5 IQR rule
+# ------ Interact --------------
 
 # Iterate over each subdirectory in the process directory
 for sub_dir in os.listdir(process_dir):
@@ -577,21 +348,18 @@ for sub_dir in os.listdir(process_dir):
     plot_histograms(
         df_original=df,
         df_adjusted=df,
-        title='Charge Distribution Before Removing Outliers',
-        filename=os.path.join(plots_dir, 'hist_before_outlier_removal.pdf'),
+        title='Charge Distribution',
+        filename=os.path.join(plots_dir, 'hist.pdf'),
         atom_to_color=atom_to_color,
         symmetric_atoms=symmetric_atoms
     )
 
 
 
-
-
     # ---------------------- Remove outlier --------------------
-    # Remove outlier functionality
-    remove_outlier = False  # Set to True to perform outlier removal
 
     if remove_outlier:
+        print("Remove Outliers ...")
         # Function to get outlier mask based on IQR
         def get_outlier_mask(series):
             Q1 = series.quantile(0.25)
@@ -636,27 +404,42 @@ for sub_dir in os.listdir(process_dir):
                 df_original=df,
                 df_adjusted=df_no_outliers,
                 title='Charge Distribution with Group Average Charges',
-                filename=os.path.join(plots_dir, 'hist_group_average_charges.pdf'),
+                filename=os.path.join(plots_dir, 'hist_group_average_clipped_charges.pdf'),
                 adjusted_average_charges=adjusted_average_charges,
                 symmetric_atoms=symmetric_atoms,
                 atom_to_color=atom_to_color,
                 symmetric_groups=symmetric_groups,  # Pass the symmetric groups
-                combine_adjusted_data=True
+                combine_original_data=True,
+                remove_outlier=True
             )
 
             # Plot charges by symmetry using the updated charges
             plot_charges_by_symmetry(updated_charges_dict, initial_charges_dict, plots_dir, equiv_group)
+
+        elif adjust_sym:
+            # Plot histograms with adjusted average charges (without group averaging) and overlay original distributions
+            plot_histograms(
+                df_original=df,
+                df_adjusted=df_no_outliers,
+                title='Clipped Charge Distribution with Symmetry and Clipped Average Charges',
+                filename=os.path.join(plots_dir, 'hist_average_clipped_charges.pdf'),
+                adjusted_average_charges=adjusted_average_charges,
+                atom_to_color=atom_to_color,
+                symmetric_atoms=symmetric_atoms,
+                remove_outlier=True
+            )
+
 
         else:
             # Plot histograms with adjusted average charges (without group averaging) and overlay original distributions
             plot_histograms(
                 df_original=df,
                 df_adjusted=df_no_outliers,
-                title='Charge Distribution with Adjusted Average Charges',
-                filename=os.path.join(plots_dir, 'hist_adjusted_average_charges.pdf'),
+                title='Clipped Charge Distribution with no Symmetry and Clipped Average Charges',
+                filename=os.path.join(plots_dir, 'hist_average_clipped_charges.pdf'),
                 adjusted_average_charges=adjusted_average_charges,
                 atom_to_color=atom_to_color,
-                symmetric_atoms=symmetric_atoms
+                remove_outlier=True
             )
 
             # Plot the charges by atom using the cleaned data
@@ -687,7 +470,7 @@ for sub_dir in os.listdir(process_dir):
                 symmetric_atoms=symmetric_atoms,
                 atom_to_color=atom_to_color,
                 symmetric_groups=symmetric_groups,  # Pass the symmetric groups
-                combine_adjusted_data=True
+                combine_original_data=False
             )
 
             # Plot charges by symmetry using the updated charges
