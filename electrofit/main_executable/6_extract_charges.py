@@ -5,6 +5,7 @@ import glob
 import fnmatch
 import json
 import pandas as pd
+import matplotlib.pyplot as plt
 
 
 def calculate_symmetric_group_averages(charges_dict_file, equivalent_groups_file):
@@ -68,6 +69,50 @@ def calculate_symmetric_group_averages(charges_dict_file, equivalent_groups_file
 
     return updated_charges_dict
 
+
+def plot_histograms(df, title, filename, adjusted_average_charges=None, color='darkred'):
+    """
+    Plot histograms of the DataFrame and save the plot.
+
+    Parameters:
+        df (pd.DataFrame): DataFrame containing the charges data.
+        title (str): Title of the plot.
+        filename (str): Filename to save the plot.
+        adjusted_average_charges (dict, optional): Dictionary of adjusted average charges.
+        color (str): Color of the histogram bars.
+    """
+    axes = df.hist(bins=20, figsize=(15, 10), color=color, alpha=0.9, grid=False)
+
+    for ax, col in zip(axes.flatten(), df.columns):
+        ax.set_title('')
+        ax.set_xlabel(col)
+        ax.set_ylabel('')
+
+        if adjusted_average_charges is not None:
+            # Get the adjusted average charge from the dictionary
+            mean_value = adjusted_average_charges.get(col, None)
+        else:
+            # Calculate the mean of the data
+            mean_value = df[col].mean()
+
+        if mean_value is not None:
+            # Plot a vertical red dashed line at the mean
+            ax.axvline(mean_value, color='black', linestyle='dashed', linewidth=1)
+
+            # Add a red text label with the mean value
+            ax.text(
+                0.95, 0.95,
+                f'{mean_value:.2f}',
+                color='black',
+                fontsize=10,
+                ha='right', va='top',
+                transform=ax.transAxes
+            )
+
+    plt.suptitle(title, fontsize=16)
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+    plt.savefig(filename)
+    plt.close()
 
 def find_project_root(current_dir, project_name="electrofit"):
     root = None
@@ -225,8 +270,8 @@ for sub_dir in os.listdir(process_dir):
             run_acpype(updated_mol2_file, charge, results_dir, atom_type, charges="user")
             reset_logging()
 
-# ---------------------- Remove outlier --------------------
-        # ---------------------- Remove outlier --------------------
+# ---------------------- Remove outlier -------------------- experimental!
+
         if remove_outlier and calc_group_average:
             data = atoms_dict
             # Convert the data into a DataFrame
@@ -235,30 +280,52 @@ for sub_dir in os.listdir(process_dir):
             for key, value in data.items():
                 charges_data[key] = value['charges']
 
-            df = pd.DataFrame(dict([(k, pd.Series(v)) for k, v in charges_data.items()]))
+            df = pd.DataFrame(charges_data)
 
-            # Function to remove outliers based on IQR
-            def remove_outliers_iqr(series):
+            # Function to get outlier mask based on IQR
+            def get_outlier_mask(series):
                 Q1 = series.quantile(0.25)
                 Q3 = series.quantile(0.75)
                 IQR = Q3 - Q1
                 is_outlier = (series < (Q1 - 1.5 * IQR)) | (series > (Q3 + 1.5 * IQR))
-                return series.mask(is_outlier)
+                return is_outlier
 
-            # Remove outliers for each column
-            df_no_outliers = df.apply(remove_outliers_iqr)
+            # Initialize a boolean mask for all rows, default False
+            outlier_mask = pd.Series(False, index=df.index)
 
-            # Compute the total charge
-            total_net_charge = sum(
-                atom_data['average_charge'] for atom_data in data.values()
+            # Identify outliers for each atom and update the mask
+            for column in df.columns:
+                series = df[column]
+                is_outlier = get_outlier_mask(series)
+                outlier_mask = outlier_mask | is_outlier  # Combine masks using logical OR
+
+            # Remove rows (conformers) where any charge is an outlier
+            df_no_outliers = df[~outlier_mask].reset_index(drop=True)
+
+            os.chdir(results_dir)
+
+            # Plot histograms before removing outliers
+            plot_histograms(
+                df,
+                title='Charge Distribution Before Removing Outliers',
+                filename='hist.pdf',
+                color='darkred'
+            )
+
+            # Plot histograms after removing outliers
+            plot_histograms(
+                df_no_outliers,
+                title='Charge Distribution After Removing Outliers',
+                filename='hist_no_outlier.pdf',
+                color='darkblue'
             )
 
             # Prepare the cleaned data dictionary with the original structure
             cleaned_data = {}
 
             for atom in df_no_outliers.columns:
-                # Get the cleaned charges list, drop NaNs
-                cleaned_charges = df_no_outliers[atom].dropna().tolist()
+                # Get the cleaned charges list
+                cleaned_charges = df_no_outliers[atom].tolist()
                 # Compute the new average charge
                 if cleaned_charges:
                     new_average_charge = sum(cleaned_charges) / len(cleaned_charges)
@@ -277,7 +344,7 @@ for sub_dir in os.listdir(process_dir):
             print("New Total Net Charge: ", new_total_net_charge)
 
             # Calculate the deviation from the required net charge
-            required_net_charge = int(total_net_charge)
+            required_net_charge = int(charge)
             print("Required Net Charge: ", required_net_charge)
 
             charge_deviation = required_net_charge - new_total_net_charge
@@ -304,10 +371,31 @@ for sub_dir in os.listdir(process_dir):
             )
             print(f"Adjusted Total Net Charge: {adjusted_total_net_charge}")
 
-            # Save the cleaned data to JSON in results_dir
+            # Save the cleaned and adjusted data to JSON in results_dir
             cleaned_adjusted_charges_file = os.path.join(results_dir, 'cleaned_adjusted_charges.json')
             with open(cleaned_adjusted_charges_file, 'w') as f:
                 json.dump(cleaned_data, f, indent=4)
+
+            # ---- Plot adjusted average charges in the clipped data ----
+            adjusted_average_charges = {}
+
+            for key, value in cleaned_data.items():
+                charges_data[key] = value['charges']
+                adjusted_average_charges[key] = value['average_charge']
+
+            # Convert the charges data into a DataFrame
+            df_adjusted = pd.DataFrame({k: pd.Series(v) for k, v in charges_data.items()})
+
+            # Plot histograms of the clipped data with adjusted average charges
+            plot_histograms(
+                df_adjusted,
+                title='Charge Distribution of Clipped Data with Reweighted Average Charges',
+                filename='hist_adjusted.pdf',
+                adjusted_average_charges=adjusted_average_charges,
+                color='darkgreen'
+            )
+            plot_charges_by_atom(cleaned_data, initial_charges_dict, results_dir)
+            # -------------------------------------------------------------
 
             # Update the path to the charges_dict_file
             charges_dict_file = cleaned_adjusted_charges_file
@@ -336,8 +424,8 @@ for sub_dir in os.listdir(process_dir):
             updated_avg_charges_path = os.path.join(results_dir, "cleaned_adjusted_group_average_charges.chg")
             with open(updated_avg_charges_path, "w") as output:
                 for i in updated_avg_charges:
-                    output.write(str(round(i, 4)) + '\n')
-            
+                    output.write(f"{i:.4f}\n")
+
             # Define the updated mol2 file path
             update_mol2_file = os.path.join(results_dir, f"averaged_{molecule_name}_cleaned.mol2")
 
@@ -346,7 +434,7 @@ for sub_dir in os.listdir(process_dir):
             run_command(f"python {update_mol2} {mol2_source_file_path} {updated_avg_charges_path} {update_mol2_file}")
             run_acpype(update_mol2_file, charge, results_dir, atom_type, charges="user")
             reset_logging()
-        # ---------------------- Remove outlier --------------------
+
 # ---------------------- Remove outlier --------------------
 
 
@@ -359,7 +447,5 @@ for sub_dir in os.listdir(process_dir):
         run_command(f"python {update_mol2} {mol2_source_file_path} {average_charges} {updated_mol2_file}")
         run_acpype(updated_mol2_file, charge, results_dir, atom_type, charges="user")
         reset_logging()
-
-
 
 
