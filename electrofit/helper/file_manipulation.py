@@ -371,33 +371,6 @@ def get_parent_parent_folder_name():
     parent_parent_folder_name = os.path.basename(parent_parent_dir)
     return parent_parent_folder_name
 
-def extract_charge_from_folder_name():
-    folder_name = get_parent_folder_name()
-
-    # Count the number of '1's in the folder name
-    number_of_ones = folder_name.count("1")
-
-    # Calculate the charge using the formula c = -12 + number_of_ones
-    charge = -12 + number_of_ones
-
-    print(f"Folder name: {folder_name}")
-    print(f"Number of '1's in folder name: {number_of_ones}")
-    print(f"Calculated net charge of IP6: {charge}")
-    return charge
-
-def extract_charge_from_folder_name_conform():
-    folder_name = get_parent_parent_folder_name()
-
-    # Count the number of '1's in the folder name
-    number_of_ones = folder_name.count("1")
-
-    # Calculate the charge using the formula c = -12 + number_of_ones
-    charge = -12 + number_of_ones
-
-    print(f"Folder name: {folder_name}")
-    print(f"Number of '1's in folder name: {number_of_ones}")
-    print(f"Calculated net charge of IP6: {charge}")
-    return charge
 
 def strip_extension(file_name):
     # Split the file name into the name and the extension

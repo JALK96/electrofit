@@ -34,9 +34,6 @@ import matplotlib.pyplot as plt
 import re
 import numpy as np
 
-# Ensure that the functions are accessible
-# from your_module import plot_charges_by_atom, plot_charges_by_symmetry, create_atom_color_mapping, load_symmetry_groups
-
 def main():
     # Set up the argument parser
     parser = argparse.ArgumentParser(description='Plot charges by atom or symmetry.')

@@ -240,9 +240,9 @@ def plot_charges_by_symmetry(atoms_dict1, initial_charges_dict, base_dir, symmet
         charges_data1,
         positions=positions1,
         widths=width,
-        showmeans=True,
+        showmeans=False,
         showmedians=False,
-        showextrema=True,
+        showextrema=False,
     )
 
     # Plot violin plots for dataset 2 if provided
@@ -251,9 +251,9 @@ def plot_charges_by_symmetry(atoms_dict1, initial_charges_dict, base_dir, symmet
             charges_data2,
             positions=positions2,
             widths=width,
-            showmeans=True,
+            showmeans=False,
             showmedians=False,
-            showextrema=True,
+            showextrema=False,
         )
 
     # Function to set colors based on symmetry groups
@@ -293,6 +293,32 @@ def plot_charges_by_symmetry(atoms_dict1, initial_charges_dict, base_dir, symmet
         s=5
     )
 
+    # Add scatter points for average charges
+    ax.scatter(
+        positions1,
+        avg_charges1,
+        color="black",
+        marker='^',
+        label="Average Charge",
+        zorder=5,
+        alpha=1,
+        s=5
+    )
+
+    if charges_data2 is not None:
+        # Add scatter points for average charges
+        ax.scatter(
+            positions2,
+            avg_charges2,
+            color="black",
+            marker='^',
+            label="Initial Charge",
+            zorder=5,
+            alpha=0.5,
+            s=5
+        )
+
+
     # Labeling
     ax.set_xticks(positions)
     ax.set_xticklabels(atom_names, rotation=60)
@@ -310,6 +336,7 @@ def plot_charges_by_symmetry(atoms_dict1, initial_charges_dict, base_dir, symmet
     #    handles.append(plt.Line2D([], [], color=color, marker='s', linestyle='None', markersize=10, label=color))
 
     handles.append(plt.Line2D([], [], color='black', marker='o', linestyle='None', markersize=5, label='Initial Charge'))
+    handles.append(plt.Line2D([], [], color='black', marker='^', linestyle='None', markersize=5, label='Average Charge'))
 
     # Add dataset labels to legend if comparing
     if charges_data2 is not None:
