@@ -231,7 +231,7 @@ from electrofit.helper.plotting import plot_charges_by_atom, plot_charges_by_sym
 
 # ------ Interact --------------
 # Remove outlier functionality
-remove_outlier = True  # Set to True to perform outlier removal based on 1.5 IQR rule
+remove_outlier = False  # Set to True to perform outlier removal based on 1.5 IQR rule
 # ------ Interact --------------
 
 # Iterate over each subdirectory in the process directory
