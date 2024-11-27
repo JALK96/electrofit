@@ -147,7 +147,7 @@ def plot_histograms(df_original, df_adjusted, title, filename, adjusted_average_
             # Set line color based on symmetry
             line_color = 'red' if is_symmetric else 'black'
             # Plot a vertical dashed line at the mean
-            ax.axvline(mean_value, color=line_color, linestyle='dashed', linewidth=1, label=f'{mean_value:.2f}')
+            ax.axvline(mean_value, color=line_color, linestyle='dashed', linewidth=2, label=f'{mean_value:.2f}')
             # Add a text label with the mean value
             #ax.text(
             #    0.95, 0.95,
@@ -218,6 +218,74 @@ def calculate_symmetric_group_averages(charges_dict, equivalent_groups):
 
     return updated_charges_dict
 
+def combine_and_calculate_symmetric_group_averages(charges_dict, equivalent_groups):
+    """
+    Calculate the mean of the average charges for symmetric atoms, update the average charges,
+    and create a combined dataset with expanded charges lists for symmetric atoms.
+
+    Parameters:
+    - charges_dict (dict): Dictionary containing charges data for atoms.
+      Expected format:
+          {
+              'C1': {'charges': [...], 'average_charge': ...},
+              'C2': {'charges': [...], 'average_charge': ...},
+              ...
+          }
+
+    - equivalent_groups (dict): Dictionary containing symmetric atom groups.
+      Expected format:
+          {
+              'C1': ['C2', 'C3'],
+              'O1': ['O2', 'O3'],
+              ...
+          }
+
+    Returns:
+    - updated_charges_dict (dict): Dictionary with updated average charges for symmetric groups.
+    - combined_charges_dict (dict): Dictionary with updated average charges and expanded charges lists of combined datasets for symmetric atom entries.
+    """
+    import copy
+    # Deep copy to avoid modifying the original dictionaries
+    updated_charges_dict = copy.deepcopy(charges_dict)
+    combined_charges_dict = copy.deepcopy(charges_dict)
+
+    # Iterate over each group in equivalent_groups
+    for representative, group in equivalent_groups.items():
+        # Form the complete group including the representative
+        full_group = [representative] + group
+
+        # Collect charges from each atom in the group
+        group_charges = []
+        for atom in full_group:
+            if atom in charges_dict:
+                group_charges.extend(charges_dict[atom]['charges'])
+            else:
+                print(f"Warning: Atom '{atom}' not found in charges_dict.")
+
+        # Calculate the mean charge for the group
+        if group_charges:
+            group_average = sum(group_charges) / len(group_charges)
+
+            # Update the average_charge for each atom in updated_charges_dict
+            for atom in full_group:
+                if atom in updated_charges_dict:
+                    updated_charges_dict[atom]['average_charge'] = group_average
+                else:
+                    print(f"Warning: Atom '{atom}' not found in updated_charges_dict.")
+
+            # Update the average_charge and charges list for each atom in combined_charges_dict
+            for atom in full_group:
+                if atom in combined_charges_dict:
+                    combined_charges_dict[atom]['average_charge'] = group_average
+                    combined_charges_dict[atom]['charges'] = group_charges.copy()
+                else:
+                    print(f"Warning: Atom '{atom}' not found in combined_charges_dict.")
+        else:
+            print(f"Warning: No charges found for group '{representative}'.")
+
+    # Atoms not in symmetric groups remain unchanged in both dictionaries
+    return updated_charges_dict, combined_charges_dict
+
 # Set up the project paths
 script_dir = os.path.dirname(os.path.abspath(__file__))
 project_path = find_project_root(current_dir=script_dir)
@@ -227,7 +295,7 @@ process_dir = os.path.join(project_path, "process")
 # Import necessary modules from the project
 from electrofit.helper.file_manipulation import find_file_with_extension, parse_charges_from_mol2, extract_charges_from_subdirectories, adjust_atom_names, load_symmetry_groups
 from electrofit.helper.config_parser import ConfigParser
-from electrofit.helper.plotting import plot_charges_by_atom, plot_charges_by_symmetry
+from electrofit.helper.plotting import plot_charges_by_atom, plot_charges_by_symmetry, plot_charges_by_atom_new_4
 
 # ------ Interact --------------
 # Remove outlier functionality
@@ -319,6 +387,7 @@ for sub_dir in os.listdir(process_dir):
 
         # Plot the charges and average charges
         plot_charges_by_symmetry(atoms_dict, initial_charges_dict, plots_dir, equiv_group)
+        plot_charges_by_atom_new_4(atoms_dict, initial_charges_dict, plots_dir)
     else:
         # Plot the charges by atom
         plot_charges_by_atom(atoms_dict, initial_charges_dict, plots_dir)
@@ -455,7 +524,7 @@ for sub_dir in os.listdir(process_dir):
     else:
         if calc_group_average and adjust_sym:
             # Compute average of symmetric atoms
-            updated_charges_dict = calculate_symmetric_group_averages(atoms_dict, symmetric_groups)
+            updated_charges_dict, combind_charges_dict = combine_and_calculate_symmetric_group_averages(atoms_dict, symmetric_groups)
 
             # Prepare the adjusted average charges for plotting
             group_average_charges = {atom: data['average_charge'] for atom, data in updated_charges_dict.items()}
@@ -474,7 +543,10 @@ for sub_dir in os.listdir(process_dir):
             )
 
             # Plot charges by symmetry using the updated charges
+            # Saves the average charges in updated_charges_dict to average_charges.chg
             plot_charges_by_symmetry(updated_charges_dict, initial_charges_dict, plots_dir, equiv_group)
 
+            # Note: This plot only works for IP6 Configs 
+            plot_charges_by_atom_new_4(atoms_dict, initial_charges_dict, plots_dir, combind_charges_dict, equivalent_groups=symmetric_groups)
         # ---------------------------------------------------------------------------
 
