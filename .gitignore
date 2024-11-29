@@ -177,7 +177,7 @@ process/
 old/
 intermediate_data/
 dummy_process/
-
+process.nobackup/
 
 # notebooks
 *.ipynb_checkpoints
