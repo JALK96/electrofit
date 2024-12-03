@@ -4,8 +4,19 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 import sys
+from rdkit import Chem
+from rdkit.Chem import AllChem, Draw
+from rdkit.Chem.Draw import rdMolDraw2D
+import pandas as pd
+import re
+from PIL import Image
+from rdkit.Chem import rdDepictor
+from collections import defaultdict
+from itertools import combinations
 
-# Function to load .xvg files, skipping header lines
+# Set preference to use CoordGen for coordinate generation
+#rdDepictor.SetPreferCoordGen(True)
+
 def load_hb_num_xvg(filename):
     """
     Load data from an .xvg file, skipping lines that start with @ or #.
@@ -32,10 +43,31 @@ def load_hb_num_xvg(filename):
                     continue
     return np.array(data)
 
-import numpy as np
-import matplotlib.pyplot as plt
-from PIL import Image
-import re
+def refine_atom_name(atom):
+    """
+    Refines the atom name based on specified rules:
+    - If the atom is named 'O', change it to 'O1'.
+    - If the atom is named 'O<number>', increment the number by 1 (e.g., 'O10' to 'O11').
+    
+    Parameters:
+    - atom (str): Original atom name.
+    
+    Returns:
+    - str: Refined atom name.
+    """
+    # Match atoms like 'O' (no number)
+    if re.fullmatch(r'[A-Za-z]+', atom):
+        return atom + '1'
+    
+    # Match atoms like 'O10', 'O2', etc.
+    match = re.fullmatch(r'([A-Za-z]+)(\d+)', atom)
+    if match:
+        name = match.group(1)
+        number = int(match.group(2)) + 1  # Increment the number by 1
+        return f"{name}{number}"
+    
+    # If atom name doesn't match expected patterns, return as is
+    return atom
 
 def parse_xpm(file_path):
     """
@@ -188,7 +220,7 @@ def visualize_data(xpm_file='intra_hb_matrix.xpm'):
     plt.tight_layout()
     plt.savefig("intra_hb_existence_map.pdf")
 
-
+    print(analysis_results['hbonds_per_index'])
     # Additional Analysis: Example - Histogram of Hydrogen Bonds per Index
     plt.figure(figsize=(8, 6))
     plt.bar(range(len(analysis_results['hbonds_per_index'])), analysis_results['hbonds_per_index'], color="darkred")
@@ -203,14 +235,12 @@ def visualize_data(xpm_file='intra_hb_matrix.xpm'):
     # Flatten all lifetimes
     all_lifetimes = [lifetime for bond_lifetimes in analysis_results['lifetimes'] for lifetime in bond_lifetimes]
     plt.figure(figsize=(8, 6))
-    plt.hist(all_lifetimes, bins=range(1, max(all_lifetimes)+2), edgecolor='black', color="darkred")
+    plt.hist(all_lifetimes, bins=range(1, max(all_lifetimes)+2), edgecolor=None, color="darkred")
     plt.title('Hydrogen Bond Lifetime Distribution')
     plt.xlabel('Lifetime (number of frames)')
     plt.ylabel('Frequency')
     plt.grid(False)
     plt.savefig("intra_hb_lifetime.pdf")
-
-
 
 def plot_hb_dist_xvg(file_path, plot_file_name="hb_distribution.pdf"):
     """
@@ -278,6 +308,273 @@ def plot_hb_dist_xvg(file_path, plot_file_name="hb_distribution.pdf"):
     plt.tight_layout()
     plt.savefig(f"{plot_file_name}.pdf", format="pdf")
 
+def add_dashed_hbonds(svg_content, hbond_pairs, atom_coords,
+                      dasharray='5,5', stroke_width='2', angle_threshold=5, offset_step=5):
+    """
+    Adds dashed lines between specified atom pairs in the SVG content, adjusting overlapping lines to prevent them from overlaying.
+    The lines have gradients to indicate direction from black to light grey.
+
+    Parameters:
+        svg_content (str): The original SVG content.
+        hbond_pairs (list of tuples): List of atom index pairs representing H-bonds (donor_idx, acceptor_idx).
+        atom_coords (dict): Dictionary mapping atom indices to (x, y) drawing coordinates.
+        dasharray (str): Dash pattern for dashed lines.
+        stroke_width (str): Width of the dashed lines.
+        angle_threshold (float): Threshold angle in degrees to consider lines as overlapping.
+        offset_step (float): Step size for offsetting overlapping lines.
+
+    Returns:
+        str: Modified SVG content with adjusted dashed H-bond lines inserted after </rect>.
+    """
+    import uuid
+
+    # Collect all lines with their data
+    lines_data = []
+
+    # Prepare gradient definitions
+    gradient_defs = []
+
+    for idx, (donor_idx, acceptor_idx) in enumerate(hbond_pairs):
+        if donor_idx not in atom_coords or acceptor_idx not in atom_coords:
+            print(f"Warning: Atom indices {donor_idx} or {acceptor_idx} not found in molecule.")
+            continue
+
+        x1, y1 = atom_coords[donor_idx]
+        x2, y2 = atom_coords[acceptor_idx]
+
+        # Calculate direction vector
+        dx = x2 - x1
+        dy = y2 - y1
+        length = math.hypot(dx, dy)
+        if length == 0:
+            print(f"Warning: Zero length line between atom {donor_idx} and {acceptor_idx}. Line skipped.")
+            continue
+        dir_vector = (dx / length, dy / length)
+
+        # Prepare data for this line
+        line_data = {
+            'donor_idx': donor_idx,
+            'acceptor_idx': acceptor_idx,
+            'x1': x1,
+            'y1': y1,
+            'x2': x2,
+            'y2': y2,
+            'dir_vector': dir_vector,
+            'offset': 0,  # Will be updated if overlap detected
+            'gradient_id': f'grad_{uuid.uuid4().hex}'  # Unique gradient ID
+        }
+        lines_data.append(line_data)
+
+    # Detect overlapping lines and apply offsets
+    for (line1, line2) in combinations(lines_data, 2):
+        # Check if lines share a common atom
+        common_atoms = {line1['donor_idx'], line1['acceptor_idx']}.intersection(
+                        {line2['donor_idx'], line2['acceptor_idx']})
+        if common_atoms:
+            # Calculate angle between direction vectors
+            dot_product = line1['dir_vector'][0] * line2['dir_vector'][0] + \
+                          line1['dir_vector'][1] * line2['dir_vector'][1]
+            angle_rad = math.acos(min(max(dot_product, -1.0), 1.0))  # Clamp value to valid range
+            angle_deg = math.degrees(angle_rad)
+            # Check if lines are nearly colinear
+            if abs(angle_deg) < angle_threshold or abs(angle_deg - 180) < angle_threshold:
+                # Apply offsets to both lines
+                line1['offset'] += offset_step
+                line2['offset'] -= offset_step  # Alternate offset direction
+
+    # Create SVG elements for lines and gradient definitions
+    dashed_lines = []
+    for line_data in lines_data:
+        x1, y1 = line_data['x1'], line_data['y1']
+        x2, y2 = line_data['x2'], line_data['y2']
+        dx = x2 - x1
+        dy = y2 - y1
+        length = math.hypot(dx, dy)
+        nx = -dy / length
+        ny = dx / length
+        # Apply offset
+        offset_distance = line_data['offset']
+        x1_adj = x1 + nx * offset_distance
+        y1_adj = y1 + ny * offset_distance
+        x2_adj = x2 + nx * offset_distance
+        y2_adj = y2 + ny * offset_distance
+
+        # Use black and light grey for gradient
+        donor_color_hex = '#000000'  # Black
+        acceptor_color_hex = '#D3D3D3'  # Light grey
+
+        # Define gradient for this line
+        gradient_def = f'''
+        <linearGradient id="{line_data['gradient_id']}" gradientUnits="userSpaceOnUse" x1="{x1_adj}" y1="{y1_adj}" x2="{x2_adj}" y2="{y2_adj}">
+            <stop offset="0%" stop-color="{donor_color_hex}" />
+            <stop offset="100%" stop-color="{acceptor_color_hex}" />
+        </linearGradient>
+        '''
+        gradient_defs.append(gradient_def)
+
+        # Create the dashed line SVG element with gradient stroke
+        line = f'<line x1="{x1_adj}" y1="{y1_adj}" x2="{x2_adj}" y2="{y2_adj}" stroke="url(#{line_data["gradient_id"]})" stroke-width="{stroke_width}" stroke-dasharray="{dasharray}" />'
+        dashed_lines.append(line)
+
+    if dashed_lines:
+        # Join all gradient definitions
+        gradients_svg = '\n'.join(gradient_defs)
+
+        # Insert gradient definitions into the SVG before <!-- END OF HEADER --> comment
+        header_end_pos = svg_content.find('<!-- END OF HEADER -->')
+        if header_end_pos != -1:
+            svg_content = svg_content[:header_end_pos] + f'\n<defs>\n{gradients_svg}\n</defs>\n' + svg_content[header_end_pos:]
+        else:
+            # Fallback if <!-- END OF HEADER --> not found
+            insert_pos = svg_content.find('>') + 1
+            svg_content = svg_content[:insert_pos] + f'\n<defs>\n{gradients_svg}\n</defs>\n' + svg_content[insert_pos:]
+            print("Warning: <!-- END OF HEADER --> comment not found. Inserting <defs> after <svg> tag.")
+
+        # Join all dashed line elements
+        dashed_svg_content = '\n'.join(dashed_lines)
+
+        # Find the position after the closing </rect> tag
+        insert_pos = svg_content.find('</rect>') + len('</rect>')
+        if insert_pos == -1 + len('</rect>'):
+            # </rect> not found, default to inserting after </defs>
+            insert_pos = svg_content.find('</defs>') + len('</defs>')
+            if insert_pos == -1 + len('</defs>'):
+                # Neither </rect> nor </defs> found, insert after opening <svg> tag
+                insert_pos = svg_content.find('>') + 1
+                print("Warning: Neither </rect> nor </defs> tag found. Inserting dashed lines after <svg> tag.")
+        svg_content = svg_content[:insert_pos] + f'\n{dashed_svg_content}\n' + svg_content[insert_pos:]
+        print(f"Added {len(dashed_lines)} dashed H-bond line(s) with gradients to SVG.")
+    else:
+        print("No dashed lines were added to the SVG content.")
+
+    return svg_content
+
+# Legend
+def create_legend(x, y, legend_entries, font_size=12):
+    """
+    Creates SVG elements for the legend.
+
+    Parameters:
+        x (float): The x-coordinate of the top-left corner of the legend.
+        y (float): The y-coordinate of the top-left corner of the legend.
+        legend_entries (list of dict): List of legend entries to include.
+        font_size (int): Font size for the legend text.
+
+    Returns:
+        str: SVG content representing the legend.
+    """
+    legend_svg = []
+    entry_height = font_size + 10
+    for i, entry in enumerate(legend_entries):
+        entry_y = y + i * entry_height
+
+        if 'dasharray' in entry:
+            # Draw a dashed line for the hydrogen bond legend entry
+            line = f'<line x1="{x}" y1="{entry_y + font_size / 2}" x2="{x + 20}" y2="{entry_y + font_size / 2}" stroke="{entry["color"]}" stroke-width="2" stroke-dasharray="{entry["dasharray"]}" />'
+            legend_svg.append(line)
+        else:
+            # Draw a colored rectangle for the atom legend entries
+            rect = f'<rect x="{x}" y="{entry_y}" width="20" height="{font_size}" fill="{entry["color"]}" stroke="black" />'
+            legend_svg.append(rect)
+
+        # Add the text label
+        text_x = x + 25
+        text_y = entry_y + font_size
+        text = f'<text x="{text_x}" y="{text_y}" font-size="{font_size}" font-family="Arial">{entry["label"]}</text>'
+        legend_svg.append(text)
+
+    return '\n'.join(legend_svg)
+
+def add_legend_to_svg(svg_content, legend_svg_content):
+    """
+    Inserts the legend SVG content into the main SVG content.
+
+    Parameters:
+        svg_content (str): The original SVG content.
+        legend_svg_content (str): The SVG content for the legend.
+
+    Returns:
+        str: Modified SVG content with the legend included.
+    """
+    # Find the position before the closing </svg> tag
+    insert_pos = svg_content.rfind('</svg>')
+    if insert_pos == -1:
+        print("Warning: </svg> tag not found. Legend will not be added.")
+        return svg_content
+
+    # Insert the legend before the </svg> tag
+    svg_content = svg_content[:insert_pos] + f'\n{legend_svg_content}\n' + svg_content[insert_pos:]
+    print("Legend added to SVG.")
+    return svg_content
+
+def parse_hbond_log_to_dataframe(file_path):
+    """
+    Parses a GROMACS .log file to extract donor-acceptor pairs with indices and refined atom names.
+    
+    Parameters:
+    - file_path (str): Path to the .log file.
+    
+    Returns:
+    - pd.DataFrame: DataFrame containing idx, donor, and acceptor columns.
+    """
+    hbond_pairs = []
+    
+    # Regular expression patterns
+    # Pattern to match lines with donor and acceptor information
+    # Example line: I211O10              -      I211O2  
+    line_pattern = re.compile(r'^\s*(\S+)\s+-\s+(\S+)\s*$')
+    
+    # Pattern to extract atom name and index from a string like 'I211O10'
+    # Assuming residue identifier is 'I211' and atom name is 'O10'
+    atom_pattern = re.compile(r'^[A-Za-z]+\d+([A-Za-z]+\d*)$')
+    
+    with open(file_path, 'r') as file:
+        for line_number, line in enumerate(file, start=1):
+            line = line.strip()
+    
+            # Skip empty lines and header lines
+            if not line or line.startswith('#') or line.startswith('"""') or line.startswith('*'):
+                continue
+    
+            # Match the line with donor and acceptor
+            match = line_pattern.match(line)
+            if match:
+                donor_full = match.group(1)     # e.g., 'I211O10'
+                acceptor_full = match.group(2)  # e.g., 'I211O2'
+    
+                # Extract atom names using regex
+                donor_match = atom_pattern.match(donor_full)
+                acceptor_match = atom_pattern.match(acceptor_full)
+    
+                if donor_match and acceptor_match:
+                    donor_atom = donor_match.group(1)       # e.g., 'O10'
+                    acceptor_atom = acceptor_match.group(1) # e.g., 'O2'
+    
+                    # Refine atom names
+                    refined_donor = refine_atom_name(donor_atom)
+                    refined_acceptor = refine_atom_name(acceptor_atom)
+    
+                    # Combine donor and acceptor with colon
+                    pair = {
+                        'donor': refined_donor,
+                        'acceptor': refined_acceptor
+                    }
+                    hbond_pairs.append(pair)
+                else:
+                    print(f"Warning (Line {line_number}): Couldn't parse atoms in line: {line}")
+            else:
+                print(f"Warning (Line {line_number}): Line didn't match expected format and was skipped: {line}")
+    
+    # Create DataFrame with index
+    df = pd.DataFrame(hbond_pairs)
+    df.reset_index(inplace=True)
+    df.rename(columns={'index': 'idx'}, inplace=True)
+    
+    # Adjust idx to start from 0
+    df['idx'] = df.index
+    
+    return df
+
 def find_project_root(current_dir, project_name="electrofit"):
     root = None
     while True:
@@ -296,6 +593,7 @@ project_path = find_project_root(current_dir=script_dir)
 sys.path.append(project_path)
 
 from electrofit.commands.run_commands import run_command
+from electrofit.helper.file_manipulation import find_file_with_extension
 
 # Define the base process directory
 process_dir = os.path.join(project_path, "process.nobackup")
@@ -309,6 +607,8 @@ for folder_name in os.listdir(process_dir):
     if os.path.isdir(folder_path):
         # Define the 'run_final_gmx_simulation' directory within this folder
         run_final_sim_dir = os.path.join(folder_path, 'run_final_gmx_simulation')
+        run_gau_create_gmx_in_dir = os.path.join(folder_path, 'run_gau_create_gmx_in')
+
         
         # Check if 'run_final_gmx_simulation' exists
         if os.path.isdir(run_final_sim_dir):
@@ -321,8 +621,8 @@ for folder_name in os.listdir(process_dir):
             xtc_file_path = os.path.join(run_final_sim_dir, 'md_center.xtc')
 
 
-            run_command(f'echo "2\n2\n" | gmx hbond -s {gro_file_path} -f {xtc_file_path} -hbn intra_hb_idx.ndx -num intra_hb_num.xvg -dist intra_hb_dist.xvg -g intra_hb.log -hbm intra_hb_matrix.xpm', cwd=dest_dir)
-            run_command(f'echo "2\n5\n" | gmx hbond -s {gro_file_path} -f {xtc_file_path} -hbn inter_hb_idx.ndx -num inter_hb_num.xvg -dist inter_hb_dist.xvg -g inter_hb.log -hbm inter_hb_matrix.xpm', cwd=dest_dir)
+            #run_command(f'echo "2\n2\n" | gmx hbond -s {gro_file_path} -f {xtc_file_path} -hbn intra_hb_idx.ndx -num intra_hb_num.xvg -dist intra_hb_dist.xvg -g intra_hb.log -hbm intra_hb_matrix.xpm', cwd=dest_dir)
+            #run_command(f'echo "2\n5\n" | gmx hbond -s {gro_file_path} -f {xtc_file_path} -hbn inter_hb_idx.ndx -num inter_hb_num.xvg -dist inter_hb_dist.xvg -g inter_hb.log -hbm inter_hb_matrix.xpm', cwd=dest_dir)
             
             # ---- Plot intra ----
             visualize_data(xpm_file="intra_hb_matrix.xpm")
@@ -396,5 +696,216 @@ for folder_name in os.listdir(process_dir):
 
             # Plot and save hb donor acceptor distance distribution:
             plot_hb_dist_xvg('inter_hb_dist.xvg', plot_file_name='inter_hb_distriution.pdf')
-            
-            
+
+            # --------------- Plot intra 2 ---------------
+            log_file = 'intra_hb.log'  
+            output_csv = 'intra_hbond_pairs.csv'  
+
+            # Parse the log file and get the DataFrame
+            hbond_df = parse_hbond_log_to_dataframe(log_file)
+
+            # Display the DataFrame
+            print("Extracted Donor-Acceptor Pairs DataFrame:")
+            print(hbond_df)
+
+            # Save the DataFrame to a CSV file
+            hbond_df.to_csv(output_csv, index=False)
+            print(f"\nDonor-Acceptor pairs have been saved to '{output_csv}'.")
+
+            data_matrix, meta_data = parse_xpm("intra_hb_matrix.xpm")
+
+            analysis_results = analyze_hydrogen_bonds(data_matrix=data_matrix, metadata=meta_data)
+
+            hbonds_per_index = analysis_results['hbonds_per_index']
+            # Add 'count' column to hbond_df
+            hbond_df['count'] = hbonds_per_index
+
+            # For each donor, get the two most abundant hydrogen bonds
+            top_hbonds_df = hbond_df.groupby('donor').apply(lambda x: x.nlargest(2, 'count')).reset_index(drop=True)
+
+            print("Top hydrogen bonds:")
+            print(top_hbonds_df)
+
+            # Path to your MOL2 file
+            os.chdir(run_gau_create_gmx_in_dir)
+            mol2_file_name = find_file_with_extension('mol2')
+            os.chdir(dest_dir)
+            mol2_file = os.path.join(run_gau_create_gmx_in_dir, mol2_file_name)
+
+            # Load the molecule
+            molecule = Chem.MolFromMol2File(mol2_file, removeHs=False)
+
+            if molecule is None:
+                raise ValueError(f"Failed to load molecule from {mol2_file}")
+
+            print("Molecule loaded successfully!")
+
+            # Set preference to use CoordGen
+            rdDepictor.SetPreferCoordGen(True)
+
+            # Generate 2D coordinates
+            rdDepictor.Compute2DCoords(molecule)
+
+            # Create custom atom labels
+            atom_counters = {}
+            atom_labels = {}
+
+            for atom in molecule.GetAtoms():
+                symbol = atom.GetSymbol()
+                idx = atom.GetIdx()
+
+                # Update the counter for this atom type
+                if symbol not in atom_counters:
+                    atom_counters[symbol] = 1
+                else:
+                    atom_counters[symbol] += 1
+
+                # Assign the custom label
+                atom_labels[idx] = f"{symbol}{atom_counters[symbol]}"
+
+            # Build a mapping from labels to atom indices
+            label_to_atom_idx = {label: idx for idx, label in atom_labels.items()}
+
+            # Now, get the donor and acceptor atom indices for highlighting
+            donor_atom_indices = []
+            acceptor_atom_indices = []
+
+            for _, row in hbond_df.iterrows():
+                donor_label = row['donor']
+                acceptor_label = row['acceptor']
+                donor_idx = label_to_atom_idx.get(donor_label)
+                acceptor_idx = label_to_atom_idx.get(acceptor_label)
+                if donor_idx is not None:
+                    donor_atom_indices.append(donor_idx)
+                if acceptor_idx is not None:
+                    acceptor_atom_indices.append(acceptor_idx)
+
+            # Remove duplicates
+            donor_atom_indices = list(set(donor_atom_indices))
+            acceptor_atom_indices = list(set(acceptor_atom_indices))
+
+            # Identify atoms that are both donors and acceptors
+            both_donor_acceptor_indices = set(donor_atom_indices) & set(acceptor_atom_indices)
+
+            # Update donor and acceptor lists to exclude atoms that are both
+            donor_only_indices = set(donor_atom_indices) - both_donor_acceptor_indices
+            acceptor_only_indices = set(acceptor_atom_indices) - both_donor_acceptor_indices
+
+            print("Donor only atom indices:", donor_only_indices)
+            print("Acceptor only atom indices:", acceptor_only_indices)
+            print("Both donor and acceptor atom indices:", both_donor_acceptor_indices)
+
+            # Collect hbond_pairs from top_hbonds_df for drawing dashed lines
+            hbond_pairs = []
+
+            for _, row in top_hbonds_df.iterrows():
+                donor_label = row['donor']
+                acceptor_label = row['acceptor']
+                donor_idx = label_to_atom_idx.get(donor_label)
+                acceptor_idx = label_to_atom_idx.get(acceptor_label)
+                if donor_idx is not None and acceptor_idx is not None:
+                    hbond_pairs.append((donor_idx, acceptor_idx))
+                else:
+                    print(f"Warning: Atom label {donor_label} or {acceptor_label} not found in molecule.")
+
+            print("Hydrogen bond pairs for dashed lines:", hbond_pairs)
+
+            # Combine all atom indices for highlighting
+            highlight_atoms = donor_only_indices.union(acceptor_only_indices).union(both_donor_acceptor_indices)
+
+            # Define colors
+            # Donor only atoms: light blue
+            # Acceptor only atoms: light green
+            # Both donor and acceptor atoms: teal
+
+            highlightAtomColors = {}
+
+            # Donor only atoms (light blue)
+            for idx in donor_only_indices:
+                highlightAtomColors[idx] = (0.6, 0.8, 1)  # Light blue
+
+            # Acceptor only atoms (light green)
+            for idx in acceptor_only_indices:
+                highlightAtomColors[idx] = (0.6, 1, 0.6)  # Light green
+
+            # Both donor and acceptor atoms (teal)
+            for idx in both_donor_acceptor_indices:
+                highlightAtomColors[idx] = (0.6, 0.9, 0.8)  # Teal color
+
+            # Set SVG size
+            svg_size = 500
+
+            # Draw the molecule with highlighted atoms
+            drawer = rdMolDraw2D.MolDraw2DSVG(svg_size, svg_size)
+            opts = drawer.drawOptions()
+            opts.addAtomIndices = False
+            opts.addBondIndices = False
+            # Set font size
+            opts.baseFontSize = 0.3
+
+            # Assign custom atom labels individually
+            for idx, label in atom_labels.items():
+                opts.atomLabels[idx] = label
+
+            # Prepare the molecule for drawing
+            rdMolDraw2D.PrepareMolForDrawing(molecule)
+
+            # Draw the molecule
+            drawer.DrawMolecule(molecule,
+                                highlightAtoms=highlight_atoms,
+                                highlightAtomColors=highlightAtomColors)
+            drawer.FinishDrawing()
+            svg = drawer.GetDrawingText()
+
+            # Extract drawing coordinates for each atom
+            draw_coords = {}
+            for atom_idx in range(molecule.GetNumAtoms()):
+                # Get the drawing coordinates (in pixels)
+                point = drawer.GetDrawCoords(atom_idx)
+                draw_coords[atom_idx] = (point.x, point.y)
+
+            # Add dashed lines for H-bonds
+            modified_svg = add_dashed_hbonds(svg, hbond_pairs, draw_coords)
+
+            # Save the modified SVG
+            with open('molecule_dashed_hbonds.svg', 'w') as f:
+                f.write(modified_svg)
+
+            print("Modified SVG with dashed H-bonds saved as 'molecule_dashed_hbonds.svg'")
+
+            # Create legend SVG content
+            # Convert RGB tuples to hex codes
+            def rgb_to_hex(rgb_tuple):
+                return '#' + ''.join(f'{int(255 * x):02X}' for x in rgb_tuple)
+
+            # Prepare the legend entries based on the data
+            legend_entries = []
+
+            # Include 'Donor' entry if there are donor-only atoms
+            if donor_only_indices:
+                legend_entries.append({'label': 'Donor (D)', 'color': rgb_to_hex((0.6, 0.8, 1))})  # Light blue
+
+            # Include 'Acceptor' entry if there are acceptor-only atoms
+            if acceptor_only_indices:
+                legend_entries.append({'label': 'Acceptor (A)', 'color': rgb_to_hex((0.6, 1, 0.6))})  # Light green
+
+            # Include 'D/A' entry if there are atoms that are both donors and acceptors
+            if both_donor_acceptor_indices:
+                legend_entries.append({'label': 'D/A', 'color': rgb_to_hex((0.6, 0.9, 0.8))})  # Teal
+
+            # Include 'H-Bond' entry if there are any hydrogen bonds (dashed lines)
+            if hbond_pairs:
+                legend_entries.append({'label': 'H-Bond', 'color': 'lightgray', 'dasharray': '5,5'})
+
+            legend_x = 20  # X position of the legend
+            legend_y = 20  # Y position of the legend
+            legend_svg_content = create_legend(legend_x, legend_y, legend_entries, font_size=14)
+
+            # Add legend to SVG content
+            modified_svg_with_legend = add_legend_to_svg(modified_svg, legend_svg_content)
+
+            # Save the modified SVG with legend
+            with open('molecule_dashed_hbonds_with_legend.svg', 'w') as f:
+                f.write(modified_svg_with_legend)
+
+            print("Modified SVG with dashed H-bonds and legend saved as 'molecule_dashed_hbonds_with_legend.svg'")
