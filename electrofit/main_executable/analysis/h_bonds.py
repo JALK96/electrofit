@@ -8,9 +8,7 @@ import pandas as pd
 import re
 from rdkit.Chem import rdDepictor
 from itertools import combinations
-
-# Set preference to use CoordGen for coordinate generation
-#rdDepictor.SetPreferCoordGen(True)
+import math
 
 def load_hb_num_xvg(filename):
     """
@@ -187,46 +185,112 @@ def analyze_hydrogen_bonds(data_matrix, metadata):
 
     return analysis_results
 
-def visualize_data(xpm_file='intra_hb_matrix.xpm'):
+def visualize_data(xpm_file='intra_hb_matrix.xpm', hbond_df=None, output_prefix='intra', bin_size_ns=0.1, time_per_frame_ns=0.01):
     """
-    Visualizes the hydrogen bond data and analysis.
+    Visualizes the hydrogen bond data and analysis with time binning.
     
     Parameters:
-    - file_path: str, path to the XPM file.
-
+    - xpm_file: str, path to the XPM file.
+    - hbond_df: pd.DataFrame, DataFrame containing donor and acceptor labels.
+    - output_prefix: str, prefix for the output file names.
+    - bin_size_ns: float, size of each time bin in nanoseconds.
+    - time_per_frame_ns: float, time duration of each frame in nanoseconds.
+    
     Returns:
     - None
     """
-
     data_matrix, metadata = parse_xpm(xpm_file)
     analysis_results = analyze_hydrogen_bonds(data_matrix, metadata)
-
+    
     matrix_shape = np.shape(data_matrix)
-    print(np.shape(data_matrix))
-    plt.figure(figsize=(8, 6))
-
+    print(f"Data matrix shape: {matrix_shape}")
+    
+    # Extract donor-acceptor labels from hbond_df
+    if hbond_df is not None:
+        hbond_labels = hbond_df['donor'] + '-' + hbond_df['acceptor']
+    else:
+        hbond_labels = [str(i) for i in range(matrix_shape[0])]
+    
+    # Verify alignment
+    if len(hbond_labels) != data_matrix.shape[0]:
+        print(f"Number of labels: {len(hbond_labels)}, Number of rows in data_matrix: {data_matrix.shape[0]}")
+        raise ValueError("Mismatch between number of hydrogen bonds in hbond_df and data_matrix.")
+    
+    # Calculate the number of frames per bin
+    frames_per_bin = int(bin_size_ns / time_per_frame_ns)
+    if frames_per_bin <= 0:
+        raise ValueError("Bin size must be larger than the time per frame.")
+    
+    # Number of bins
+    num_bins = data_matrix.shape[1] // frames_per_bin
+    if data_matrix.shape[1] % frames_per_bin != 0:
+        num_bins += 1  # Include partial bin
+    
+    # Initialize binned data matrix
+    binned_matrix = np.zeros((data_matrix.shape[0], num_bins))
+    
+    # Aggregate data into bins
+    for i in range(num_bins):
+        start_idx = i * frames_per_bin
+        end_idx = min((i + 1) * frames_per_bin, data_matrix.shape[1])
+        bin_data = data_matrix[:, start_idx:end_idx]
+        # Calculate the fraction of time the bond is present in the bin
+        binned_matrix[:, i] = np.mean(bin_data, axis=1)
+    
+    # Adjust figure size based on the number of hydrogen bonds
+    fig_height = max(6, 0.3 * len(hbond_labels))
+    plt.figure(figsize=(12, fig_height))
+    
     # Heatmap of hydrogen bonds
-    plt.imshow(data_matrix, aspect='auto', cmap="Reds", origin='lower')
-    plt.title(metadata.get('title', 'Hydrogen Bond Existence Map'))
-    plt.xlabel(metadata.get('x-label', 'Time'))
-    plt.ylabel(metadata.get('y-label', 'Hydrogen Bond Index'))
-    plt.colorbar(label='Bond Presence')
-    plt.yticks(np.arange(matrix_shape[0]))
+    plt.imshow(binned_matrix, aspect='auto', cmap="Reds", origin='lower', vmin=0, vmax=1)
+    plt.title(f"{metadata.get('title', 'Hydrogen Bond Existence Map')} (Binned)")
+    plt.xlabel('Time (ns)')
+    plt.ylabel('Donor-Acceptor Pairs')
+    
+    # Adjust time axis labels
+    bin_times_ns = np.arange(num_bins) * bin_size_ns
+    # Determine the number of ticks you want to display
+    num_ticks = 5 
+
+    # Generate tick positions evenly spaced across the bins
+    tick_positions = np.linspace(0, num_bins - 1, num_ticks, dtype=int)
+
+    # Generate tick labels corresponding to the bin times
+    tick_labels = [f"{bin_times_ns[pos]:.1f}" for pos in tick_positions]
+
+    # Set the x-ticks with the selected positions and labels
+    plt.xticks(tick_positions, labels=tick_labels)
+    
+    # Set y-ticks with donor-acceptor labels
+    plt.yticks(np.arange(len(hbond_labels)), hbond_labels)
+    
+    # Adjust y-axis tick label font size if necessary
+    plt.tick_params(axis='y', which='major', labelsize=8)
+    
+    # Color bar representing fraction of bond presence
+    cbar = plt.colorbar(label='Fraction of Bond Presence')
+    cbar.set_ticks([0, 0.25, 0.5, 0.75, 1.0])
+    cbar.set_ticklabels(['0%', '25%', '50%', '75%', '100%'])
+    
     plt.tight_layout()
-    plt.savefig("intra_hb_existence_map.pdf")
-
-    print(analysis_results['hbonds_per_index'])
-    # Additional Analysis: Example - Histogram of Hydrogen Bonds per Index
-    plt.figure(figsize=(8, 6))
-    plt.bar(range(len(analysis_results['hbonds_per_index'])), analysis_results['hbonds_per_index'], color="darkred")
+    plt.savefig(f"{output_prefix}_hb_existence_map_binned.pdf")
+    plt.close()
+    
+    print("Hydrogen bonds per index:", analysis_results['hbonds_per_index'])
+    
+    # Histogram of Hydrogen Bonds per Index (Horizontal Bar Plot)
+    plt.figure(figsize=(12, fig_height))
+    plt.barh(range(len(analysis_results['hbonds_per_index'])), analysis_results['hbonds_per_index'], color="darkred")
     plt.title('Total Occurrence of Each Hydrogen Bond')
-    plt.xlabel('Hydrogen Bond Index')
-    plt.ylabel('Occurrences')
+    plt.xlabel('Occurrences')
+    plt.ylabel('Donor-Acceptor Pairs')
+    plt.yticks(np.arange(len(hbond_labels)), hbond_labels)
     plt.grid(False)
-    plt.xticks(np.arange(matrix_shape[0]))
-    plt.savefig("intra_hb_occurences.pdf")
-
-    # Example: Lifetime Distribution
+    plt.tight_layout()
+    plt.savefig(f"{output_prefix}_hb_occurrences.pdf")
+    plt.close()
+    
+    # Lifetime Distribution
     # Flatten all lifetimes
     all_lifetimes = [lifetime for bond_lifetimes in analysis_results['lifetimes'] for lifetime in bond_lifetimes]
     plt.figure(figsize=(8, 6))
@@ -235,7 +299,9 @@ def visualize_data(xpm_file='intra_hb_matrix.xpm'):
     plt.xlabel('Lifetime (number of frames)')
     plt.ylabel('Frequency')
     plt.grid(False)
-    plt.savefig("intra_hb_lifetime.pdf")
+    plt.tight_layout()
+    plt.savefig(f"{output_prefix}_hb_lifetime.pdf")
+    plt.close()
 
 def plot_hb_dist_xvg(file_path, plot_file_name="hb_distribution.pdf"):
     """
@@ -618,42 +684,7 @@ for folder_name in os.listdir(process_dir):
             #run_command(f'echo "2\n2\n" | gmx hbond -s {gro_file_path} -f {xtc_file_path} -hbn intra_hb_idx.ndx -num intra_hb_num.xvg -dist intra_hb_dist.xvg -g intra_hb.log -hbm intra_hb_matrix.xpm', cwd=dest_dir)
             #run_command(f'echo "2\n5\n" | gmx hbond -s {gro_file_path} -f {xtc_file_path} -hbn inter_hb_idx.ndx -num inter_hb_num.xvg -dist inter_hb_dist.xvg -g inter_hb.log -hbm inter_hb_matrix.xpm', cwd=dest_dir)
             
-            # ---- Plot intra ----
-            visualize_data(xpm_file="intra_hb_matrix.xpm")
-            # Load the hb_num.xvg file
-            xvg_filename = 'intra_hb_num.xvg'  # Replace with your actual .xvg file name
-            data = load_hb_num_xvg(xvg_filename)
 
-            # Check if data was loaded correctly
-            if data.size == 0:
-                raise ValueError(f"No data found in {xvg_filename}.")
-
-            # Extract columns
-            time = data[:, 0]  # Time in ps
-            num_hbonds = data[:, 1]  # Number of Hydrogen Bonds (s0)
-            pairs_within_0_35_nm = data[:, 2] if data.shape[1] > 2 else None  # Pairs within 0.35 nm (s1)
-
-            # Plotting
-            plt.figure(figsize=(8, 6))
-            plt.plot(time, num_hbonds, label='Hydrogen Bonds', color='darkblue', linewidth=2)
-            if pairs_within_0_35_nm is not None:
-                plt.plot(time, pairs_within_0_35_nm, label='Pairs within 0.35 nm', color='darkred', linewidth=2)
-
-            plt.title('Hydrogen Bonds Over Time')
-            plt.xlabel('Time (ps)')
-            plt.ylabel('Number')
-            plt.legend()
-            plt.grid(True)
-
-            # Save the plot as SVG
-            output_svg = 'intra_hb_num_over_time.pdf'
-            plt.savefig(output_svg, format='pdf')
-            plt.close()
-
-            print(f"Plot saved as {output_svg}")
-
-            # Plot and save hb donor acceptor distance distribution:
-            plot_hb_dist_xvg('intra_hb_dist.xvg', plot_file_name='intra_hb_distriution.pdf')
 
             # ---- Plot inter ----
             # Load the hb_num.xvg file
@@ -689,7 +720,7 @@ for folder_name in os.listdir(process_dir):
             print(f"Plot saved as {output_svg}")
 
             # Plot and save hb donor acceptor distance distribution:
-            plot_hb_dist_xvg('inter_hb_dist.xvg', plot_file_name='inter_hb_distriution.pdf')
+            plot_hb_dist_xvg('inter_hb_dist.xvg', plot_file_name='inter_hb_distriution')
 
             # --------------- Plot intra 2 ---------------
             log_file = 'intra_hb.log'  
@@ -903,3 +934,41 @@ for folder_name in os.listdir(process_dir):
                 f.write(modified_svg_with_legend)
 
             print("Modified SVG with dashed H-bonds and legend saved as 'molecule_dashed_hbonds_with_legend.svg'")
+
+
+            # ---- Plot intra ----
+            visualize_data(xpm_file="intra_hb_matrix.xpm", hbond_df=hbond_df)
+            # Load the hb_num.xvg file
+            xvg_filename = 'intra_hb_num.xvg'  # Replace with your actual .xvg file name
+            data = load_hb_num_xvg(xvg_filename)
+
+            # Check if data was loaded correctly
+            if data.size == 0:
+                raise ValueError(f"No data found in {xvg_filename}.")
+
+            # Extract columns
+            time = data[:, 0]  # Time in ps
+            num_hbonds = data[:, 1]  # Number of Hydrogen Bonds (s0)
+            pairs_within_0_35_nm = data[:, 2] if data.shape[1] > 2 else None  # Pairs within 0.35 nm (s1)
+
+            # Plotting
+            plt.figure(figsize=(8, 6))
+            plt.plot(time, num_hbonds, label='Hydrogen Bonds', color='darkblue', linewidth=2)
+            if pairs_within_0_35_nm is not None:
+                plt.plot(time, pairs_within_0_35_nm, label='Pairs within 0.35 nm', color='darkred', linewidth=2)
+
+            plt.title('Hydrogen Bonds Over Time')
+            plt.xlabel('Time (ps)')
+            plt.ylabel('Number')
+            plt.legend()
+            plt.grid(True)
+
+            # Save the plot as SVG
+            output_svg = 'intra_hb_num_over_time.pdf'
+            plt.savefig(output_svg, format='pdf')
+            plt.close()
+
+            print(f"Plot saved as {output_svg}")
+
+            # Plot and save hb donor acceptor distance distribution:
+            plot_hb_dist_xvg('intra_hb_dist.xvg', plot_file_name='intra_hb_distriution')
