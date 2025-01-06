@@ -2,6 +2,29 @@ import numpy as np
 import matplotlib.pyplot as plt
 import re
 import os
+import sys
+
+def find_project_root(current_dir, project_name="electrofit"):
+    root = None
+    while True:
+        parent_dir = os.path.dirname(current_dir)
+        if os.path.basename(current_dir) == project_name:
+            root = current_dir  # Set root to the current project_name directory
+        if parent_dir == current_dir:
+            # We've reached the filesystem root
+            if root is None:
+                raise FileNotFoundError(f"Project root directory '{project_name}' not found.")
+            return root  # Return the outermost match found
+        current_dir = parent_dir
+
+# Set up the project paths
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_path = find_project_root(current_dir=script_dir)
+sys.path.append(project_path)
+process_dir = os.path.join(project_path, "process")
+
+from electrofit.helper.curlyBrace import curlyBrace
+
 
 def plot_charges_by_atom(atoms_dict1, initial_charges_dict, base_dir, atoms_dict2=None):
     """
@@ -173,8 +196,6 @@ def plot_charges_by_atom(atoms_dict1, initial_charges_dict, base_dir, atoms_dict
             output.write('\n')
             for i in avg_charges2:
                 output.write(str(round(i, 4)) + '\n')
-
-
 
 def plot_charges_by_atom_new(atoms_dict1, initial_charges_dict, base_dir, atoms_dict2=None):
     """
@@ -396,27 +417,6 @@ def plot_charges_by_atom_new(atoms_dict1, initial_charges_dict, base_dir, atoms_
             output.write('\n')
             for i in avg_charges2:
                 output.write(str(round(i, 4)) + '\n')
-
-
-import os
-import sys
-import shutil
-import glob
-import fnmatch
-import json
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-
-import os
-import sys
-import shutil
-import glob
-import fnmatch
-import json
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
 
 def plot_charges_by_atom_new_2(atoms_dict1, initial_charges_dict, base_dir, atoms_dict2=None):
     """
@@ -662,27 +662,6 @@ def plot_charges_by_atom_new_2(atoms_dict1, initial_charges_dict, base_dir, atom
             output.write('\n')
             for i in avg_charges2:
                 output.write(str(round(i, 4)) + '\n')
-
-def find_project_root(current_dir, project_name="electrofit"):
-    root = None
-    while True:
-        parent_dir = os.path.dirname(current_dir)
-        if os.path.basename(current_dir) == project_name:
-            root = current_dir  # Set root to the current project_name directory
-        if parent_dir == current_dir:
-            # We've reached the filesystem root
-            if root is None:
-                raise FileNotFoundError(f"Project root directory '{project_name}' not found.")
-            return root  # Return the outermost match found
-        current_dir = parent_dir
-
-# Set up the project paths
-script_dir = os.path.dirname(os.path.abspath(__file__))
-project_path = find_project_root(current_dir=script_dir)
-sys.path.append(project_path)
-process_dir = os.path.join(project_path, "process")
-
-from electrofit.helper.curlyBrace import curlyBrace
 
 def plot_charges_by_atom_new_3(atoms_dict1, initial_charges_dict, base_dir, atoms_dict2=None):
     """
@@ -1024,7 +1003,6 @@ def plot_charges_by_atom_new_3(atoms_dict1, initial_charges_dict, base_dir, atom
             for i in avg_charges2:
                 output.write(str(round(i, 4)) + '\n')
 
-
 def plot_charges_by_atom_new_4(atoms_dict1, initial_charges_dict, base_dir, atoms_dict2=None, equivalent_groups=None):
     """
     Plot the charge distributions of atoms along with their average and initial charges,
@@ -1333,7 +1311,6 @@ def create_atom_color_mapping(atom_names, symmetry_groups):
         atom_to_color[atom] = color
 
     return atom_to_color
-
 
 def plot_charges_by_symmetry(atoms_dict1, initial_charges_dict, base_dir, symmetry_groups, atoms_dict2=None):
     """

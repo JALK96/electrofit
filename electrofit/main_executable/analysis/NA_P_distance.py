@@ -139,7 +139,7 @@ def plot_all_distances_subplots(output_prefix, num_groups, plot_filename='all_di
     plt.tight_layout()
 
     # Add a main title for all subplots
-    #fig.suptitle('Minimum Distances Between Phosphorus Groups and Na-Ions', fontsize=18, y=1.02)
+    fig.suptitle('Minimum Distances Between Phosphorus Groups and Na-Ions', fontsize=18, y=1.05)
 
     # Save the figure
     plt.savefig(plot_filename, dpi=300, bbox_inches='tight')
@@ -157,47 +157,67 @@ def plot_all_distances_subplots(output_prefix, num_groups, plot_filename='all_di
 # ----------------------------
 
 def main():
-    # Define paths (adjust these as necessary)
-    structure_file = "md.gro"
-    index_file = "NA_P_index.ndx"
-    trajectory_file = "md_center.xtc"
-    topology_file = "md.tpr"
-    selection_group = "NA"
-    output_prefix = "distances_P"  # Generates distances_P1.xvg to distances_P6.xvg
-    log_file = "automate_gmx.log"
+    # Define the base process directory
+    process_dir = os.path.join(project_path, "process.nobackup")
 
-    # List of phosphorus groups
-    p_groups = ["P", "P1", "P2", "P3", "P4", "P5"]
+    # Loop through each subdirectory in the process directory
+    for folder_name in os.listdir(process_dir):
+        folder_path = os.path.join(process_dir, folder_name)
+        
+        # Check if it's a directory
+        if os.path.isdir(folder_path):
+            # Define the 'run_final_gmx_simulation' directory within this folder
+            run_final_sim_dir = os.path.join(folder_path, 'run_final_gmx_simulation')
+            
+            # Check if 'run_final_gmx_simulation' exists
+            if os.path.isdir(run_final_sim_dir):
+                # Define the destination directory 'analyze_final_sim' within the same working directory
+                dest_dir = os.path.join(folder_path, 'analyze_final_sim')
+                os.makedirs(dest_dir, exist_ok=True)
+                os.chdir(dest_dir)
 
-    # Set up logging
-    setup_logging(log_file)
-    logging.info("Logging is set up.")
+                # Define paths (adjust these as necessary)
+                structure_file = os.path.join(run_final_sim_dir, 'md.gro')
+                
+                trajectory_file = os.path.join(run_final_sim_dir, 'md_center.xtc')
+                index_file = "NA_P_index.ndx"
+                topology_file = os.path.join(run_final_sim_dir, "md.tpr")
+                selection_group = "NA"
+                output_prefix = "distances_NaP"  # Generates distances_P1.xvg to distances_P6.xvg
+                log_file = "distances_NaP_gmx.log"
 
-    # Check if input files exist
-    input_files = [structure_file, trajectory_file, topology_file]
-    for file in input_files:
-        if not os.path.isfile(file):
-            logging.error(f"Required input file '{file}' not found. Exiting.")
-            sys.exit(1)
-    logging.info("All required input files are present.")
+                # List of phosphorus groups
+                p_groups = ["P", "P1", "P2", "P3", "P4", "P5"]
 
-    # Step 1: Create the index file
-    create_index_file(structure_file, index_file)
+                # Set up logging
+                setup_logging(log_file)
+                logging.info("Logging is set up.")
 
-    # Step 2: Run gmx pairdist for each phosphorus group
-    run_pairdist_commands(
-        trajectory=trajectory_file,
-        topology=topology_file,
-        index_file=index_file,
-        groups=p_groups,
-        selection_group=selection_group,
-        output_prefix=output_prefix
-    )
+                # Check if input files exist
+                input_files = [structure_file, trajectory_file, topology_file]
+                for file in input_files:
+                    if not os.path.isfile(file):
+                        logging.error(f"Required input file '{file}' not found. Exiting.")
+                        sys.exit(1)
+                logging.info("All required input files are present.")
 
-    # Optional Step 3: Plot the distance data
-    plot_all_distances_subplots(output_prefix=output_prefix, num_groups=len(p_groups))
+                # Step 1: Create the index file
+                create_index_file(structure_file, index_file)
 
-    logging.info("All tasks completed successfully.")
+                # Step 2: Run gmx pairdist for each phosphorus group
+                run_pairdist_commands(
+                    trajectory=trajectory_file,
+                    topology=topology_file,
+                    index_file=index_file,
+                    groups=p_groups,
+                    selection_group=selection_group,
+                    output_prefix=output_prefix
+                )
+
+                # Optional Step 3: Plot the distance data
+                plot_all_distances_subplots(output_prefix=output_prefix, num_groups=len(p_groups))
+
+                logging.info("All tasks completed successfully.")
 
 if __name__ == "__main__":
     main()
