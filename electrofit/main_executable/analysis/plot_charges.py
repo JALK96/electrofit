@@ -1,9 +1,7 @@
 import os
 import sys
-import shutil
 import glob
 import fnmatch
-import json
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -290,7 +288,7 @@ def combine_and_calculate_symmetric_group_averages(charges_dict, equivalent_grou
 script_dir = os.path.dirname(os.path.abspath(__file__))
 project_path = find_project_root(current_dir=script_dir)
 sys.path.append(project_path)
-process_dir = os.path.join(project_path, "process")
+process_dir = os.path.join(project_path, "process.nobackup")
 
 # Import necessary modules from the project
 from electrofit.helper.file_manipulation import find_file_with_extension, parse_charges_from_mol2, extract_charges_from_subdirectories, adjust_atom_names, load_symmetry_groups

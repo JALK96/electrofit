@@ -9,6 +9,9 @@ import re
 from rdkit.Chem import rdDepictor
 from itertools import combinations
 import math
+import seaborn as sns 
+
+sns.set_context("talk")
 
 def load_hb_num_xvg(filename):
     """
@@ -239,7 +242,7 @@ def visualize_data_donor_accpetor_pair(xpm_file='intra_hb_matrix.xpm', hbond_df=
     
     # Adjust figure size based on the number of hydrogen bonds
     fig_height = max(6, 0.3 * len(hbond_labels))
-    plt.figure(figsize=(12, fig_height))
+    plt.figure(figsize=(8, fig_height))
     
     # Heatmap of hydrogen bonds
     plt.imshow(binned_matrix, aspect='auto', cmap="Reds", origin='lower', vmin=0, vmax=1)
@@ -279,7 +282,7 @@ def visualize_data_donor_accpetor_pair(xpm_file='intra_hb_matrix.xpm', hbond_df=
     print("Hydrogen bonds per index:", analysis_results['hbonds_per_index'])
     
     # Histogram of Hydrogen Bonds per Index (Horizontal Bar Plot)
-    plt.figure(figsize=(12, fig_height))
+    plt.figure(figsize=(8, fig_height))
     plt.barh(range(len(analysis_results['hbonds_per_index'])), analysis_results['hbonds_per_index'], color="darkred")
     plt.title('Total Occurrence of Each Hydrogen Bond')
     plt.xlabel('Occurrences')
@@ -291,12 +294,34 @@ def visualize_data_donor_accpetor_pair(xpm_file='intra_hb_matrix.xpm', hbond_df=
     plt.close()
     
     # Lifetime Distribution
-    # Flatten all lifetimes
-    all_lifetimes = [lifetime for bond_lifetimes in analysis_results['lifetimes'] for lifetime in bond_lifetimes]
+    # Suppose each frame is 10 ps = 0.01 ns
+    time_per_frame = 0.01  # ns per frame
+
+    # Lifetime Distribution
+    # Flatten all lifetimes (still in frames)
+    all_lifetimes_frames = [
+        lifetime 
+        for bond_lifetimes in analysis_results['lifetimes'] 
+        for lifetime in bond_lifetimes
+    ]
+
+    # Convert frames --> ns
+    all_lifetimes_ns = [lifetime * time_per_frame for lifetime in all_lifetimes_frames]
+
+    # Define histogram bins in ns.
+    # Bin every 0.01 ns:
+
+    max_lifetime = max(all_lifetimes_ns)
+    bin_width = 0.01  # 0.01 ns bin width (adjust to taste)
+    num_bins = int(max_lifetime / bin_width) + 2  # +2 for a little padding
+    bins = np.arange(0, num_bins * bin_width, bin_width)
+
     plt.figure(figsize=(8, 6))
-    plt.hist(all_lifetimes, bins=range(1, max(all_lifetimes)+2), edgecolor=None, color="darkred")
+    # Plot the histogram of lifetimes in ns
+    plt.hist(all_lifetimes_ns, bins=bins, edgecolor=None, color="darkred")
+
     plt.title('Hydrogen Bond Lifetime Distribution')
-    plt.xlabel('Lifetime (number of frames)')
+    plt.xlabel('Lifetime (ns)')  # Note the change here!
     plt.ylabel('Frequency')
     plt.grid(False)
     plt.tight_layout()
@@ -403,7 +428,7 @@ def visualize_data_donor_acceptor(xpm_file='inter_hb_matrix.xpm', hbond_df=None,
 
     # Adjust figure size based on the number of oxygens
     fig_height = max(6, 0.3 * len(oxygen_list))
-    plt.figure(figsize=(12, fig_height))
+    plt.figure(figsize=(8, fig_height))
 
     # Heatmap of hydrogen bonds per oxygen atom
     plt.imshow(aggregated_binned_matrix, aspect='auto', cmap="Reds", origin='lower', vmin=0, vmax=1)
@@ -449,7 +474,7 @@ def visualize_data_donor_acceptor(xpm_file='inter_hb_matrix.xpm', hbond_df=None,
     # Now, the histogram of occurrences per oxygen atom
     # Sum over time bins
     oxygen_occurrences = np.sum(aggregated_binned_matrix * frames_per_bin, axis=1)
-    plt.figure(figsize=(12, fig_height))
+    plt.figure(figsize=(8, fig_height))
     plt.barh(range(len(oxygen_occurrences)), oxygen_occurrences, color="darkred")
     plt.title('Total Occurrence of Hydrogen Bonds per Oxygen Atom')
     plt.xlabel('Occurrences')
@@ -474,9 +499,7 @@ def visualize_data_donor_acceptor(xpm_file='inter_hb_matrix.xpm', hbond_df=None,
     plt.savefig(f"{output_prefix}_hb_occurrences.pdf")
     plt.close()
 
-    # Lifetime Distribution remains as before
-    # Since lifetimes are calculated per hydrogen bond, aggregating them per oxygen might be complex
-    # You can skip this part or adjust as needed
+
 
 def plot_hb_dist_xvg(file_path, plot_file_name="hb_distribution.pdf"):
     """
@@ -540,7 +563,7 @@ def plot_hb_dist_xvg(file_path, plot_file_name="hb_distribution.pdf"):
     plt.title(title)
     plt.xlabel(x_label)
     plt.ylabel(y_label)
-    plt.grid(True)
+    plt.grid(False)
     plt.tight_layout()
     plt.savefig(f"{plot_file_name}.pdf", format="pdf")
 
@@ -829,13 +852,14 @@ project_path = find_project_root(current_dir=script_dir)
 sys.path.append(project_path)
 
 from electrofit.helper.file_manipulation import find_file_with_extension
-
+from electrofit.commands.run_commands import run_command
 # Define the base process directory
 process_dir = os.path.join(project_path, "process.nobackup")
 
 
 # Loop through each subdirectory in the process directory
 for folder_name in os.listdir(process_dir):
+
     folder_path = os.path.join(process_dir, folder_name)
     
     # Check if it's a directory
@@ -849,6 +873,7 @@ for folder_name in os.listdir(process_dir):
         if os.path.isdir(run_final_sim_dir):
             # Define the destination directory 'analyze_final_sim' within the same working directory
             dest_dir = os.path.join(folder_path, 'analyze_final_sim')
+            dest_dir = os.path.join(dest_dir, 'h_bonds')
             os.makedirs(dest_dir, exist_ok=True)
             os.chdir(dest_dir)
 
@@ -856,8 +881,8 @@ for folder_name in os.listdir(process_dir):
             xtc_file_path = os.path.join(run_final_sim_dir, 'md_center.xtc')
 
 
-            #run_command(f'echo "2\n2\n" | gmx hbond -s {gro_file_path} -f {xtc_file_path} -hbn intra_hb_idx.ndx -num intra_hb_num.xvg -dist intra_hb_dist.xvg -g intra_hb.log -hbm intra_hb_matrix.xpm', cwd=dest_dir)
-            #run_command(f'echo "2\n5\n" | gmx hbond -s {gro_file_path} -f {xtc_file_path} -hbn inter_hb_idx.ndx -num inter_hb_num.xvg -dist inter_hb_dist.xvg -g inter_hb.log -hbm inter_hb_matrix.xpm', cwd=dest_dir)
+            run_command(f'echo "2\n2\n" | gmx hbond -s {gro_file_path} -f {xtc_file_path} -hbn intra_hb_idx.ndx -num intra_hb_num.xvg -dist intra_hb_dist.xvg -g intra_hb.log -hbm intra_hb_matrix.xpm', cwd=dest_dir)
+            run_command(f'echo "2\n5\n" | gmx hbond -s {gro_file_path} -f {xtc_file_path} -hbn inter_hb_idx.ndx -num inter_hb_num.xvg -dist inter_hb_dist.xvg -g inter_hb.log -hbm inter_hb_matrix.xpm', cwd=dest_dir)
             
 
 
@@ -872,6 +897,7 @@ for folder_name in os.listdir(process_dir):
 
             # Extract columns
             time = data[:, 0]  # Time in ps
+            time = time / 10**3
             num_hbonds = data[:, 1]  # Number of Hydrogen Bonds (s0)
             pairs_within_0_35_nm = data[:, 2] if data.shape[1] > 2 else None  # Pairs within 0.35 nm (s1)
 
@@ -882,10 +908,10 @@ for folder_name in os.listdir(process_dir):
                 plt.plot(time, pairs_within_0_35_nm, label='Pairs within 0.35 nm', color='darkred', linewidth=2)
 
             plt.title('Hydrogen Bonds Over Time')
-            plt.xlabel('Time (ps)')
+            plt.xlabel('Time (ns)')
             plt.ylabel('Number')
             plt.legend()
-            plt.grid(True)
+            plt.grid(False)
 
             # Save the plot as SVG
             output_svg = 'inter_hb_num_over_time.pdf'
@@ -1149,7 +1175,7 @@ for folder_name in os.listdir(process_dir):
             plt.xlabel('Time (ps)')
             plt.ylabel('Number')
             plt.legend()
-            plt.grid(True)
+            plt.grid(False)
 
             # Save the plot as SVG
             output_svg = 'intra_hb_num_over_time.pdf'
