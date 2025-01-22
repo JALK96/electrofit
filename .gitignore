@@ -178,6 +178,7 @@ old/
 intermediate_data/
 dummy_process/
 process.nobackup/
+AA_test.nobackup/
 
 # notebooks
 *.ipynb_checkpoints
