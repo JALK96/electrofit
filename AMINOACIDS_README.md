@@ -1,8 +1,9 @@
-# RESP Charge Fitting with Antechamber and Gaussian
+# RESP Charge Fitting with Antechamber and Gaussian: A Tutorial
 
 ## Setting Up the Environment
 
 Activate the conda environment and start tleap.
+
 ```bash
 conda activate AmberTools23
 tleap
@@ -63,7 +64,7 @@ antechamber -i ala_capped_2.mol2 -fi mol2 -nc 0 -at gaff2 \
 ## Run Gaussian
 
 ```bash
-rung16 gau_input.gcrt
+g16 gau_input.gcrt
 ```
 
 ## Generate ESP File
@@ -165,7 +166,8 @@ Create a `.qin` file (`ala.qin`) using the charges out of the first mol2 file fo
  0.000000  0.000000  0.000000  0.000000  0.000000  0.000000  0.000000  0.000000 
 -0.415700  0.271900 -0.149000  0.097600  0.097600  0.097600
 ```
-These charges are known and widely used (e.g., https://carlosramosg.com/amber-custom-residue-parameterization).
+
+These charges are known and widely used (e.g., <https://carlosramosg.com/amber-custom-residue-parameterization>).
 
 - Each line contains 8 numbers.
 - Use 6 decimal places.

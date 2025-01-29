@@ -500,6 +500,724 @@ def visualize_data_donor_acceptor(xpm_file='inter_hb_matrix.xpm', hbond_df=None,
     plt.close()
 
 
+#---- occurences in ns 
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import re
+
+def visualize_data_donor_acceptor(
+    xpm_file='inter_hb_matrix.xpm',
+    hbond_df=None,
+    output_prefix='inter',
+    bin_size_ns=0.1,
+    time_per_frame_ns=0.01
+):
+    """
+    Visualizes the hydrogen bond data and analysis with time binning.
+    Aggregates data per oxygen atom in the molecule (donor or acceptor), showing the existence of any hydrogen bond
+    associated with that oxygen atom, regardless of the water molecules they are interacting with.
+
+    Parameters:
+    - xpm_file: str, path to the XPM file.
+    - hbond_df: pd.DataFrame, DataFrame containing donor and acceptor labels.
+    - output_prefix: str, prefix for the output file names.
+    - bin_size_ns: float, size of each time bin in nanoseconds.
+    - time_per_frame_ns: float, time duration of each frame in nanoseconds.
+
+    Returns:
+    - None
+    """
+    data_matrix, metadata = parse_xpm(xpm_file)
+    analysis_results = analyze_hydrogen_bonds(data_matrix, metadata)
+
+    matrix_shape = np.shape(data_matrix)
+    print(f"Data matrix shape: {matrix_shape}")
+
+    # Verify that hbond_df is provided
+    if hbond_df is None:
+        raise ValueError("hbond_df must be provided.")
+
+    # Ensure that 'idx' in hbond_df matches the rows in data_matrix
+    hbond_df = hbond_df.reset_index(drop=True)
+    hbond_df['idx'] = hbond_df.index
+
+    # Identify oxygen atoms in the molecule
+    def is_molecule_atom(atom_name):
+        # Assuming molecule atoms start with 'O' followed by digits
+        return bool(re.match(r'^O\d+$', atom_name))
+
+    # Filter donors and acceptors to molecule oxygens
+    molecule_donors = hbond_df['donor'][hbond_df['donor'].apply(is_molecule_atom)]
+    molecule_acceptors = hbond_df['acceptor'][hbond_df['acceptor'].apply(is_molecule_atom)]
+
+    # Get unique oxygen atoms in molecule
+    molecule_oxygens = set(molecule_donors).union(set(molecule_acceptors))
+
+    # Create mapping from oxygen to indices
+    oxygen_to_indices = {}
+    for oxygen in molecule_oxygens:
+        indices = hbond_df[
+            (hbond_df['donor'] == oxygen) | (hbond_df['acceptor'] == oxygen)
+        ]['idx'].tolist()
+        oxygen_to_indices[oxygen] = indices
+
+    # Calculate the number of frames per bin
+    frames_per_bin = int(bin_size_ns / time_per_frame_ns)
+    if frames_per_bin <= 0:
+        raise ValueError("Bin size must be larger than the time per frame.")
+
+    # Number of bins
+    num_bins = data_matrix.shape[1] // frames_per_bin
+    if data_matrix.shape[1] % frames_per_bin != 0:
+        num_bins += 1  # Include partial bin
+
+    # Initialize binned data matrix
+    binned_matrix = np.zeros((data_matrix.shape[0], num_bins))
+
+    # Aggregate data into bins
+    for i in range(num_bins):
+        start_idx = i * frames_per_bin
+        end_idx = min((i + 1) * frames_per_bin, data_matrix.shape[1])
+        bin_data = data_matrix[:, start_idx:end_idx]
+        # Calculate the fraction of time the bond is present in the bin
+        binned_matrix[:, i] = np.mean(bin_data, axis=1)
+
+    # Now, aggregate data per oxygen atom
+    num_oxygens = len(oxygen_to_indices)
+    aggregated_binned_matrix = np.zeros((num_oxygens, num_bins))
+
+    oxygen_list = list(oxygen_to_indices.keys())
+    for i, oxygen in enumerate(oxygen_list):
+        indices = oxygen_to_indices[oxygen]
+        oxygen_data = binned_matrix[indices, :]  # shape: (num_hbonds_for_oxygen, num_bins)
+        # Aggregate over the rows
+        aggregated_data = np.max(oxygen_data, axis=0)  # For binary data, max indicates presence
+        aggregated_binned_matrix[i, :] = aggregated_data
+
+    # Prepare roles for coloring y-tick labels
+    oxygen_roles = {}
+    for oxygen in oxygen_list:
+        is_donor = any(hbond_df['donor'] == oxygen)
+        is_acceptor = any(hbond_df['acceptor'] == oxygen)
+        if is_donor and is_acceptor:
+            role = 'both'
+        elif is_donor:
+            role = 'donor'
+        elif is_acceptor:
+            role = 'acceptor'
+        else:
+            role = 'unknown'  # This shouldn't happen
+        oxygen_roles[oxygen] = role
+
+    # Adjust figure size based on the number of oxygens
+    fig_height = max(6, 0.3 * len(oxygen_list))
+    plt.figure(figsize=(8, fig_height))
+
+    # Heatmap of hydrogen bonds per oxygen atom
+    plt.imshow(aggregated_binned_matrix, aspect='auto', cmap="Reds", origin='lower', vmin=0, vmax=1)
+    plt.title(f"{metadata.get('title', 'Hydrogen Bond Existence Map')} (Binned)")
+    plt.xlabel('Time (ns)')
+    plt.ylabel('Oxygen Atoms')
+
+    # Adjust time axis labels
+    bin_times_ns = np.arange(num_bins) * bin_size_ns
+    num_ticks = 5  # Adjust as needed
+    tick_positions = np.linspace(0, num_bins - 1, num_ticks, dtype=int)
+    tick_labels = [f"{bin_times_ns[pos]:.1f}" for pos in tick_positions]
+    plt.xticks(tick_positions, labels=tick_labels)
+
+    # Set y-ticks with oxygen labels
+    plt.yticks(np.arange(len(oxygen_list)), oxygen_list)
+
+    # Adjust y-axis tick label font size if necessary
+    plt.tick_params(axis='y', which='major', labelsize=8)
+
+    # Color y-tick labels based on role
+    ax = plt.gca()
+    yticks = ax.get_yticklabels()
+    for tick_label in yticks:
+        text = tick_label.get_text()
+        role = oxygen_roles.get(text, 'unknown')
+        if role == 'donor':
+            tick_label.set_color('blue')
+        elif role == 'acceptor':
+            tick_label.set_color('green')
+        elif role == 'both':
+            tick_label.set_color('purple')
+
+    # Color bar representing fraction of bond presence
+    cbar = plt.colorbar(label='Fraction of Bond Presence')
+    cbar.set_ticks([0, 0.25, 0.5, 0.75, 1.0])
+    cbar.set_ticklabels(['0%', '25%', '50%', '75%', '100%'])
+
+    plt.tight_layout()
+    plt.savefig(f"{output_prefix}_hb_existence_map_binned.pdf")
+    plt.close()
+
+    # ===== Corrected Occurrence Counting =====
+
+    # Step 1: Calculate the total bond presence time per hydrogen bond
+    # This should be per hbond, not per oxygen atom
+    hbonds_per_index = np.sum(binned_matrix, axis=1) * bin_size_ns  # Total time per hbond
+
+    # Step 2: Assign the counts to the DataFrame
+    hbond_df['count'] = hbonds_per_index
+
+    # Step 3: Melt the DataFrame to have one row per donor or acceptor with associated count
+    melted = hbond_df.melt(id_vars=['idx', 'count'], value_vars=['donor', 'acceptor'], value_name='oxygen')
+
+    # Step 4: Drop any NaN values
+    melted = melted.dropna(subset=['oxygen'])
+
+    # Step 5: Group by oxygen atom and sum the counts
+    oxygen_occurrences = melted.groupby('oxygen')['count'].sum()
+
+    # Ensure that all molecule oxygens are present in the occurrences
+    oxygen_occurrences = oxygen_occurrences.reindex(molecule_oxygens, fill_value=0)
+
+    # ===== End of Corrected Occurrence Counting =====
+
+    # Now, create the histogram of occurrences per oxygen atom
+    plt.figure(figsize=(8, fig_height))
+    # Sort oxygen_occurrences to match the oxygen_list order
+    sorted_occurrences = oxygen_occurrences.loc[oxygen_list]
+    plt.barh(range(len(sorted_occurrences)), sorted_occurrences.values, color="darkred")
+    plt.title('Total Occurrence of Hydrogen Bonds per Oxygen Atom')
+    plt.xlabel('Occurrences (ns)')
+    plt.ylabel('Oxygen Atoms')
+    plt.yticks(np.arange(len(oxygen_list)), oxygen_list)
+    plt.grid(False)
+
+    # Color y-tick labels based on role
+    ax = plt.gca()
+    yticks = ax.get_yticklabels()
+    for tick_label in yticks:
+        text = tick_label.get_text()
+        role = oxygen_roles.get(text, 'unknown')
+        if role == 'donor':
+            tick_label.set_color('blue')
+        elif role == 'acceptor':
+            tick_label.set_color('green')
+        elif role == 'both':
+            tick_label.set_color('purple')
+
+    plt.tight_layout()
+    plt.savefig(f"{output_prefix}_hb_occurrences.pdf")
+    plt.close()
+
+    print(f"Visualization completed. Files saved with prefix '{output_prefix}_hb_'.")
+
+
+#---- occurences in ns + total number of H-bonds (event based) overlay
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import re
+
+def visualize_data_donor_acceptor(
+    xpm_file='inter_hb_matrix.xpm',
+    hbond_df=None,
+    output_prefix='inter',
+    bin_size_ns=0.1,
+    time_per_frame_ns=0.01
+):
+    """
+    Visualizes the hydrogen bond data and analysis with time binning.
+    Aggregates data per oxygen atom in the molecule (donor or acceptor), showing both the total number of ones
+    and the number of distinct hydrogen bond occurrences associated with that oxygen atom, regardless of the water molecules they are interacting with.
+
+    Parameters:
+    - xpm_file: str, path to the XPM file.
+    - hbond_df: pd.DataFrame, DataFrame containing donor and acceptor labels.
+    - output_prefix: str, prefix for the output file names.
+    - bin_size_ns: float, size of each time bin in nanoseconds.
+    - time_per_frame_ns: float, time duration of each frame in nanoseconds.
+
+    Returns:
+    - None
+    """
+    # Ensure necessary functions are defined or imported
+    # Assuming parse_xpm and analyze_hydrogen_bonds are defined elsewhere
+    data_matrix, metadata = parse_xpm(xpm_file)
+    analysis_results = analyze_hydrogen_bonds(data_matrix, metadata)
+
+    matrix_shape = np.shape(data_matrix)
+    print(f"Data matrix shape: {matrix_shape}")
+
+    # Verify that hbond_df is provided
+    if hbond_df is None:
+        raise ValueError("hbond_df must be provided.")
+
+    # Ensure that 'idx' in hbond_df matches the rows in data_matrix
+    hbond_df = hbond_df.reset_index(drop=True)
+    hbond_df['idx'] = hbond_df.index
+
+    # Identify oxygen atoms in the molecule
+    def is_molecule_atom(atom_name):
+        # Assuming molecule atoms start with 'O' followed by digits
+        return bool(re.match(r'^O\d+$', atom_name))
+
+    # Filter donors and acceptors to molecule oxygens
+    molecule_donors = hbond_df['donor'][hbond_df['donor'].apply(is_molecule_atom)]
+    molecule_acceptors = hbond_df['acceptor'][hbond_df['acceptor'].apply(is_molecule_atom)]
+
+    # Get unique oxygen atoms in molecule
+    molecule_oxygens = set(molecule_donors).union(set(molecule_acceptors))
+
+    # Create mapping from oxygen to indices
+    oxygen_to_indices = {}
+    for oxygen in molecule_oxygens:
+        indices = hbond_df[
+            (hbond_df['donor'] == oxygen) | (hbond_df['acceptor'] == oxygen)
+        ]['idx'].tolist()
+        oxygen_to_indices[oxygen] = indices
+
+    # Calculate the number of frames per bin
+    frames_per_bin = int(bin_size_ns / time_per_frame_ns)
+    if frames_per_bin <= 0:
+        raise ValueError("Bin size must be larger than the time per frame.")
+
+    # Number of bins
+    num_bins = data_matrix.shape[1] // frames_per_bin
+    if data_matrix.shape[1] % frames_per_bin != 0:
+        num_bins += 1  # Include partial bin
+
+    # Initialize binned data matrix
+    binned_matrix = np.zeros((data_matrix.shape[0], num_bins))
+
+    # Aggregate data into bins
+    for i in range(num_bins):
+        start_idx = i * frames_per_bin
+        end_idx = min((i + 1) * frames_per_bin, data_matrix.shape[1])
+        bin_data = data_matrix[:, start_idx:end_idx]
+        # Calculate the fraction of time the bond is present in the bin
+        binned_matrix[:, i] = np.mean(bin_data, axis=1)
+
+    # Now, aggregate data per oxygen atom for the heatmap
+    num_oxygens = len(oxygen_to_indices)
+    aggregated_binned_matrix = np.zeros((num_oxygens, num_bins))
+
+    oxygen_list = list(oxygen_to_indices.keys())
+    for i, oxygen in enumerate(oxygen_list):
+        indices = oxygen_to_indices[oxygen]
+        oxygen_data = binned_matrix[indices, :]  # shape: (num_hbonds_for_oxygen, num_bins)
+        # Aggregate over the rows
+        aggregated_data = np.max(oxygen_data, axis=0)  # For binary data, max indicates presence
+        aggregated_binned_matrix[i, :] = aggregated_data
+
+    # Prepare roles for coloring y-tick labels
+    oxygen_roles = {}
+    for oxygen in oxygen_list:
+        is_donor = any(hbond_df['donor'] == oxygen)
+        is_acceptor = any(hbond_df['acceptor'] == oxygen)
+        if is_donor and is_acceptor:
+            role = 'both'
+        elif is_donor:
+            role = 'donor'
+        elif is_acceptor:
+            role = 'acceptor'
+        else:
+            role = 'unknown'  # This shouldn't happen
+        oxygen_roles[oxygen] = role
+
+    # Adjust figure size based on the number of oxygens
+    fig_height = max(6, 0.3 * len(oxygen_list))
+    fig, axes = plt.subplots(nrows=2, ncols=1, figsize=(10, 2 * fig_height), constrained_layout=True)
+
+    # --- Subplot 1: Heatmap ---
+    ax1 = axes[0]
+    cax = ax1.imshow(aggregated_binned_matrix, aspect='auto', cmap="Reds", origin='lower', vmin=0, vmax=1)
+    ax1.set_title(f"{metadata.get('title', 'Hydrogen Bond Existence Map')} (Binned)")
+    ax1.set_xlabel('Time (ns)')
+    ax1.set_ylabel('Oxygen Atoms')
+
+    # Adjust time axis labels
+    bin_times_ns = np.arange(num_bins) * bin_size_ns
+    num_ticks = 5  # Adjust as needed
+    tick_positions = np.linspace(0, num_bins - 1, num_ticks, dtype=int)
+    tick_labels = [f"{bin_times_ns[pos]:.1f}" for pos in tick_positions]
+    ax1.set_xticks(tick_positions)
+    ax1.set_xticklabels(tick_labels)
+
+    # Set y-ticks with oxygen labels
+    ax1.set_yticks(np.arange(len(oxygen_list)))
+    ax1.set_yticklabels(oxygen_list)
+
+    # Adjust y-axis tick label font size if necessary
+    ax1.tick_params(axis='y', which='major', labelsize=8)
+
+    # Color y-tick labels based on role
+    yticks = ax1.get_yticklabels()
+    for tick_label in yticks:
+        text = tick_label.get_text()
+        role = oxygen_roles.get(text, 'unknown')
+        if role == 'donor':
+            tick_label.set_color('blue')
+        elif role == 'acceptor':
+            tick_label.set_color('green')
+        elif role == 'both':
+            tick_label.set_color('purple')
+
+    # Color bar representing fraction of bond presence
+    cbar = fig.colorbar(cax, ax=ax1, label='Fraction of Bond Presence')
+    cbar.set_ticks([0, 0.25, 0.5, 0.75, 1.0])
+    cbar.set_ticklabels(['0%', '25%', '50%', '75%', '100%'])
+
+    # --- Subplot 2: Combined Histogram ---
+    ax2 = axes[1]
+
+    # ===== Occurrence Counting =====
+
+    # --- Total Number of Ones ---
+    # Calculate the total number of ones each hydrogen bond has
+    hbonds_total_ones = np.sum(data_matrix, axis=1)  # Total ones per hbond
+
+    # --- Number of Occurrences ---
+    # Define an occurrence as a transition from 0 to 1
+    # Vectorized approach for efficiency
+    bond_transitions = np.diff(data_matrix, prepend=0, axis=1)
+    hbonds_occurrences = np.sum(bond_transitions == 1, axis=1)  # Number of events per hbond
+
+    # Assign both counts to the DataFrame
+    hbond_df['total_ones'] = hbonds_total_ones
+    hbond_df['num_occurrences'] = hbonds_occurrences
+
+    # --- Aggregating Counts per Oxygen Atom ---
+
+    # Melt the DataFrame for total number of ones
+    melted_ones = hbond_df.melt(id_vars=['idx', 'total_ones'], value_vars=['donor', 'acceptor'], value_name='oxygen')
+    melted_ones = melted_ones.dropna(subset=['oxygen'])
+    oxygen_total_ones = melted_ones.groupby('oxygen')['total_ones'].sum()
+    oxygen_total_ones = oxygen_total_ones.reindex(molecule_oxygens, fill_value=0)
+
+    # Melt the DataFrame for number of occurrences
+    melted_occ = hbond_df.melt(id_vars=['idx', 'num_occurrences'], value_vars=['donor', 'acceptor'], value_name='oxygen')
+    melted_occ = melted_occ.dropna(subset=['oxygen'])
+    oxygen_num_occurrences = melted_occ.groupby('oxygen')['num_occurrences'].sum()
+    oxygen_num_occurrences = oxygen_num_occurrences.reindex(molecule_oxygens, fill_value=0)
+
+    # --- Plotting Subplot 2 ---
+
+    # Define y positions
+    y_positions = np.arange(len(oxygen_list))
+
+    # Plot Total Number of Ones (lightgreen)
+    ax2.barh(
+        y_positions,
+        oxygen_total_ones.values,
+        color='lightgreen',
+        label='Total Number of Ones'
+    )
+
+    # Overlay Number of Occurrences (darkgreen) with transparency
+    ax2.barh(
+        y_positions,
+        oxygen_num_occurrences.values,
+        color='darkgreen',
+        label='Number of Occurrences'
+    )
+
+    # Set labels and titles
+    ax2.set_title('Total Number of Hydrogen Bond Occurrences and Ones per Oxygen Atom')
+    ax2.set_xlabel('Counts')
+    ax2.set_ylabel('Oxygen Atoms')
+    ax2.set_yticks(y_positions)
+    ax2.set_yticklabels(oxygen_list)
+    ax2.grid(False)
+
+    # Add legend
+    ax2.legend(loc='upper right')
+
+    # Color y-tick labels based on role
+    yticks = ax2.get_yticklabels()
+    for tick_label in yticks:
+        text = tick_label.get_text()
+        role = oxygen_roles.get(text, 'unknown')
+        if role == 'donor':
+            tick_label.set_color('blue')
+        elif role == 'acceptor':
+            tick_label.set_color('green')
+        elif role == 'both':
+            tick_label.set_color('purple')
+
+    # Optional: Add value labels for clarity
+    for i, (total, occ) in enumerate(zip(oxygen_total_ones.values, oxygen_num_occurrences.values)):
+        # Label for Total Number of Ones
+        ax2.text(
+            total + max(oxygen_total_ones.values)*0.01, 
+            i, 
+            f"{int(total)}", 
+            va='center', 
+            fontsize=8, 
+            color='black'
+        )
+        # Label for Number of Occurrences
+        ax2.text(
+            occ + max(oxygen_num_occurrences.values)*0.01, 
+            i, 
+            f"{int(occ)}", 
+            va='center', 
+            fontsize=8, 
+            color='black'
+        )
+
+    # Save the combined plot
+    plt.savefig(f"{output_prefix}_hb_visualization.pdf")
+    plt.close()
+
+    print(f"Visualization completed. Files saved with prefix '{output_prefix}_hb_visualization.pdf'.")
+
+
+#--- occurences in ns + total number of H-bonds (event based)
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import re
+
+def visualize_data_donor_acceptor(
+    xpm_file='inter_hb_matrix.xpm',
+    hbond_df=None,
+    output_prefix='inter',
+    bin_size_ns=0.1,
+    time_per_frame_ns=0.01
+):
+    """
+    Visualizes the hydrogen bond data and analysis with time binning.
+    Aggregates data per oxygen atom in the molecule (donor or acceptor), showing both the total time and the number of distinct hydrogen bond occurrences
+    associated with that oxygen atom, regardless of the water molecules they are interacting with.
+
+    Parameters:
+    - xpm_file: str, path to the XPM file.
+    - hbond_df: pd.DataFrame, DataFrame containing donor and acceptor labels.
+    - output_prefix: str, prefix for the output file names.
+    - bin_size_ns: float, size of each time bin in nanoseconds.
+    - time_per_frame_ns: float, time duration of each frame in nanoseconds.
+
+    Returns:
+    - None
+    """
+    # Ensure necessary functions are defined or imported
+    # Assuming parse_xpm and analyze_hydrogen_bonds are defined elsewhere
+    data_matrix, metadata = parse_xpm(xpm_file)
+    analysis_results = analyze_hydrogen_bonds(data_matrix, metadata)
+
+    matrix_shape = np.shape(data_matrix)
+    print(f"Data matrix shape: {matrix_shape}")
+
+    # Verify that hbond_df is provided
+    if hbond_df is None:
+        raise ValueError("hbond_df must be provided.")
+
+    # Ensure that 'idx' in hbond_df matches the rows in data_matrix
+    hbond_df = hbond_df.reset_index(drop=True)
+    hbond_df['idx'] = hbond_df.index
+
+    # Identify oxygen atoms in the molecule
+    def is_molecule_atom(atom_name):
+        # Assuming molecule atoms start with 'O' followed by digits
+        return bool(re.match(r'^O\d+$', atom_name))
+
+    # Filter donors and acceptors to molecule oxygens
+    molecule_donors = hbond_df['donor'][hbond_df['donor'].apply(is_molecule_atom)]
+    molecule_acceptors = hbond_df['acceptor'][hbond_df['acceptor'].apply(is_molecule_atom)]
+
+    # Get unique oxygen atoms in molecule
+    molecule_oxygens = set(molecule_donors).union(set(molecule_acceptors))
+
+    # Create mapping from oxygen to indices
+    oxygen_to_indices = {}
+    for oxygen in molecule_oxygens:
+        indices = hbond_df[
+            (hbond_df['donor'] == oxygen) | (hbond_df['acceptor'] == oxygen)
+        ]['idx'].tolist()
+        oxygen_to_indices[oxygen] = indices
+
+    # Calculate the number of frames per bin
+    frames_per_bin = int(bin_size_ns / time_per_frame_ns)
+    if frames_per_bin <= 0:
+        raise ValueError("Bin size must be larger than the time per frame.")
+
+    # Number of bins
+    num_bins = data_matrix.shape[1] // frames_per_bin
+    if data_matrix.shape[1] % frames_per_bin != 0:
+        num_bins += 1  # Include partial bin
+
+    # Initialize binned data matrix
+    binned_matrix = np.zeros((data_matrix.shape[0], num_bins))
+
+    # Aggregate data into bins
+    for i in range(num_bins):
+        start_idx = i * frames_per_bin
+        end_idx = min((i + 1) * frames_per_bin, data_matrix.shape[1])
+        bin_data = data_matrix[:, start_idx:end_idx]
+        # Calculate the fraction of time the bond is present in the bin
+        binned_matrix[:, i] = np.mean(bin_data, axis=1)
+
+    # Now, aggregate data per oxygen atom for the heatmap
+    num_oxygens = len(oxygen_to_indices)
+    aggregated_binned_matrix = np.zeros((num_oxygens, num_bins))
+
+    oxygen_list = list(oxygen_to_indices.keys())
+    for i, oxygen in enumerate(oxygen_list):
+        indices = oxygen_to_indices[oxygen]
+        oxygen_data = binned_matrix[indices, :]  # shape: (num_hbonds_for_oxygen, num_bins)
+        # Aggregate over the rows
+        aggregated_data = np.max(oxygen_data, axis=0)  # For binary data, max indicates presence
+        aggregated_binned_matrix[i, :] = aggregated_data
+
+    # Prepare roles for coloring y-tick labels
+    oxygen_roles = {}
+    for oxygen in oxygen_list:
+        is_donor = any(hbond_df['donor'] == oxygen)
+        is_acceptor = any(hbond_df['acceptor'] == oxygen)
+        if is_donor and is_acceptor:
+            role = 'both'
+        elif is_donor:
+            role = 'donor'
+        elif is_acceptor:
+            role = 'acceptor'
+        else:
+            role = 'unknown'  # This shouldn't happen
+        oxygen_roles[oxygen] = role
+
+    # Adjust figure size based on the number of oxygens
+    fig_height = max(6, 0.3 * len(oxygen_list))
+    plt.figure(figsize=(8, fig_height))
+
+    # Heatmap of hydrogen bonds per oxygen atom
+    plt.imshow(aggregated_binned_matrix, aspect='auto', cmap="Reds", origin='lower', vmin=0, vmax=1)
+    plt.title(f"{metadata.get('title', 'Hydrogen Bond Existence Map')} (Binned)")
+    plt.xlabel('Time (ns)')
+    plt.ylabel('Oxygen Atoms')
+
+    # Adjust time axis labels
+    bin_times_ns = np.arange(num_bins) * bin_size_ns
+    num_ticks = 5  # Adjust as needed
+    tick_positions = np.linspace(0, num_bins - 1, num_ticks, dtype=int)
+    tick_labels = [f"{bin_times_ns[pos]:.1f}" for pos in tick_positions]
+    plt.xticks(tick_positions, labels=tick_labels)
+
+    # Set y-ticks with oxygen labels
+    plt.yticks(np.arange(len(oxygen_list)), oxygen_list)
+
+    # Adjust y-axis tick label font size if necessary
+    plt.tick_params(axis='y', which='major', labelsize=8)
+
+    # Color y-tick labels based on role
+    ax = plt.gca()
+    yticks = ax.get_yticklabels()
+    for tick_label in yticks:
+        text = tick_label.get_text()
+        role = oxygen_roles.get(text, 'unknown')
+        if role == 'donor':
+            tick_label.set_color('blue')
+        elif role == 'acceptor':
+            tick_label.set_color('green')
+        elif role == 'both':
+            tick_label.set_color('purple')
+
+    # Color bar representing fraction of bond presence
+    cbar = plt.colorbar(label='Fraction of Bond Presence')
+    cbar.set_ticks([0, 0.25, 0.5, 0.75, 1.0])
+    cbar.set_ticklabels(['0%', '25%', '50%', '75%', '100%'])
+
+    plt.tight_layout()
+    plt.savefig(f"{output_prefix}_hb_existence_map_binned.pdf")
+    plt.close()
+
+    # ===== Occurrence Counting =====
+
+    # --- Time-Resolved Occurrence ---
+    # Calculate the total time each hydrogen bond is present
+    hbonds_time_resolved = np.sum(binned_matrix, axis=1) * bin_size_ns  # in ns
+
+    # --- Event-Based Occurrence ---
+    # Define an occurrence as a transition from 0 to 1
+    # Vectorized approach for efficiency
+    # Prepend a column of zeros to detect transitions at the first frame
+    bond_transitions = np.diff(data_matrix, prepend=0, axis=1)
+    hbonds_event_based = np.sum(bond_transitions == 1, axis=1)  # Number of events per hbond
+
+    # Assign both counts to the DataFrame
+    hbond_df['count_time_ns'] = hbonds_time_resolved
+    hbond_df['count_events'] = hbonds_event_based
+
+    # --- Aggregating Counts per Oxygen Atom ---
+
+    # Melt the DataFrame for time-resolved counts
+    melted_time = hbond_df.melt(id_vars=['idx', 'count_time_ns'], value_vars=['donor', 'acceptor'], value_name='oxygen')
+    melted_time = melted_time.dropna(subset=['oxygen'])
+    oxygen_time_occurrences = melted_time.groupby('oxygen')['count_time_ns'].sum()
+    oxygen_time_occurrences = oxygen_time_occurrences.reindex(molecule_oxygens, fill_value=0)
+
+    # Melt the DataFrame for event-based counts
+    melted_events = hbond_df.melt(id_vars=['idx', 'count_events'], value_vars=['donor', 'acceptor'], value_name='oxygen')
+    melted_events = melted_events.dropna(subset=['oxygen'])
+    oxygen_event_occurrences = melted_events.groupby('oxygen')['count_events'].sum()
+    oxygen_event_occurrences = oxygen_event_occurrences.reindex(molecule_oxygens, fill_value=0)
+
+    # --- Plotting Histograms ---
+
+    # Define a combined figure with two subplots
+    fig, axes = plt.subplots(nrows=2, ncols=1, figsize=(10, 2 * fig_height), constrained_layout=True)
+
+    # --- Histogram 1: Total Time in ns ---
+    axes[0].barh(range(len(oxygen_time_occurrences)), oxygen_time_occurrences.values, color="darkred")
+    axes[0].set_title('Total Time of Hydrogen Bonds per Oxygen Atom')
+    axes[0].set_xlabel('Time (ns)')
+    axes[0].set_ylabel('Oxygen Atoms')
+    axes[0].set_yticks(np.arange(len(oxygen_list)))
+    axes[0].set_yticklabels(oxygen_list)
+    axes[0].grid(False)
+
+    # Color y-tick labels based on role
+    yticks = axes[0].get_yticklabels()
+    for tick_label in yticks:
+        text = tick_label.get_text()
+        role = oxygen_roles.get(text, 'unknown')
+        if role == 'donor':
+            tick_label.set_color('blue')
+        elif role == 'acceptor':
+            tick_label.set_color('green')
+        elif role == 'both':
+            tick_label.set_color('purple')
+
+    # --- Histogram 2: Total Number of Occurrences ---
+    axes[1].barh(range(len(oxygen_event_occurrences)), oxygen_event_occurrences.values, color="darkgreen")
+    axes[1].set_title('Total Number of Hydrogen Bond Occurrences per Oxygen Atom')
+    axes[1].set_xlabel('Number of Occurrences')
+    axes[1].set_ylabel('Oxygen Atoms')
+    axes[1].set_yticks(np.arange(len(oxygen_list)))
+    axes[1].set_yticklabels(oxygen_list)
+    axes[1].grid(False)
+
+    # Color y-tick labels based on role
+    yticks = axes[1].get_yticklabels()
+    for tick_label in yticks:
+        text = tick_label.get_text()
+        role = oxygen_roles.get(text, 'unknown')
+        if role == 'donor':
+            tick_label.set_color('blue')
+        elif role == 'acceptor':
+            tick_label.set_color('green')
+        elif role == 'both':
+            tick_label.set_color('purple')
+
+    # Save the combined histograms
+    plt.savefig(f"{output_prefix}_hb_occurrences.pdf")
+    plt.close()
+
+    print(f"Visualization completed. Files saved with prefix '{output_prefix}_hb_'.")
+
+
+#---- stop occurences
 
 def plot_hb_dist_xvg(file_path, plot_file_name="hb_distribution.pdf"):
     """
@@ -858,7 +1576,8 @@ process_dir = os.path.join(project_path, "process.nobackup")
 
 
 # Loop through each subdirectory in the process directory
-for folder_name in os.listdir(process_dir):
+#for folder_name in os.listdir(process_dir):
+for folder_name in (f for f in os.listdir(process_dir) if f == "IP_010101"):
 
     folder_path = os.path.join(process_dir, folder_name)
     

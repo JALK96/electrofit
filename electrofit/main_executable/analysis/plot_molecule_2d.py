@@ -1,15 +1,11 @@
-import numpy as np
-import matplotlib.pyplot as plt
+
 import os
 import sys
 from rdkit import Chem
 from rdkit.Chem.Draw import rdMolDraw2D
-import pandas as pd
-import re
 from rdkit.Chem import rdDepictor
-from itertools import combinations
-import math        
-            
+from rdkit.Chem.Draw.MolDrawing import DrawingOptions
+
 
 def find_project_root(current_dir, project_name="electrofit"):
     root = None
@@ -96,6 +92,8 @@ for folder_name in os.listdir(process_dir):
             svg_size = 500
             # Draw the molecule with highlighted atoms
             drawer = rdMolDraw2D.MolDraw2DSVG(svg_size, svg_size)
+            # Draw every atom in black 
+            #drawer.drawOptions().updateAtomPalette({k: (0, 0, 0) for k in DrawingOptions.elemDict.keys()})
             opts = drawer.drawOptions()
             opts.addAtomIndices = False
             opts.addBondIndices = False
