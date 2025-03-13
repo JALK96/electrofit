@@ -3,6 +3,8 @@ import logging
 import os
 import subprocess
 from pathlib import Path
+import io
+from contextlib import redirect_stdout, redirect_stderr
 
 
 
@@ -94,6 +96,43 @@ def run_command(command, cwd=None):
         logging.error(f"Error executing command '{command}': {e.stderr}")
         raise
 
+
+def run_and_log(func, *args, log_level=logging.INFO, **kwargs):
+    """
+    Runs the given function while capturing its stdout and stderr output,
+    then logs that output at the specified log level.
+    
+    Parameters
+    ----------
+    func : callable
+        The function to execute.
+    *args, **kwargs : 
+        Arguments and keyword arguments to pass to the function.
+    log_level : int, optional
+        The logging level to use for the captured output (default is logging.INFO).
+    
+    Returns
+    -------
+    result
+        The return value of the function.
+    
+    If the function raises an exception, its output will be logged before the exception is re-raised.
+    """
+    f = io.StringIO()
+    try:
+        with redirect_stdout(f), redirect_stderr(f):
+            result = func(*args, **kwargs)
+    except Exception as e:
+        output = f.getvalue()
+        if output:
+            logging.log(log_level, f"Output before exception:\n{output}")
+        logging.error("Function raised an exception", exc_info=True)
+        raise
+    else:
+        output = f.getvalue()
+        if output:
+            logging.log(log_level, f"Captured output:\n{output}")
+        return result
 
 def create_gaussian_input(mol2_file, molecule_name, net_charge, scratch_dir, atom_type="gaff2"):
     """

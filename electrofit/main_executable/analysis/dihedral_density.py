@@ -7,6 +7,11 @@ import matplotlib.pyplot as plt
 import os
 import sys
 import re
+import seaborn as sns
+from scipy.stats import gaussian_kde
+
+sns.set_context("talk")
+sns.set_style({'font.family':'serif', 'font.serif':'Times New Roman'})
 
 ################################################################################
 # HACKY CONFIG OBJECT:
@@ -75,6 +80,7 @@ if __name__ == "__main__":
     # Loop through each subdirectory in the process directory
     for folder_name in os.listdir(process_dir):
         folder_path = os.path.join(process_dir, folder_name)
+        species_id = folder_name.replace("IP_", "")
 
         # Check if it's a directory
         if os.path.isdir(folder_path):
@@ -96,7 +102,6 @@ if __name__ == "__main__":
                 u = mda.Universe(gro_file_path, xtc_file_path)
 
                 # Define dihedral groups
-                # NOTE: Feel free to rename or restructure if you want more clarity
                 dihedral_groups = [
                     {
                         'name': 'Ring Dihedrals',
@@ -112,7 +117,7 @@ if __name__ == "__main__":
                     {
                         'name': 'Dihedrals for C1',
                         'dihedrals': [
-                            ("C", "O", "P", "O6"),      # For demonstration
+                            ("C", "O", "P", "O6"),      
                             ("C", "O", "P", "O7"),
                             ("C", "O", "P", "O8"),
                         ]
@@ -221,8 +226,52 @@ if __name__ == "__main__":
                     group_dihedral_indices[group_idx].append(dihedral_idx)
 
                 ############################################################################
-                #  PART 1: TIME-SERIES PLOTS (already in your code)
+                #  PART 1: TIME-SERIES PLOTS
                 ############################################################################
+                # Filter only groups whose name starts with 'Dihedrals for C'
+                groups_to_plot = [group for group in dihedral_groups if group['name'].startswith('Dihedrals for C')]
+                # Also record the corresponding original indices
+                groups_to_plot_indices = [i for i, group in enumerate(dihedral_groups) if group['name'].startswith('Dihedrals for C')]
+                num_groups = len(groups_to_plot)
+
+                # Define a color map for however many groups we have
+                colors_summary = plt.cm.get_cmap(cf.color_map)(np.linspace(0, 1, len(groups_to_plot)))
+
+
+                # Create one subplot per filtered group in one overall figure.
+                fig, axes = plt.subplots(nrows=num_groups, ncols=1, figsize=(5, 2 * num_groups), sharex=True)
+                if num_groups == 1:
+                    axes = [axes]
+
+                # Loop over each filtered group and plot only the first dihedral for that group.
+                for idx, group in enumerate(groups_to_plot):
+                    # Retrieve the original group index to access the correct dihedral indices.
+                    original_group_idx = groups_to_plot_indices[idx]
+                    dihedral_idxs = group_dihedral_indices[original_group_idx]
+                    if len(dihedral_idxs) == 0:
+                        continue
+
+                    # Always choose the first dihedral from the group.
+                    first_dihedral_idx = dihedral_idxs[0]
+                    
+                    # Create the label from the dihedral definition.
+                    dihedral_atoms = dihedral_definitions[first_dihedral_idx]
+                    dihedral_atoms_shifted = [shift_atom_number(atom) for atom in dihedral_atoms]
+                    label = '-'.join(dihedral_atoms_shifted).replace(' ', '_')
+                    
+                    # Plot the trace for this dihedral using dark blue.
+                    axes[idx].plot(times, angles_deg[:, first_dihedral_idx],
+                                label=label, color=colors_summary[idx], linestyle="", marker="o")
+                    
+                    axes[idx].set_ylabel('Angle (°)', fontsize=18)
+                    #axes[idx].legend(loc='best', fontsize=10)
+
+                axes[-1].set_xlabel('Time (ns)', fontsize=18)
+                plt.tight_layout()
+                plt.savefig("dihedrals_summary.pdf")
+                plt.close()
+
+                # Individual time-series plots for each group independent
                 for group_idx, group in enumerate(dihedral_groups):
                     dihedral_idxs = group_dihedral_indices[group_idx]
                     num_dihedrals_in_group = len(dihedral_idxs)
@@ -289,9 +338,6 @@ if __name__ == "__main__":
                 #   - All "carbon" dihedrals in ONE figure
                 #   - "oxygen" dihedrals in triple-wise chunks, each chunk in its own figure
                 #
-                #   Enhancements:
-                #   - Reverse the plotting order for both carbon and oxygen to render background histograms first.
-                #   - Dynamically adjust the line width: thicker lines for foreground, thinner for background.
                 ############################################################################
 
                 import numpy as np
@@ -376,6 +422,50 @@ if __name__ == "__main__":
                     plt.savefig("dihedral_hist_carbon_offset.pdf")
                     plt.close()
 
+                if len(carbon_data) > 0:
+                    fig_carbon, ax_carbon = plt.subplots(figsize=(5, 4), constrained_layout=True)
+                    colors_carbon = plt.cm.get_cmap(cf.color_map)(np.linspace(0, 1, len(carbon_data)))
+                    
+                    # Define a grid for the smooth KDE curves
+                    x_grid = np.linspace(-180, 180, 361)
+                    
+                    base_linewidth = 2
+                    linewidth_decrement = 0.25  # Adjust as needed
+
+                    # Reverse the order so that the highest offset (background) is plotted first.
+                    for i_idx, (d_idx, angles_deg_array, label) in reversed(list(enumerate(carbon_data))):
+                        # Compute the smooth KDE using gaussian_kde
+                        kde = gaussian_kde(angles_deg_array)
+                        density = kde(x_grid)
+                        
+                        # Apply an offset to separate overlapping curves
+                        offset = 0.02 * i_idx
+                        density_offset = density + offset
+                        
+                        # Adjust linewidth: thicker for curves with a higher index (foreground)
+                        linewidth = base_linewidth - (linewidth_decrement * i_idx)
+                        linewidth = max(linewidth, 1.0)  # Prevent the linewidth from becoming too thin
+                        
+                        # Plot the smooth KDE curve with the offset
+                        ax_carbon.plot(
+                            x_grid,
+                            density_offset,
+                            label=label,
+                            color=colors_carbon[i_idx],
+                            linewidth=1.5
+                        )
+
+                    ax_carbon.set_yticks([])
+                    ax_carbon.set_ylabel("Density", fontsize=18)
+                    ax_carbon.set_xlabel("Angle (°)", fontsize=18)
+                    ax_carbon.set_xlim(-180, 180)
+                    ax_carbon.set_title(f"({species_id})", fontsize=18)
+                    ax_carbon.legend(fontsize=10)
+                    ax_carbon.grid(False)
+
+                    plt.savefig("dihedral_kde_carbon_offset.pdf")
+                    plt.close()
+
                 ############################################################################
                 # Plot OXYGEN dihedrals in TRIPLE-WISE fashion, offset each histogram, reversed order, dynamic linewidth
                 ############################################################################
@@ -448,7 +538,6 @@ if __name__ == "__main__":
                 ############################################################################
                 # FINAL SUMMARY PLOT: One histogram per oxygen chunk
                 # We'll pick the first dihedral from each chunk_data (chunk_data[0])
-                # and plot them all in one figure with no offset.
                 ############################################################################
 
                 if len(oxygen_data) > 0:
@@ -476,6 +565,8 @@ if __name__ == "__main__":
                             density=True
                         )
                         bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+                        offset = 0.01 * chunk_idx
+                        counts = counts + offset
 
                         # Plot with steps
                         ax_summary.plot(
@@ -497,3 +588,76 @@ if __name__ == "__main__":
                     outname = "dihedral_hist_oxygen_summary.pdf"
                     plt.savefig(outname)
                     plt.close()
+
+                if len(oxygen_data) > 0:
+                    fig_summary, ax_summary = plt.subplots(figsize=(7, 4), constrained_layout=True)
+
+                    # Define a color map for however many chunks we have
+                    colors_summary = plt.cm.get_cmap(cf.color_map)(np.linspace(0, 1, len(oxygen_chunks)))
+
+                    for chunk_idx, chunk_data in enumerate(oxygen_chunks):
+                        # Just pick the first dihedral in this chunk.
+                        if len(chunk_data) == 0:
+                            continue
+                        d_idx, angles_deg_array, label = chunk_data[0]
+
+                        # Plot the KDE for the dihedral angle data.
+                        # Using clip=(-180,180) to restrict the density estimation to the desired range.
+                        sns.kdeplot(
+                            x=angles_deg_array,
+                            bw_adjust=1,  # Adjust the bandwidth if needed.
+                            label=label,
+                            color=colors_summary[chunk_idx],
+                            linewidth=1.5,
+                            ax=ax_summary,
+                            clip=(-180, 180)
+                        )
+
+                    ax_summary.set_yticks([])
+                    ax_summary.set_xlabel("Angle (°)", fontsize=14)
+                    ax_summary.set_ylabel("Density", fontsize=14)
+                    ax_summary.set_xlim(-180, 180)
+                    ax_summary.set_title("Summary: Oxygen Dihedrals (KDE)", fontsize=16)
+                    ax_summary.legend(fontsize=10)
+                    ax_summary.grid(False)
+
+                    outname = "dihedral_kde_oxygen_summary.pdf"
+                    plt.savefig(outname)
+                    plt.close()
+
+                # Define a grid over the range of angles
+                x_grid = np.linspace(-180, 180, 361)
+
+                fig_summary, ax_summary = plt.subplots(figsize=(4,4), constrained_layout=True)
+
+                # Define a color map for however many chunks we have
+                colors_summary = plt.cm.get_cmap(cf.color_map)(np.linspace(0, 1, len(oxygen_chunks)))
+
+                for chunk_idx, chunk_data in enumerate(oxygen_chunks):
+                    if len(chunk_data) == 0:
+                        continue
+                    d_idx, angles_deg_array, label = chunk_data[0]
+
+                    # Compute the smooth KDE using gaussian_kde
+                    kde = gaussian_kde(dataset=angles_deg_array, bw_method="silverman")
+                    density = kde(x_grid)
+                    
+                    # Compute an offset, e.g., 0.01 * chunk_idx
+                    offset = 0.01 * chunk_idx
+                    density_offset = density + offset
+
+                    # Plot the smooth KDE curve with the offset (no 'steps-mid' drawstyle)
+                    ax_summary.plot(x_grid, density_offset, label=label, 
+                                    color=colors_summary[chunk_idx], linewidth=1.5)
+
+                ax_summary.set_yticks([])
+                ax_summary.set_xlabel("Angle (°)", fontsize=18)
+                ax_summary.set_ylabel("Density", fontsize=18)
+                ax_summary.set_xlim(-180, 180)
+                ax_summary.set_title(f"({species_id})", fontsize=18)
+                ax_summary.legend(fontsize=10)
+                ax_summary.grid(False)
+
+                outname = "dihedral_kde_offset_oxygen_summary.pdf"
+                plt.savefig(outname)
+                plt.close()

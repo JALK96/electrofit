@@ -179,6 +179,12 @@ intermediate_data/
 dummy_process/
 process.nobackup/
 AA_test.nobackup/
+test.nobackup/
+test/
+fep.nobackup/
+xfep.nobackup/
+FEP/
+
 
 # notebooks
 *.ipynb_checkpoints

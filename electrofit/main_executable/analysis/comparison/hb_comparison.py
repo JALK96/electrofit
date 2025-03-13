@@ -24,10 +24,10 @@ import sys
 import logging
 import numpy as np
 import pandas as pd
-import matplotlib as mpl
 import matplotlib.pyplot as plt
 import seaborn as sns
 from pathlib import Path
+import networkx as nx
 
 # ------------------------------------------------------------------------------
 # Logging & Font Setup
@@ -273,84 +273,271 @@ def count_oxygen_occurrences_from_matrix(hbond_df, hbonds_per_index):
     logger.info(f"Found {len(grouped)} total oxygen atoms.")
     return grouped
 
+def expand_phosphate_data_for_violins(df_phosphate):
+    """
+    Expand each row of df_phosphate (which has columns e.g.:
+       [species, phosphate_group, engaged_ns]
+    into multiple rows, effectively simulating a distribution
+    for each (species, phosphate_group).
+
+    Returns a new DataFrame with columns [species, pgroup_index].
+    'pgroup_index' is repeated ~ engaged_ns times for each row.
+    """
+    # 1) Map each phosphate group to an integer index
+    #    e.g. P1->0, P2->1, ... P6->5
+    pgroup_index_map = {
+        'P1': 0,
+        'P2': 1,
+        'P3': 2,
+        'P4': 3,
+        'P5': 4,
+        'P6': 5
+    }
+
+    expanded_rows = []
+
+    for row in df_phosphate.itertuples(index=False):
+        species_id = row.species
+        pgroup     = row.phosphate_group
+        engaged_ns = row.engaged_ns * 1000
+
+        # choose how many times to repeat. E.g. round it:
+        repeat_count = int(round(engaged_ns))  
+        # If engaged_ns is large, repeat_count could be big => large DataFrame.
+
+        idx_val = pgroup_index_map.get(pgroup, None)
+        if idx_val is None:
+            continue  # skip unknown group
+
+        # expand
+        for _ in range(repeat_count):
+            expanded_rows.append({
+                'species': species_id,
+                'pgroup_index': idx_val
+            })
+
+    expanded_df = pd.DataFrame(expanded_rows)
+    return expanded_df
+
+import matplotlib.pyplot as plt
+import networkx as nx
+
+def draw_phosphorus_diagram(species_id, top_three_map):
+    """
+    Draws a simple directed graph (P1..P6) showing donor->target relationships:
+      - first-target edges (red), straight (rad=0.0)
+      - second-target edges (black), slight positive curve (rad=+0.2)
+      - third-target edges (blue), slight negative curve (rad=-0.2)
+    Also re-maps the node positions so that P1 is placed where P3 normally sits
+    in the default NetworkX circular layout.
+    
+    Parameters
+    ----------
+    species_id : str
+        Unique identifier (e.g. "101111") that appears in the figure's title
+    top_three_map : dict
+        Dictionary mapping donor (1..6) -> {rank: target}, for ranks in {"first","second","third"}.
+        Example:
+          {
+            1: {"first": 1, "second": 2, "third": 6},
+            2: {"first": 3, "second": 1, "third": 5},
+            3: {"first": 4, "second": 2},
+            ...
+          }
+    """
+
+    # 1) Build a DiGraph with nodes P1..P6
+    G = nx.DiGraph()
+    for i in range(1, 7):
+        G.add_node(i)
+
+    # 2) Add edges, storing rank in edge attribute
+    for donor, ranks_dict in top_three_map.items():
+        for rank, target in ranks_dict.items():
+            G.add_edge(donor, target, rank=rank)
+
+    # 3) Compute a circular layout, then re-map so P1 => oldpos[3], etc.
+    oldpos = nx.circular_layout(G)
+    # We want P1 to go where P3 was, then continue around the circle
+    newpos = {
+        1: oldpos[3],  # P1 placed at old P3's location
+        2: oldpos[4],
+        3: oldpos[5],
+        4: oldpos[6],
+        5: oldpos[1],
+        6: oldpos[2],
+    }
+    pos = newpos 
+
+
+    # 4) Prepare figure
+    plt.figure(figsize=(8,6))
+
+    # Draw nodes
+    nx.draw_networkx_nodes(
+        G, pos,
+        node_color="lightgray",
+        edgecolors="black",
+        node_size=1300
+    )
+
+    # 5) Separate edges by rank => different color/arc
+    edges_first  = [(u,v) for (u,v,d) in G.edges(data=True) if d['rank'] == "first"]
+    edges_second = [(u,v) for (u,v,d) in G.edges(data=True) if d['rank'] == "second"]
+    edges_third  = [(u,v) for (u,v,d) in G.edges(data=True) if d['rank'] == "third"]
+
+    # 6) Draw edges
+    # First => red, rad=0.0 (straight)
+    nx.draw_networkx_edges(
+        G, pos,
+        edgelist=edges_first,
+        edge_color="red",
+        arrows=True,
+        arrowstyle='-|>',
+        arrowsize=20,
+        connectionstyle="arc3,rad=0.0",
+        min_source_margin=45,
+        min_target_margin=45
+    )
+    # Second => black, rad=+0.2
+    nx.draw_networkx_edges(
+        G, pos,
+        edgelist=edges_second,
+        edge_color="black",
+        arrows=True,
+        arrowstyle='-|>',
+        arrowsize=20,
+        connectionstyle="arc3,rad=0.2",
+        min_source_margin=45,
+        min_target_margin=45
+    )
+    # Third => blue, rad=-0.2
+    nx.draw_networkx_edges(
+        G, pos,
+        edgelist=edges_third,
+        edge_color="blue",
+        arrows=True,
+        arrowstyle='-|>',
+        arrowsize=20,
+        connectionstyle="arc3,rad=-0.2",
+        min_source_margin=45,
+        min_target_margin=45
+    )
+
+    # 7) Label the nodes as "P1", "P2", etc.
+    nx.draw_networkx_labels(
+        G, pos,
+        labels={i: f"P{i}" for i in G.nodes},
+        font_size=14
+    )
+
+    # 8) Final styling
+    plt.title(f"Species: {species_id}", fontsize=12)
+    plt.axis("off")
+    #plt.tight_layout()
+
+    outname = f"species_{species_id}.pdf"
+    plt.savefig(outname)
+    #plt.show()
 
 # ------------------------------------------------------------------------------
 # 1) 2×2 Figure (Lifetime, Distance, Time/Atom, H-Bond Count)
 # ------------------------------------------------------------------------------
-def two_by_two_plots_box_violin(
-    df_lifetimes,   # [species, num_ones, lifetime_ns]
-    df_distance,    # [species, num_ones, distance_nm, frequency]
-    df_engaged,     # [species, num_ones, engaged_time_ns]
-    df_hbonds,      # [species, num_ones, hbond_count]
+def three_by_two_plots_box_violin(
+    df_lifetimes,   
+    df_distance,    
+    df_engaged,     
+    df_hbonds,      
+    df_phosphate,   # [species, phosphate_group, engaged_ns, ...]
     color_dict=None,
     output_prefix="intra_hbonds",
-    figure_size=(16, 12),
+    figure_size=(16, 22),   
     spacer_prefix="~space_"
 ):
     """
-    2×2 layout:
-      (0,0) => Lifetime (Box)
-      (0,1) => Distance (Box)
-      (1,0) => Time/Atom (Bar)
-      (1,1) => H-bond Count (Violin)
+    Creates a 3×2 layout:
 
-    Insert spacers for species grouping (5->4->3).
+      Row 0: (0,0) => (a) Lifetime (Box)  
+              (0,1) => (b) Distance (Box)
+
+      Row 1: (1,0) => (c) Time/Atom (Stacked)
+              (1,1) => (d) H-bond Count (Violin)
+
+      Row 2: (2,0) => (e) Horizontal Phosphate Violin
+              (2,1) => Empty (white)
+
+    We do not alter the 4 subplots from your 2×2 figure, 
+    but add a 5th plot (phosphate violin) in row=2, col=0.
+    Spacers are injected so all y-axis labels match across the subplots.
     """
-    logger.info("Generating 2×2 figure with swapped bottom row (Time/Atom, HbondCount).")
 
-    # Quick check if all are empty
+    logger.info("Generating a 3×2 figure: the original 4 subplots + a 5th horizontal violin below them.")
+
+    # ------------------------------------------------------
+    # 0) Check empties for the top-4 data
+    # ------------------------------------------------------
     all_empty = True
-    for df in [df_lifetimes, df_distance, df_engaged, df_hbonds]:
-        if df is not None and not df.empty:
+    for df_check in [df_lifetimes, df_distance, df_engaged, df_hbonds]:
+        if df_check is not None and not df_check.empty:
             all_empty = False
             break
     if all_empty:
-        logger.warning("All DataFrames empty => skipping 2×2 plot.")
-        return
+        logger.warning("All top-4 DataFrames empty => skipping top-4 plots.")
+        # We still allow the 5th plot if df_phosphate is non-empty
 
-    # Gather species
+    # ------------------------------------------------------
+    # 1) Gather species from the top-4 DataFrames
+    # ------------------------------------------------------
     species_in_any = set()
-    for df in [df_lifetimes, df_distance, df_engaged, df_hbonds]:
-        if df is not None and not df.empty:
-            species_in_any.update(df["species"].unique())
+    for df_check in [df_lifetimes, df_distance, df_engaged, df_hbonds]:
+        if df_check is not None and not df_check.empty:
+            species_in_any.update(df_check["species"].unique())
 
+    # Helper: figure out how many '1' bits for a species
     def get_num_ones(sp, df_list):
         for d in df_list:
             if d is not None and not d.empty:
-                row = d.loc[d["species"]==sp]
+                row = d.loc[d["species"] == sp]
                 if not row.empty:
                     return row.iloc[0]["num_ones"]
         return None
 
-    # Only keep those with num_ones in [3,4,5]
+    # Keep only species with 3,4,5
     all_with_num = []
     for sp in species_in_any:
         val = get_num_ones(sp, [df_lifetimes, df_distance, df_engaged, df_hbonds])
-        if val in [3,4,5]:
-            all_with_num.append((sp,val))
+        if val in [3, 4, 5]:
+            all_with_num.append((sp, val))
+
     if not all_with_num:
-        logger.warning("No species with 3,4,5 ones => skipping 2×2.")
+        logger.warning("No species with num_ones in [3,4,5]. Skipping all top-4 plots + 5th.")
         return
 
-    # Sort: 5->top, then 4->3
+    # Sort => 5->top, 4->middle, 3->bottom
     all_with_num.sort(key=lambda x: (-x[1], x[0]))
-    # Insert spacers
+
+    # Insert spacers for transitions (5->4->3)
     grouped_species_order = []
     prev_n_ones = None
-    for i, (sp,n) in enumerate(all_with_num):
-        if i>0 and n!=prev_n_ones:
-            grouped_species_order.append((f"{spacer_prefix}{prev_n_ones}to{n}", None))
-        grouped_species_order.append((sp,n))
-        prev_n_ones = n
+    for i, (sp, n_ones) in enumerate(all_with_num):
+        if i > 0 and n_ones != prev_n_ones:
+            grouped_species_order.append((f"{spacer_prefix}{prev_n_ones}to{n_ones}", None))
+        grouped_species_order.append((sp, n_ones))
+        prev_n_ones = n_ones
+    # final list => species + placeholders
     full_order = [t[0] for t in grouped_species_order]
 
+    # A helper to inject spacers into a DataFrame
     def inject_spacers(df, measure_col):
+        """
+        For each spacer in grouped_species_order, add a row with measure_col=NaN.
+        """
         if df is None or df.empty:
             return pd.DataFrame(columns=["species", measure_col, "num_ones"])
         new_df = df.copy()
         row_spacers = []
         for sp, val in grouped_species_order:
-            if val is None:  # indicates dummy label
+            if val is None:  # a dummy spacer
                 row_spacers.append({
                     "species": sp,
                     measure_col: np.nan,
@@ -358,45 +545,71 @@ def two_by_two_plots_box_violin(
                 })
         if row_spacers:
             dummy_df = pd.DataFrame(row_spacers)
-            return pd.concat([new_df, dummy_df], ignore_index=True)
+            combined = pd.concat([new_df, dummy_df], ignore_index=True)
+            return combined
         return new_df
 
-    # Expand distance if needed
+    # ------------------------------------------------------
+    # 2) For df_distance, expand by frequency if needed
+    # ------------------------------------------------------
     if df_distance is not None and not df_distance.empty:
         df_distance = df_distance.copy()
         df_distance['frequency'] = df_distance['frequency'].astype(int)
-        df_dist_expanded = df_distance.loc[
-            df_distance.index.repeat(df_distance['frequency'])
-        ].reset_index(drop=True)
+        df_dist_expanded = df_distance.loc[df_distance.index.repeat(df_distance['frequency'])].reset_index(drop=True)
     else:
         df_dist_expanded = pd.DataFrame()
 
-    df_life2 = inject_spacers(df_lifetimes, "lifetime_ns")
-    df_dist2 = inject_spacers(df_dist_expanded, "distance_nm")
-    df_eng2  = inject_spacers(df_engaged, "engaged_time_ns")
-    df_hbond2= inject_spacers(df_hbonds, "hbond_count")
+    # Now inject spacers for each measure
+    df_life2  = inject_spacers(df_lifetimes, "lifetime_ns")
+    df_dist2  = inject_spacers(df_dist_expanded, "distance_nm")
+    df_eng2   = inject_spacers(df_engaged, "engaged_time_ns")
+    df_hbond2 = inject_spacers(df_hbonds, "hbond_count")
 
-    # Ensure color_dict has spacer color
+    # ------------------------------------------------------
+    # 3) Summarize df_phosphate => row=species, col=P1..P6, so we can do time/atom stacked
+    #    (unchanged from your code)
+    # ------------------------------------------------------
+    grouped_phos = df_phosphate.groupby(['species','phosphate_group'])['engaged_ns'].sum().reset_index()
+    pivot_phos = grouped_phos.pivot(index='species', columns='phosphate_group', values='engaged_ns').fillna(0)
+
+    phosphate_cols = ['P1','P2','P3','P4','P5','P6']
+    for c in phosphate_cols:
+        if c not in pivot_phos.columns:
+            pivot_phos[c] = 0.0
+    pivot_phos = pivot_phos[phosphate_cols]
+
+    # If no color_dict => create an empty one
     if color_dict is None:
         color_dict = {}
     else:
-        color_dict = color_dict.copy()
+        color_dict = dict(color_dict)  # copy to avoid mutating the original
+
+    # Ensure spacers have a color
     spacer_color = "#D3D3D3"
-    for sp,val in grouped_species_order:
+    for sp, val in grouped_species_order:
         if val is None and sp not in color_dict:
             color_dict[sp] = spacer_color
 
-    fig, axes = plt.subplots(2,2, figsize=figure_size)
-    ax_life = axes[0][0]
-    ax_dist = axes[0][1]
-    ax_eng  = axes[1][0]  # Time/Atom
-    ax_hbond= axes[1][1]  # H-bond count
+    # ------------------------------------------------------
+    # 4) Create a 3×2 figure 
+    # ------------------------------------------------------
+    fig, axes = plt.subplots(nrows=3, ncols=2, figsize=figure_size)
 
-    # (1) Lifetime
-    if not df_life2.empty:
+    # Ax references
+    ax_life   = axes[0][0]  # (a)
+    ax_dist   = axes[0][1]  # (b)
+    ax_stack  = axes[1][0]  # (c)
+    ax_hbond  = axes[1][1]  # (d)
+    ax_violin = axes[2][0]  # (e)
+    ax_blank  = axes[2][1]  
+    ax_blank.axis('off')   # White cell
+
+    # ~~~~~~~~~~~~~ (a) Lifetime (Box) ~~~~~~~~~~~~~
+    if df_life2 is not None and not df_life2.empty:
         sns.boxplot(
             data=df_life2,
-            x="lifetime_ns", y="species",
+            x="lifetime_ns",
+            y="species",
             order=full_order,
             orient='h',
             palette=color_dict,
@@ -405,13 +618,14 @@ def two_by_two_plots_box_violin(
             showfliers=False,
             ax=ax_life
         )
-        ax_life.set_title("(a)")
+        ax_life.set_title("(a) Lifetime (Box)")
         ax_life.set_xlabel("Lifetime (ns)")
         ax_life.set_ylabel("Species")
-        # Hide spacer labels
-        new_lbls=[]
+
+        # Hide spacer row labels
+        new_lbls = []
         for lbl in ax_life.get_yticklabels():
-            txt=lbl.get_text()
+            txt = lbl.get_text()
             if txt.startswith(spacer_prefix):
                 new_lbls.append("")
             else:
@@ -422,11 +636,12 @@ def two_by_two_plots_box_violin(
         ax_life.set_xlabel("")
         ax_life.set_ylabel("")
 
-    # (2) Distance
-    if not df_dist2.empty:
+    # ~~~~~~~~~~~~~ (b) Distance (Box) ~~~~~~~~~~~~~
+    if df_dist2 is not None and not df_dist2.empty:
         sns.boxplot(
             data=df_dist2,
-            x="distance_nm", y="species",
+            x="distance_nm",
+            y="species",
             order=full_order,
             orient='h',
             palette=color_dict,
@@ -435,7 +650,7 @@ def two_by_two_plots_box_violin(
             showfliers=False,
             ax=ax_dist
         )
-        ax_dist.set_title("(b)")
+        ax_dist.set_title("(b) Distance (Box)")
         ax_dist.set_xlabel("Distance (nm)")
         ax_dist.set_ylabel("")
         ax_dist.set_yticklabels([])
@@ -445,47 +660,12 @@ def two_by_two_plots_box_violin(
         ax_dist.set_ylabel("")
         ax_dist.set_yticklabels([])
 
-    # (3) Time/Atom (bottom-left)
-    if not df_eng2.empty:
-        sns.barplot(
-            data=df_eng2,
-            x="engaged_time_ns",
-            y="species",
-            order=full_order,
-            orient='h',
-            palette=color_dict,
-            ax=ax_eng
-        )
-        ax_eng.set_title("(c)")
-        ax_eng.set_xlabel("Engaged Time / H-Atom (ns)")
-        ax_eng.set_ylabel("(micro) Protonationstate")
-        ax_eng.set_yticklabels(new_lbls)
-
-        # Larger annotation font
-        for patch in ax_eng.patches:
-            width = patch.get_width()
-            y_center = patch.get_y() + patch.get_height()/2
-            if not np.isnan(width) and width>0:
-                ax_eng.annotate(
-                    f"{width:.2f}",
-                    (width, y_center),
-                    ha='right',
-                    va='center',
-                    xytext=(-5,0),
-                    textcoords='offset points',
-                    fontsize=14  # bigger font
-                )
-    else:
-        ax_eng.set_title("No Engaged-Time Data")
-        ax_eng.set_xlabel("")
-        ax_eng.set_ylabel("(micro) Protonationstate")
-        ax_eng.set_yticklabels(new_lbls)
-
-    # (4) H-bond count (bottom-right)
-    if not df_hbond2.empty:
+    # ~~~~~~~~~~~~~ (d) H-bond Count (Violin) ~~~~~~~~~~~~~
+    if df_hbond2 is not None and not df_hbond2.empty:
         sns.violinplot(
             data=df_hbond2,
-            x="hbond_count", y="species",
+            x="hbond_count",
+            y="species",
             order=full_order,
             orient='h',
             palette=color_dict,
@@ -493,31 +673,157 @@ def two_by_two_plots_box_violin(
             inner=None,
             ax=ax_hbond
         )
-        ax_hbond.set_title("(d)")
+        ax_hbond.set_title("(d) H-bond Count (Violin)")
         ax_hbond.set_xlabel("H-bond Count")
         ax_hbond.set_ylabel("")
         ax_hbond.set_yticklabels([])
 
-        # Means
+        # Overlay means
         df_means = df_hbond2.groupby('species')['hbond_count'].mean().reset_index()
         df_means = df_means[~df_means['species'].str.startswith(spacer_prefix)]
         ax_hbond.scatter(
-            df_means['hbond_count'], df_means['species'],
-            color='black', marker='o', s=80, label='Mean', zorder=5
+            df_means['hbond_count'],
+            df_means['species'],
+            color='black',
+            marker='o',
+            s=80,
+            label='Mean',
+            zorder=5
         )
-        #ax_hbond.legend(loc='lower right')
     else:
         ax_hbond.set_title("No H-bond Data")
         ax_hbond.set_xlabel("")
         ax_hbond.set_ylabel("")
         ax_hbond.set_yticklabels([])
 
+    # ~~~~~~~~~~~~~ (c) Time/Atom (Stacked) ~~~~~~~~~~~~~
+    ax_stack.set_title("(c) Time / H-Atom")
+    ax_stack.set_xlabel("Engaged Time (ns)")
+    ax_stack.set_ylabel("Species")
+
+    # We'll map each species/spacer -> a y-position
+    y_positions = {}
+    real_index = 0
+    for sp, val in grouped_species_order:
+        y_positions[sp] = real_index
+        real_index += 1
+
+    # For each species, sum of engaged time in pivot_phos => stacked bars
+    for sp in y_positions:
+        if sp not in pivot_phos.index:
+            continue
+        species_color = color_dict.get(sp, "gray")  
+        row_vals = pivot_phos.loc[sp]
+        left_val = 0.0
+        for pgroup in ['P1','P2','P3','P4','P5','P6']:
+            seg_val = row_vals[pgroup]
+            if seg_val>0:
+                ax_stack.barh(
+                    y=y_positions[sp],
+                    width=seg_val,
+                    left=left_val,
+                    height=0.8,
+                    color=species_color, 
+                    edgecolor='k',
+                    alpha=0.9
+                )
+                if seg_val>12.5:
+                    ax_stack.annotate(
+                        f"{seg_val:.2f}",
+                        (left_val + seg_val/2, y_positions[sp]),
+                        ha='center', va='center',
+                        color='white', fontsize=10
+                    )
+                left_val += seg_val
+
+    ax_stack.set_ylim(-0.5, real_index-0.5)
+    ax_stack.set_yticks(np.arange(real_index))
+    # Build final y labels
+    y_lbls_stack = []
+    for sp, val in grouped_species_order:
+        if val is None:
+            y_lbls_stack.append("")
+        else:
+            y_lbls_stack.append(sp)
+    ax_stack.set_yticklabels(y_lbls_stack)
+    ax_stack.invert_yaxis()
+
+    # ~~~~~~~~~~~~~ (e) Horizontal Phosphate Violin ~~~~~~~~~~~~~
+    # We want to inject spacers for the expanded data, so the y-axis matches top plots
+    expanded_df = expand_phosphate_data_for_violins(df_phosphate)
+    if expanded_df.empty:
+        logger.warning("No phosphate-group donor data => skipping subplot (e).")
+        ax_violin.set_title("(e) No Phosphate Data")
+    else:
+        # We'll treat 'pgroup_index' as measure column so we can inject spacers
+        # though they won't have pgroup_index in the spacer row. It's still okay.
+        # We'll create a new column measure for injection
+        expanded_for_injection = expanded_df.copy()
+        expanded_for_injection['pgroup_index'] = expanded_for_injection['pgroup_index'].astype(float)
+
+        # Now we do the same injection approach
+        # We'll rename measure_col to 'pgroup_index'
+        def inject_violin_spacers(df_in):
+            if df_in is None or df_in.empty:
+                return pd.DataFrame(columns=["species", "pgroup_index"])
+            new_df = df_in.copy()
+            row_spacers = []
+            for sp, val in grouped_species_order:
+                if val is None:  
+                    row_spacers.append({
+                        "species": sp,
+                        "pgroup_index": np.nan
+                    })
+            if row_spacers:
+                dummy_df = pd.DataFrame(row_spacers)
+                return pd.concat([new_df, dummy_df], ignore_index=True)
+            return new_df
+
+        expanded_with_spacers = inject_violin_spacers(expanded_for_injection)
+
+        # Now we can do a horizontal violin
+        sns.violinplot(
+            data=expanded_with_spacers,
+            x='pgroup_index',
+            y='species',
+            hue='species',
+            order=full_order,
+            palette=color_dict,
+            orient='h',
+            cut=0,
+            inner=None,
+            ax=ax_violin
+        )
+        ax_violin.set_title("(e) Phosphate Group Horizontal Violin")
+
+        # x-axis ticks => 0..5 => P1..P6
+        phosphate_labels = ['P1','P2','P3','P4','P5','P6']
+        ax_violin.set_xticks(range(len(phosphate_labels)))
+        ax_violin.set_xticklabels(phosphate_labels)
+        ax_violin.set_xlabel("Phosphate Group")
+        ax_violin.set_ylabel("Species")
+
+        # We'll create the same y ticks as the other subplots => full_order
+        ax_violin.set_yticks(np.arange(real_index))
+        y_lbls_violin = []
+        for sp, val in grouped_species_order:
+            if val is None:
+                y_lbls_violin.append("")
+            else:
+                y_lbls_violin.append(sp)
+        ax_violin.set_yticklabels(y_lbls_violin)
+
+        # If the legend is large, you may remove or place it differently
+        # ax_violin.legend(loc='best')
+
+    # ------------------------------------------------------
+    # 5) Final
+    # ------------------------------------------------------
     plt.tight_layout()
-    out_pdf = f"{output_prefix}_2x2_summery.pdf"
+    out_pdf = f"{output_prefix}_3x2_with_violin.pdf"
     plt.savefig(out_pdf, dpi=300)
     plt.close()
-    logger.info(f"Saved 2×2 figure to '{out_pdf}'")
-
+    logger.info(f"Saved 3×2 figure with the 5th plot => '{out_pdf}'!")
 
 # ------------------------------------------------------------------------------
 # 2) Summary Plot (Occurrence bars + Existence Heatmap)
@@ -546,6 +852,16 @@ def generate_summary_plot(
 
     if donor_atoms_by_species is None:
         donor_atoms_by_species = {}
+
+    # ----------------------------------------------------------------------
+    # 1) Remove 'OW1' from each species' occurrence_data
+    # ----------------------------------------------------------------------
+    for sp in list(occurrence_data.keys()):
+        ser = occurrence_data[sp]
+        if "OW1" in ser.index:
+            print(ser)
+            print(ser.index)
+            occurrence_data[sp] = ser.drop("OW1")
 
     # Gather all possible oxygens
     all_oxygens = set()
@@ -651,106 +967,177 @@ def generate_summary_plot(
 
 
 # ------------------------------------------------------------------------------
-# 3) Phosphate Group Violin Plot
-# ------------------------------------------------------------------------------
-def plot_phosphate_group_violin(
-    df_phosphate,
-    color_dict=None,
-    output_file="phosphate_group_violin.pdf"
-):
-    """
-    Creates a violin plot showing:
-      x-axis = phosphate group label (P1..P6),
-      y-axis = engaged_ns (the total time in ns for each donor),
-      hue    = species (microprotonation state).
-
-    This compares how donors in each phosphate group 
-    are distributed across the 11 species.
-    """
-    logger.info("Generating phosphate group violin plot...")
-
-    if df_phosphate is None or df_phosphate.empty:
-        logger.warning("No phosphate-group donor data => skipping violin plot.")
-        return
-    
-    plt.figure(figsize=(10,6))
-
-    # We'll do x='phosphate_group', y='engaged_ns', hue='species'
-    sns.violinplot(
-        data=df_phosphate,
-        x='phosphate_group',
-        y='engaged_ns',
-        hue='species',
-        palette=color_dict if color_dict else "tab10",
-        cut=0
-    )
-    plt.title("Donor Engagement by Phosphate Group (Violin)")
-    plt.xlabel("Phosphate Group")
-    plt.ylabel("Engaged Time (ns)")
-
-    plt.legend(loc='best')
-    plt.tight_layout()
-    plt.savefig(output_file, dpi=300)
-    plt.close()
-    logger.info(f"Saved phosphate group violin plot => '{output_file}'")
-
-
-# ------------------------------------------------------------------------------
 # 4) Textual Table: Donor→Acceptor usage
 # ------------------------------------------------------------------------------
+
 def build_donor_acceptor_summary(species_id, bond_df, hbonds_per_index, time_per_frame_ns, donor_map, acceptor_map):
     """
     For each bond => map donor->pgroup, acceptor->pgroup => accumulate times
     """
-    result={}
+    result = {}
+    hbonds_length = len(hbonds_per_index)  # Cache length for efficiency
     for i, row in bond_df.iterrows():
-        b_idx=row['idx']
-        d_atom=row['donor']
-        a_atom=row['acceptor']
-        frames=hbonds_per_index[b_idx]
-        engaged_ns=frames*time_per_frame_ns
+        b_idx = row['idx']
+        d_atom = row['donor']
+        a_atom = row['acceptor']
+        
+        # Safe access to hbonds_per_index
+        if 0 <= b_idx < hbonds_length:
+            frames = hbonds_per_index[b_idx]
+        else:
+            frames = 0  # Default to 0 if index is out of bounds
+        
+        engaged_ns = frames * time_per_frame_ns
 
-        donor_pgroup=donor_map.get(d_atom,None)
-        acceptor_pgroup=acceptor_map.get(a_atom,None)
+        donor_pgroup = donor_map.get(d_atom, None)
+        acceptor_pgroup = acceptor_map.get(a_atom, None)
         if donor_pgroup is None or acceptor_pgroup is None:
             continue
 
         if donor_pgroup not in result:
-            result[donor_pgroup]={"sum_donor_time":0.0,"targets":{}}
-        result[donor_pgroup]["sum_donor_time"]+=engaged_ns
+            result[donor_pgroup] = {"sum_donor_time": 0.0, "targets": {}}
+        result[donor_pgroup]["sum_donor_time"] += engaged_ns
 
-        key_t=(acceptor_pgroup,a_atom)
+        key_t = (acceptor_pgroup, a_atom)
         if key_t not in result[donor_pgroup]["targets"]:
-            result[donor_pgroup]["targets"][key_t]=0.0
-        result[donor_pgroup]["targets"][key_t]+=engaged_ns
+            result[donor_pgroup]["targets"][key_t] = 0.0
+        result[donor_pgroup]["targets"][key_t] += engaged_ns
     return result
 
-def print_donor_acceptor_table(species_id, data):
+def print_donor_acceptor_table(species_id, data, logger, summary_format='arrow', draw_figure=True):
     """
-    Print lines for each donor pgroup => top acceptor targets
-    """
-    print(f"Species: {species_id}\n")
+    Generate a summary table for each donor pgroup, log it, and (optionally) draw a figure
+    for the top 3 phosphorus-target relationships (1st=red, 2nd=black, 3rd=blue).
+    Now we also produce separate textual summaries for first, second, and third P-targets.
 
-    donor_sorted=sorted(data.keys())  # e.g. P1..P6
+    Parameters:
+    - species_id (str): Identifier for the species (e.g. "101111").
+    - data (dict): Summary data from build_donor_acceptor_summary.
+    - logger (logging.Logger): Configured logger instance.
+    - summary_format (str): Format of the summary line ('arrow', 'graphical', etc.).
+    - draw_figure (bool): If True, generate a color-coded figure for each species.
+    """
+    table_lines = []
+    table_lines.append(f"Species: {species_id}\n")
+
+    # We'll store up to 3 P-targets for each donor in top_three_map => used by the figure
+    # Also store them in rank_p_targets => used by textual summary
+    top_three_map   = {}  # e.g. {1: {"first":2, "second":4, "third":5}, ...}
+    rank_p_targets  = { "first": {}, "second": {}, "third": {} }  
+    # e.g. rank_p_targets["first"] = { "P2":"P3", "P4":"P5", ... }
+
+    donor_sorted = sorted(data.keys())  # e.g. ['P1','P2','P3','P4','P5','P6'] if they exist
     for dpgroup in donor_sorted:
-        sum_time=data[dpgroup]["sum_donor_time"]
-        print(f"  Donor {dpgroup} => total time: {sum_time:.2f} ns")
-        # top 3 targets
-        t_map=data[dpgroup]["targets"]
-        t_list=sorted(t_map.items(), key=lambda x:x[1], reverse=True)
-        top_names=["main target Pi","second target Pi","third target Pi"]
-        for i, ((acc_pg,acc_atom),val_ns) in enumerate(t_list):
-            if i<3:
-                print(f"    {top_names[i]:20s} => {acc_pg}({acc_atom}) = {val_ns/sum_time*100:.0f} %")
-        print()
-    print("-"*70)
-    print()
+        sum_time = data[dpgroup]["sum_donor_time"]
+        table_lines.append(f"  Donor {dpgroup} => total time: {sum_time:.2f} ns")
+        
+        # Sort all acceptor targets by descending time
+        t_map = data[dpgroup]["targets"]  # e.g. {(acc_pg, acc_atom): time_ns, ...}
+        t_list = sorted(t_map.items(), key=lambda x: x[1], reverse=True)
 
+        if not t_list:
+            table_lines.append("    No acceptor targets found.")
+            table_lines.append("    No Phosphorus acceptor targets found.\n")
+            continue
+        
+        # Print each target with rank (1st, 2nd, 3rd, etc.) for logging
+        for i, ((acc_pg, acc_atom), val_ns) in enumerate(t_list, start=1):
+            # ordinal suffix
+            if 10 <= i % 100 <= 20:
+                suffix = 'th'
+            else:
+                suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(i % 10, 'th')
+            target_label = f"{i}{suffix} target"
+            percentage = (val_ns / sum_time * 100) if sum_time > 0 else 0.0
+            table_lines.append(f"    {target_label:15s} => {acc_pg}({acc_atom}) = {percentage:.1f} %")
+
+        # Aggregate phosphorus targets only
+        p_group_summary = {}
+        for ((acc_pg, acc_atom), val_ns) in t_list:
+            if acc_pg.startswith('P'):
+                p_group_summary[acc_pg] = p_group_summary.get(acc_pg, 0.0) + val_ns
+
+        if p_group_summary:
+            # Sort P-targets by time, descending
+            p_targets_sorted = sorted(p_group_summary.items(), key=lambda x: x[1], reverse=True)
+            table_lines.append("    Phosphorus Targets:")
+
+            # Donor numeric index (P3 => 3)
+            donor_num = int(dpgroup.replace('P',''))
+            top_three_map[donor_num] = {}
+
+            # We’ll store up to 3 in top_three_map: 'first','second','third'
+            rank_to_key = {1: 'first', 2: 'second', 3: 'third'}
+
+            for i, (acc_pg, total_ns) in enumerate(p_targets_sorted, start=1):
+                if 10 <= i % 100 <= 20:
+                    suffix = 'th'
+                else:
+                    suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(i % 10, 'th')
+                p_target_label = f"{i}{suffix} P target"
+
+                p_percentage = (total_ns / sum_time * 100) if sum_time > 0 else 0.0
+                table_lines.append(f"      {p_target_label:15s} => {acc_pg} = {p_percentage:.1f} %")
+
+                # If i <= 3 => store in top_three_map for the figure
+                if i <= 3:
+                    top_three_map[donor_num][rank_to_key[i]] = int(acc_pg.replace('P',''))
+
+                # Also store in rank_p_targets => for the textual summary
+                if i <= 3:
+                    # e.g. rank_p_targets["first"][dpgroup] = acc_pg
+                    rank_str = rank_to_key[i]
+                    rank_p_targets[rank_str][dpgroup] = acc_pg
+        else:
+            table_lines.append("    No Phosphorus acceptor targets found.")
+        
+        table_lines.append("")  # spacing
+
+    # Now we produce three separate summaries (first, second, third)
+    # e.g. "Summary of First Phosphorus Targets:\n  P2 -> P3 | P4 -> P5 | ..."
+    # If any donors have a first, second, third P-target.
+
+    # Helper to produce lines like "P2 -> P3 | P4 -> P5 | ..."
+    def build_summary_line(mapping):
+        # mapping e.g. rank_p_targets["first"] => { "P2":"P3", "P4":"P5", ... }
+        pairs = []
+        for donor, first_p in sorted(mapping.items()):
+            pairs.append(f"{donor} -> {first_p}")
+        return " | ".join(pairs)
+
+    # 1) First
+    if rank_p_targets["first"]:
+        line_str = build_summary_line(rank_p_targets["first"])
+        table_lines.append("Summary of First Phosphorus Targets:")
+        table_lines.append(f"  {line_str}\n")
+
+    # 2) Second
+    if rank_p_targets["second"]:
+        line_str = build_summary_line(rank_p_targets["second"])
+        table_lines.append("Summary of Second Phosphorus Targets:")
+        table_lines.append(f"  {line_str}\n")
+
+    # 3) Third
+    if rank_p_targets["third"]:
+        line_str = build_summary_line(rank_p_targets["third"])
+        table_lines.append("Summary of Third Phosphorus Targets:")
+        table_lines.append(f"  {line_str}\n")
+
+    table_lines.append("-" * 70)
+    table_lines.append("")
+
+    # Combine lines + log
+    table_str = "\n".join(table_lines)
+    logger.info(table_str)
+
+    # Finally, if desired, draw the figure
+    if draw_figure:
+        draw_phosphorus_diagram(species_id, top_three_map)
 
 # ------------------------------------------------------------------------------
 # Main
 # ------------------------------------------------------------------------------
-def main():
+def main(hbond_type):
     logger.info("Starting combined analysis with 2x2 figure, summary plot, phosphate violin, textual table...")
 
     # 1) Find project root & process directory
@@ -807,10 +1194,10 @@ def main():
         folder_path = process_path / folder_name
 
         # Required files
-        hb_num_file = folder_path / "analyze_final_sim" / "h_bonds" / "intra_hb_num.xvg"
-        xpm_file    = folder_path / "analyze_final_sim" / "h_bonds" / "intra_hb_matrix.xpm"
-        dist_file   = folder_path / "analyze_final_sim" / "h_bonds" / "intra_hb_dist.xvg"
-        log_file    = folder_path / "analyze_final_sim" / "h_bonds" / "intra_hb.log"
+        hb_num_file = folder_path / "analyze_final_sim" / "h_bonds" / f"{hbond_type}_hb_num.xvg"
+        xpm_file    = folder_path / "analyze_final_sim" / "h_bonds" / f"{hbond_type}_hb_matrix.xpm"
+        dist_file   = folder_path / "analyze_final_sim" / "h_bonds" / f"{hbond_type}_hb_dist.xvg"
+        log_file    = folder_path / "analyze_final_sim" / "h_bonds" / f"{hbond_type}_hb.log"
 
         # Check existence
         if not (hb_num_file.is_file() and xpm_file.is_file() and dist_file.is_file() and log_file.is_file()):
@@ -905,15 +1292,18 @@ def main():
     for i, sp in enumerate(all_species_ids):
         color_dict[sp] = palette[i % len(palette)]
 
-    # 6) Optionally create the 2×2 figure
-    two_by_two_plots_box_violin(
+    # Build a DataFrame for the phosphate group violin
+    df_phosphate = pd.DataFrame(df_phosphate_rows)
+    # 6) Optionally create the 3×2 figure
+    three_by_two_plots_box_violin(
         df_lifetimes=df_lifetimes,
         df_distance=df_distance,
         df_engaged=df_engaged,
         df_hbonds=df_hbonds,
+        df_phosphate=df_phosphate,
         color_dict=color_dict,
-        output_prefix="intra_hbonds",
-        figure_size=(16,12)
+        output_prefix=f"{hbond_type}_hbonds",
+        figure_size=(16,18)
     )
 
     # 7) Create data for summary existence plot
@@ -923,7 +1313,7 @@ def main():
     # We'll also collect all oxygens across these species
     all_oxys = set()
     for fname, species_id, n_ones in folder_list:
-        log_path = process_path / fname / "analyze_final_sim" / "h_bonds" / "intra_hb.log"
+        log_path = process_path / fname / "analyze_final_sim" / "h_bonds" / f"{hbond_type}_hb.log"
         if not log_path.is_file():
             continue
         bdf = parse_hbond_log_to_dataframe(str(log_path))
@@ -934,8 +1324,8 @@ def main():
 
     for fname, species_id, n_ones in folder_list:
         fpath = process_path / fname
-        xpm_file = fpath / "analyze_final_sim" / "h_bonds" / "intra_hb_matrix.xpm"
-        log_file = fpath / "analyze_final_sim" / "h_bonds" / "intra_hb.log"
+        xpm_file = fpath / "analyze_final_sim" / "h_bonds" / f"{hbond_type}_hb_matrix.xpm"
+        log_file = fpath / "analyze_final_sim" / "h_bonds" / f"{hbond_type}_hb.log"
         if not (xpm_file.is_file() and log_file.is_file()):
             continue
         bond_df = parse_hbond_log_to_dataframe(str(log_file))
@@ -945,28 +1335,28 @@ def main():
         an = analyze_hydrogen_bonds(mat, meta)
         hpi = an['hbonds_per_index']
 
-        # This time we sum donor+acceptor => occurrence_data
+        # Sum donor+acceptor → occurrence_data
         from_both = count_oxygen_occurrences_from_matrix(bond_df, hpi)
         occurrence_data[species_id] = from_both
 
         # Build existence map
         bin_size_ns = 0.2
         frames_per_bin = int(bin_size_ns / time_per_frame_ns)
-        if frames_per_bin<1:
+        if frames_per_bin < 1:
             continue
         n_frames = mat.shape[1]
         nbins = n_frames // frames_per_bin
         if n_frames % frames_per_bin != 0:
-            nbins+=1
+            nbins += 1
 
         binned = np.zeros((mat.shape[0], nbins))
         for i in range(nbins):
-            st = i*frames_per_bin
-            en = min((i+1)*frames_per_bin, n_frames)
+            st = i * frames_per_bin
+            en = min((i + 1) * frames_per_bin, n_frames)
             chunk = mat[:, st:en]
             binned[:, i] = np.mean(chunk, axis=1)
 
-        # Bond -> oxygen
+        # Build a mapping from oxygen to bond indices
         oxy_map = {}
         for idx, row in bond_df.iterrows():
             d = row['donor']
@@ -974,42 +1364,37 @@ def main():
             oxy_map.setdefault(d, []).append(idx)
             oxy_map.setdefault(a, []).append(idx)
 
-        # aggregator
-        sorted_oxy = sorted(all_oxys, key=lambda x: int(re.findall(r'\d+', x)[0]) if re.findall(r'\d+', x) else 0)
+        # Filter out "OW1" from the global oxygen list
+        sorted_oxy = sorted([o for o in all_oxys if o != "OW1"],
+                            key=lambda x: int(re.findall(r'\d+', x)[0]) if re.findall(r'\d+', x) else 0)
+        
         agg = np.zeros((len(sorted_oxy), nbins))
         for o_i, oxy in enumerate(sorted_oxy):
             b_list = oxy_map.get(oxy, [])
             if b_list:
                 for bn in range(nbins):
-                    agg[o_i,bn] = np.max(binned[b_list,bn])
+                    agg[o_i, bn] = np.max(binned[b_list, bn])
         existence_data[species_id] = agg
 
-
+    
     # 8) Once we have occurrence_data + existence_data:
+    # This is time consuming...
     generate_summary_plot(
         occurrence_data=occurrence_data,
         existence_data=existence_data,
         donor_atoms_by_species=donor_atoms_by_species,
         color_dict=color_dict,
         time_per_frame_ns=time_per_frame_ns,
-        output_file='oxygen_occurrences_summary.pdf',
+        output_file=f"{hbond_type}_oxygen_occurrences_summary.pdf",
         folder_order=sorted_species_list
-    )
-
-    # 9) Build a DataFrame for the phosphate group violin
-    df_phosphate = pd.DataFrame(df_phosphate_rows)
-    plot_phosphate_group_violin(
-        df_phosphate=df_phosphate,
-        color_dict=color_dict,
-        output_file="phosphate_group_violin.pdf"
     )
 
     # 10) Print textual table
     for sp, data in donor_acceptor_summaries.items():
-        print_donor_acceptor_table(sp, data)
+        print_donor_acceptor_table(sp, data, logger, "arrow")
 
     logger.info("All analysis steps completed successfully!")
 
 
 if __name__=="__main__":
-    main()
+    main("inter")
