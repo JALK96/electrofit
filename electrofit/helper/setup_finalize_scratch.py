@@ -1,6 +1,9 @@
 import os
 import shutil
 import logging
+import filecmp
+
+
 from electrofit.helper.set_logging import setup_logging
 
 
@@ -59,24 +62,119 @@ def setup_scratch_directory(input_files, base_scratch_dir="/scratch/johannal96/t
 
     return scratch_dir, fullpath
 
-def finalize_scratch_directory_old(
-    original_dir, scratch_dir, input_files, output_files=None
+
+
+
+def directories_differ(src, dst):
+    """
+    Recursively check if two directories differ.
+    
+    Returns True if:
+      - There are files or subdirectories present in one but not the other,
+      - There are files with different contents,
+      - Or any comparison issues are detected.
+    Otherwise, returns False.
+    """
+    dcmp = filecmp.dircmp(src, dst)
+    if dcmp.left_only or dcmp.right_only or dcmp.diff_files or dcmp.funny_files:
+        return True
+    # Recurse into each subdirectory present in both directories
+    for subdir in dcmp.subdirs:
+        new_src = os.path.join(src, subdir)
+        new_dst = os.path.join(dst, subdir)
+        if directories_differ(new_src, new_dst):
+            return True
+    return False
+
+def finalize_scratch_directory(
+    original_dir, scratch_dir, input_files, output_files=None, overwrite=True
 ):
     """
-    Copies output files and directories back to the original directory and cleans up the scratch directory.
+    Recursively checks input files and directories for changes and copies updated content
+    back to the original directory. Also processes output files/directories from scratch_dir.
+    If an item appears in both input_files and output_files, it will only be processed as an input.
+    Finally, it cleans up the scratch directory.
 
     Parameters:
     - original_dir (str): Path to the original directory.
     - scratch_dir (str): Path to the scratch directory.
-    - input_files (list): List of input file and directory names to exclude from copying back.
+    - input_files (list): List of input file and directory names to check for changes.
+                          For changed items, the original is renamed and the modified copy is copied over.
     - output_files (list, optional): Specific list of output files/directories to copy back.
-                                     If None, all items in scratch_dir excluding input_files are copied.
+                                     If None, all items in scratch_dir excluding input_files are processed.
+    - overwrite (bool, optional): 
+          If True, updated input items will be copied back (after renaming the original).
+          If False, even if differences are detected the original content will be preserved.
     """
-    if output_files is None:
-        # List all items in scratch_dir excluding input_files
-        output_files = [f for f in os.listdir(scratch_dir) if f not in input_files]
+    # --- Process Input Files/Directories ---
+    for item in input_files:
+        src = os.path.join(scratch_dir, item)
+        dst = os.path.join(original_dir, item)
 
-    # Log the output files that will be copied back
+        if not os.path.exists(src):
+            logging.warning(f"Input item '{item}' does not exist in scratch directory.")
+            continue
+
+        if os.path.isfile(src):
+            if os.path.exists(dst):
+                if not filecmp.cmp(src, dst, shallow=False):
+                    if overwrite:
+                        base, ext = os.path.splitext(dst)
+                        renamed_dst = f"{base}.input_file{ext}"
+                        os.rename(dst, renamed_dst)
+                        logging.info(
+                            f"Original input file '{item}' renamed to '{os.path.basename(renamed_dst)}'."
+                        )
+                        shutil.copy2(src, dst)
+                        logging.info(
+                            f"Modified input file '{item}' copied back to original directory."
+                        )
+                    else:
+                        logging.info(
+                            f"Input file '{item}' has changes but overwrite is disabled. No action taken."
+                        )
+                else:
+                    logging.info(f"Input file '{item}' unchanged. No action taken.")
+            else:
+                shutil.copy2(src, dst)
+                logging.info(
+                    f"Input file '{item}' does not exist in original directory. Copied from scratch."
+                )
+        elif os.path.isdir(src):
+            if os.path.exists(dst):
+                if directories_differ(src, dst):
+                    if overwrite:
+                        renamed_dst = f"{dst}.input_file"
+                        os.rename(dst, renamed_dst)
+                        logging.info(
+                            f"Original input directory '{item}' renamed to '{os.path.basename(renamed_dst)}'."
+                        )
+                        shutil.copytree(src, dst)
+                        logging.info(
+                            f"Modified input directory '{item}' copied back to original directory."
+                        )
+                    else:
+                        logging.info(
+                            f"Input directory '{item}' has changes but overwrite is disabled. No action taken."
+                        )
+                else:
+                    logging.info(f"Input directory '{item}' unchanged. No action taken.")
+            else:
+                shutil.copytree(src, dst)
+                logging.info(
+                    f"Input directory '{item}' does not exist in original directory. Copied from scratch."
+                )
+        else:
+            logging.warning(f"Input item '{item}' is neither a file nor a directory. Skipping.")
+
+    # --- Process Output Files/Directories ---
+    # If output_files is None, compute all items excluding input_files.
+    if output_files is None:
+        output_files = [f for f in os.listdir(scratch_dir) if f not in input_files]
+    else:
+        # Filter out any items that were already processed as input_files.
+        output_files = [f for f in output_files if f not in input_files]
+        
     logging.info(f"Output files to be copied back: {output_files}")
 
     for item in output_files:
@@ -84,14 +182,10 @@ def finalize_scratch_directory_old(
         dst = os.path.join(original_dir, item)
 
         if not os.path.exists(src):
-            logging.warning(
-                f"Output item '{item}' does not exist in scratch directory."
-            )
+            logging.warning(f"Output item '{item}' does not exist in scratch directory.")
             continue
 
-        # Determine if the item is a file or directory
         if os.path.isfile(src):
-            # Handle file overwrites
             if os.path.exists(dst):
                 base, ext = os.path.splitext(dst)
                 counter = 1
@@ -107,7 +201,6 @@ def finalize_scratch_directory_old(
                 shutil.copy2(src, dst)
                 logging.info(f"Copied file '{item}' back to original directory.")
         elif os.path.isdir(src):
-            # Handle directory overwrites
             if os.path.exists(dst):
                 base = dst
                 counter = 1
@@ -123,24 +216,18 @@ def finalize_scratch_directory_old(
                 shutil.copytree(src, dst)
                 logging.info(f"Copied directory '{item}' back to original directory.")
         else:
-            logging.warning(
-                f"Item '{item}' is neither a file nor a directory. Skipping."
-            )
+            logging.warning(f"Output item '{item}' is neither a file nor a directory. Skipping.")
 
-    # Clean up scratch directory
+    # --- Cleanup: Remove the scratch directory ---
     try:
         shutil.rmtree(scratch_dir)
         logging.info(f"Removed scratch directory: {scratch_dir}")
     except Exception as e:
         logging.error(f"Failed to remove scratch directory '{scratch_dir}': {e}")
 
-# New finalize scratch directory: rename to finalize_scratch and delete old function. 
-import os
-import shutil
-import logging
-import filecmp
 
-def finalize_scratch_directory(
+
+def finalize_scratch_directory_old(
     original_dir, scratch_dir, input_files, output_files=None 
 ):
     """

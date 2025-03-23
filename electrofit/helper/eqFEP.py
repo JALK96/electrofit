@@ -4,11 +4,42 @@ import logging
 import glob
 import pandas as pd
 import concurrent.futures
+import numpy as np
 
 from pmx.utils import create_folder
 from pmx import gmx, ligand_alchemy
 
 from electrofit.commands.run_commands import run_command
+
+def generate_cos_lambda_scheme(n, exponent=1.5):
+    """
+    Generate a lambda scheme with non-uniform spacing, denser at both lambda=0 and lambda=1.
+    
+    Parameters
+    ----------
+    n : int
+        Total number of lambda windows.
+    exponent : float, optional
+        Exponent for biasing the distribution.
+        - If exponent = 1.0, the scheme is the standard cosine scheme.
+        - If exponent > 1.0, points are denser at both ends.
+        Default is 2.0.
+    
+    Returns
+    -------
+    lambdas : np.ndarray
+        Array of lambda values in [0, 1] with enhanced density at the endpoints.
+    """
+    # Step 1: Generate standard cosine spacing:
+    x = np.linspace(0, np.pi, n)
+    u = 0.5 * (1 - np.cos(x))
+    
+    # Step 2: Apply the double-end enrichment transform.
+    # This transformation maps u in [0,1] to lambda such that:
+    #   For u near 0, lambda ~ u^exponent, and for u near 1, lambda ~ 1 - (1-u)^exponent.
+    lambdas = u**exponent / (u**exponent + (1 - u)**exponent)
+    return lambdas
+
 
 class eqFEP:
     """
@@ -565,14 +596,16 @@ class eqFEP:
             edges = self.edges
         if self.cascade:
             logging.info("In cascade mode, you can skip prepare_transitions() if desired.")
+
         for edge in edges:
+            #ligA, ligB = edges[edge]
             for state in self.states:
                 if state == 'stateA':
                     template_mdp = os.path.join(self.mdpPath, 'template_ti_l0.mdp')
-                    lam_schedule = " ".join([f"{x:.4f}" for x in self.lambdaStates])
+                    lam_schedule = " ".join([f"{x:.6f}" for x in self.lambdaStates])
                 else:
                     template_mdp = os.path.join(self.mdpPath, 'template_ti_l1.mdp')
-                    lam_schedule = " ".join([f"{x:.4f}" for x in reversed(self.lambdaStates)])
+                    lam_schedule = " ".join([f"{x:.6f}" for x in reversed(self.lambdaStates)])
         
                 for r in range(1, self.replicas + 1):
                     transBase = os.path.join(self.workPath, edge, "water", state, f"run{r}", "transitions")
@@ -585,6 +618,7 @@ class eqFEP:
                         with open(template_mdp, 'r') as f:
                             mdp_txt = f.read()
                         # Replace placeholders
+                        #mdp_txt = mdp_txt.replace('MOL_TYPE', f'IP_{ligA}')
                         mdp_txt = mdp_txt.replace('init_lambda_state        = REPLACE_LAMBDA',
                                                   f'init_lambda_state        = {i}')
                         mdp_txt = mdp_txt.replace('REPLACE_FEP_LAMBDAS', lam_schedule)

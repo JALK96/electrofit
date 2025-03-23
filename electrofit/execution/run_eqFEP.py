@@ -38,7 +38,7 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 project_path = find_project_root(script_dir)
 sys.path.append(project_path)
 
-from electrofit.helper.eqFEP import eqFEP
+from electrofit.helper.eqFEP import eqFEP, generate_cos_lambda_scheme
 from electrofit.helper.set_logging import setup_logging
 from electrofit.helper.setup_finalize_scratch import setup_scratch_directory, finalize_scratch_directory
 
@@ -73,6 +73,13 @@ def main():
                         help='Base scratch directory to use if --scratch is set.')
     parser.add_argument('-id', '--input_dir', type=str, default='input',
                         help='Input directory to copy to scratch (e.g. containing the "molecules" folder).')
+    
+    parser.add_argument('--cos_lambda', action='store_true', default=False,
+                        help="If set, use a non-uniform lambda spacing based on the cosine function defined by "
+                             "lambda = u^exponent / (u^exponent + (1-u)^exponent), where u = 0.5*(1 - cos(x)) "
+                             "with x evenly distributed from 0 to pi. If not set, equidistant spacing is used.")
+    parser.add_argument('-exp', '--exponent', type=float, default=1.5,
+                        help="Exponent for the cosine lambda scheme (only used if --cos_lambda is set). Default is 1.5.")
     args = parser.parse_args()
 
     # Set up logging; create a log file in the current directory
@@ -90,8 +97,13 @@ def main():
     # Use the provided states list.
     states_list = args.state
 
-    # Create a lambda schedule from 0 to 1 with n_lambdas values.
-    lambda_list = list(np.linspace(0, 1, args.n_lambdas))
+    if args.cos_lambda:
+        lambda_list = list(generate_cos_lambda_scheme(n=args.n_lambdas, exponent=args.exponent))
+        logging.info(f"Using cosine lambda scheme with exponent {args.exponent}: {lambda_list}")
+    else:
+        # Default is equidistant lambda spacing
+        lambda_list = list(np.linspace(0, 1, args.n_lambdas))
+        logging.info(f"Using equidistant lambda scheme: {lambda_list}")
 
     # Optional: Set up scratch directory if requested.
     if args.scratch:
