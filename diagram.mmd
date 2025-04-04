@@ -1,0 +1,9 @@
+%%{init: {'theme': 'neutral'}}%%
+flowchart TB
+    A["Start<br>prepareFreeEnergyDir()"] --> B["Check &amp; store paths<br>- workPath<br>- mdpPath<br>- ligandPath"]
+    B --> C["Ensure <code>workPath</code> exists"]
+    C --> D["Read ligands from <code>ligandPath</code><br>_read_ligands()"]
+    D --> E["Read edges<br>_read_edges()"]
+    E --> F["Create folder structure<br>_create_folder_structure()"]
+    F --> G["Log / Print folder summary"]
+    G --> H["Finished<br>prepareFreeEnergyDir()"]

@@ -145,7 +145,7 @@ def main():
     fe.run_simulation_locally(simType='npt')
     fe.prepare_transitions(bGenTpr=True)
     fe.run_simulation_locally(simType='transitions', bVerbose=True)
-    fe.run_analysis(bVerbose=True, start_time=100)
+    fe.run_analysis(bVerbose=True, start_time=500)
 
     logging.info("eqFEP run complete.")
 
