@@ -38,7 +38,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-sns.set_context("talk")
+sns.set_context("talk", font_scale=1.2)
 
 def extract_energy_data(ener_edr, output_xvg, energy_term=10):
     """
@@ -63,7 +63,7 @@ def parse_xvg(xvg_file):
                 data.append([float(x) for x in parts])
     return np.array(data)
 
-def plot_single_subdir_set(base_dir, energy_term=10, invert_y=False, ax=None, title=""):
+def plot_single_subdir_set(base_dir, energy_term=10, invert_y=False, ax=None, title="", units="kJ"):
     """
     Plots KDE energy distributions for all lambda_* directories in a single base_dir.
 
@@ -101,7 +101,10 @@ def plot_single_subdir_set(base_dir, energy_term=10, invert_y=False, ax=None, ti
         if data.size == 0:
             print(f"No data found in {output_xvg}. Skipping.")
             continue
+
         energy = data[:, 1]
+        if units.lower() == "kcal":
+            energy *= 0.239  # convert energy from kJ/mol to kcal/mol
 
         # Map index to a 0..1 color value
         if not invert_y:
@@ -118,7 +121,7 @@ def plot_single_subdir_set(base_dir, energy_term=10, invert_y=False, ax=None, ti
     if invert_y:
         ax.invert_yaxis()
 
-def plot_energy_density_vertical(base_dir1, base_dir2=None, energy_term=10):
+def plot_energy_density_vertical(base_dir1, base_dir2=None, energy_term=10, units="kJ"):
     """
     Plots energy density distributions from 1 or 2 directories:
       - If only base_dir1 is provided, plots a single subplot.
@@ -138,7 +141,7 @@ def plot_energy_density_vertical(base_dir1, base_dir2=None, energy_term=10):
             ax=ax_top, 
             title="A → B"
         )
-        ax_top.set_xlabel("Energy (kJ/mol)")
+        ax_top.set_xlabel(f"Energy ({units}/mol)")
         
         # Create a colorbar from 0→1
         norm = matplotlib.colors.Normalize(vmin=0, vmax=1)
@@ -172,7 +175,7 @@ def plot_energy_density_vertical(base_dir1, base_dir2=None, energy_term=10):
             title="B → A"
         )
         ax_bottom.set_ylabel(r"$P_{bwd}(E)$")
-        ax_bottom.set_xlabel("Energy (kJ/mol)")
+        ax_bottom.set_xlabel(f"Energy ({units}/mol)")
 
         # Create a colorbar for each subplot that indicates the indexing:
         #   top: 0→1, bottom: 1→0
@@ -198,9 +201,11 @@ def main():
                         help="(Optional) second base directory with lambda_* subdirectories.")
     parser.add_argument("--energy_term", type=int, default=10,
                         help="Energy term index to extract (default: 10).")
+    parser.add_argument("--units", type=str, default="kJ", choices=["kJ", "kcal"],
+                        help="Energy units to plot (default: kJ).")
     args = parser.parse_args()
 
-    plot_energy_density_vertical(args.base_dir1, args.base_dir2, energy_term=args.energy_term)
+    plot_energy_density_vertical(args.base_dir1, args.base_dir2, energy_term=args.energy_term, units=args.units)
 
 if __name__ == "__main__":
     main()

@@ -2,15 +2,8 @@
 """
 run_eqFEP.py
 
-Driver script for running the eqFEP workflow for multi-lambda free energy calculations in water.
+Driver script for running the eqFEP workflow for multi-lambda free energy calculations in water or vacuum.
 Optionally, it sets up a scratch directory for the run if the --scratch flag is provided.
-
-Usage examples:
-  # Cascade mode for two states, with scratch management:
-  python run_eqFEP.py --cascade -s stateA stateB -e 011111 101111 -c 40 -n 20 -r 1 -m input/mdp --scratch -bsd /scratch/user/tmp/ --id input
-
-  # Parallel mode for stateA only (no scratch):
-  python run_eqFEP.py -s stateA -e 011111 101111 -c 40 -n 10 -r 1
 """
 
 import argparse
@@ -20,7 +13,6 @@ import os
 import numpy as np
 import glob
 
-# Helper: find project root (if needed)
 def find_project_root(current_dir, project_name="electrofit"):
     root = None
     while True:
@@ -33,7 +25,6 @@ def find_project_root(current_dir, project_name="electrofit"):
             return root
         current_dir = parent_dir
 
-# Set up project root and include it in PYTHONPATH
 script_dir = os.path.dirname(os.path.abspath(__file__))
 project_path = find_project_root(script_dir)
 sys.path.append(project_path)
@@ -49,13 +40,13 @@ def main():
     parser.add_argument('--cascade', action='store_true', default=False,
                         help='Run transitions in cascade mode (each window uses previous confout).')
     parser.add_argument('-s', '--state', nargs='+', type=str, default=['stateA'],
-                        help='One or more states to run. E.g.: "-s stateA" or "-s stateA stateB".')
+                        help='One or more states to run, e.g. "-s stateA" or "-s stateA stateB".')
     parser.add_argument('-w', '--workPath', type=str, default='workpath',
                         help='Main working directory for eqFEP output.')
     parser.add_argument('-m', '--mdpPath', type=str, default='mdp',
                         help='Path to MDP files.')
     parser.add_argument('-l', '--ligandPath', type=str, default='input/molecules',
-                        help='Path to your ligand directories (e.g. IP_011111).')
+                        help='Path to your ligand directories (e.g., IP_011111).')
     parser.add_argument('-e', '--edge', action='append', nargs=2, metavar=('LIG_A', 'LIG_B'),
                         help='Specify a ligand pair edge as two ligand IDs. Can be used multiple times.')
     parser.add_argument('-b', '--windowsBatch', type=int, default=4,
@@ -65,47 +56,55 @@ def main():
     parser.add_argument('-c', '--total_cpus', type=int, default=40,
                         help='Total CPU cores available (used to compute ntomp).')
     parser.add_argument('-n', '--n_lambdas', type=int, default=10,
-                        help='Number of equally spaced lambda windows (default is 10).')
-    # Optional scratch management arguments:
+                        help='Number of equally spaced lambda windows (default = 10).')
+    # New argument: boxd (box distance from solute)
+    parser.add_argument('--boxd', type=float, default=1.2,
+                        help='Box distance from solute in nm (default is 1.2 nm).')
+
+    # Scratch management arguments:
     parser.add_argument('--scratch', action='store_true', default=False,
                         help='If set, set up a scratch directory and copy input files there.')
     parser.add_argument('-bsd', '--base_scratch_dir', type=str, default='/scratch/johannal96/tmp/',
                         help='Base scratch directory to use if --scratch is set.')
     parser.add_argument('-id', '--input_dir', type=str, default='input',
                         help='Input directory to copy to scratch (e.g. containing the "molecules" folder).')
-    
+
+    # Lambda spacing arguments:
     parser.add_argument('--cos_lambda', action='store_true', default=False,
-                        help="If set, use a non-uniform lambda spacing based on the cosine function defined by "
-                             "lambda = u^exponent / (u^exponent + (1-u)^exponent), where u = 0.5*(1 - cos(x)) "
-                             "with x evenly distributed from 0 to pi. If not set, equidistant spacing is used.")
+                        help="Use a non-uniform lambda spacing based on a cosine scheme.")
     parser.add_argument('-exp', '--exponent', type=float, default=1.5,
-                        help="Exponent for the cosine lambda scheme (only used if --cos_lambda is set). Default is 1.5.")
+                        help="Exponent for the cosine lambda scheme (only used if --cos_lambda is set).")
+
+    # Vacuum mode argument:
+    parser.add_argument('--vacuum', action='store_true', default=False,
+                        help='Run in vacuum mode (no solvation or ions).')
+
     args = parser.parse_args()
 
-    # Set up logging; create a log file in the current directory
+    # Set up logging
     fullpath = os.getcwd()
     log_file_path = os.path.join(fullpath, "eqfep_process.log")
     setup_logging(log_file_path)
     logging.info(f"Logging initialized. Log file: {log_file_path}")
 
-    # Parse edges; if none provided, use a default.
+    # Parse edges
     if args.edge is None:
         edges = [('011111', '101111')]
     else:
         edges = args.edge
 
-    # Use the provided states list.
+    # States list
     states_list = args.state
 
+    # Configure lambda schedule
     if args.cos_lambda:
         lambda_list = list(generate_cos_lambda_scheme(n=args.n_lambdas, exponent=args.exponent))
         logging.info(f"Using cosine lambda scheme with exponent {args.exponent}: {lambda_list}")
     else:
-        # Default is equidistant lambda spacing
         lambda_list = list(np.linspace(0, 1, args.n_lambdas))
         logging.info(f"Using equidistant lambda scheme: {lambda_list}")
 
-    # Optional: Set up scratch directory if requested.
+    # Set up scratch directory if requested.
     if args.scratch:
         input_files = [args.input_dir]
         scratch_dir, original_dir = setup_scratch_directory(input_files, args.base_scratch_dir)
@@ -126,32 +125,45 @@ def main():
         total_cpus=args.total_cpus,
         lambdaStates=lambda_list,
         cascade=args.cascade,
-        states=states_list
+        states=states_list,
+        boxd=args.boxd,
+        boxshape='cubic'
     )
 
     logging.info("Starting eqFEP pipeline...")
 
-    # Run the workflow.
+    # Main pipeline steps
     fe.prepareFreeEnergyDir()
     fe.atom_mapping(bVerbose=True)
     fe.hybrid_structure_topology(bVerbose=True)
     fe.assemble_systems()
-    fe.boxWaterIons()
+
+    # Conditionally skip solvation/ion steps if vacuum.
+    if args.vacuum:
+        # For vacuum simulation, disable water and ion steps.
+        fe.boxWaterIons(bIon=False, bSolvate=False)
+    else:
+        fe.boxWaterIons(bIon=True, bSolvate=True)
+
+    # Prepare and run the energy minimization (EM), NVT, and NPT steps.
     fe.prepare_simulation(simType='em')
     fe.run_simulation_locally(simType='em')
     fe.prepare_simulation(simType='nvt')
     fe.run_simulation_locally(simType='nvt')
     fe.prepare_simulation(simType='npt')
     fe.run_simulation_locally(simType='npt')
+
+    # Prepare and run the alchemical transitions
     fe.prepare_transitions(bGenTpr=True)
     fe.run_simulation_locally(simType='transitions', bVerbose=True)
-    fe.run_analysis(bVerbose=True, start_time=500)
 
+    # Run BAR analysis on the results.
+    fe.run_analysis(bVerbose=True, start_time=500)
     logging.info("eqFEP run complete.")
 
-    # If scratch was used, finalize the scratch directory.
+    # Finalize scratch directory if used.
     if args.scratch:
-        finalize_scratch_directory(original_dir, scratch_dir, input_files)
+        finalize_scratch_directory(original_dir, scratch_dir, [args.input_dir])
         logging.info("Scratch directory finalized.")
 
 if __name__ == '__main__':

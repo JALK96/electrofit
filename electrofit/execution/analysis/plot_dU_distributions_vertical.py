@@ -10,6 +10,8 @@ Changes:
    so gather_dU_per_subdir can print those details.
 2) In plot_single_dir_dU, we do a manual KDE + scaling so that each distribution's peak = 1.
 3) We add print statements showing which columns/first 10 ΔU values, etc.
+4) A new command‑line option “--units” is added. If set to “kcal”, the ΔU values are converted
+   (ΔU [kcal/mol] = ΔU [kJ/mol] × 0.239) and the x‑axis labels update accordingly.
 
 Usage Example:
     python plot_dU_distributions_vertical.py /path/to/lambda_dir
@@ -28,7 +30,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy.stats import gaussian_kde
 
-sns.set_context("talk")
+sns.set_context("talk", font_scale=1.2)
 
 def parse_dhdl_xvg_current_and_targets(dhdl_file, debug=False):
     """
@@ -111,7 +113,7 @@ def parse_dhdl_xvg_current_and_targets(dhdl_file, debug=False):
 
                 continue
 
-            # Otherwise numeric data line
+            # Numeric data line
             if line.startswith('@'):
                 continue
 
@@ -221,8 +223,7 @@ def gather_dU_per_subdir(base_dir, offset_fix=0, debug=False):
             print(f"[WARNING] Could not parse current lambda in {dhdl_file}")
             continue
         if nLam is None or deltaU is None:
-            print(f"[INFO] No next-lambda found for subdir with current λ={cLam:.4f} "
-                  f"in {dhdl_file}. Skipping.")
+            print(f"[INFO] No next-lambda found for subdir with current λ={cLam:.4f} in {dhdl_file}. Skipping.")
             continue
 
         out_list.append((cLam, nLam, deltaU, col_idx, sdir_idx))
@@ -231,14 +232,61 @@ def gather_dU_per_subdir(base_dir, offset_fix=0, debug=False):
     out_list.sort(key=lambda x: x[0])
     return out_list
 
+#####################################################################
+#  Plotting Consecutive Transitions with skip_time + trim + (de)normalization
+#####################################################################
 
-def plot_single_dir_dU(base_dir, invert_y=False, ax=None, offset_fix=0, debug=False, trim=0.1):
+def compute_density(deltaU, normalize=False, trim_percentile=None):
+    """
+    Compute kernel density for the data 'deltaU'.
+    - If 'normalize' is True, scale so max(y)=1.
+    - If trim_percentile is not None (e.g. 2), we clamp x-range
+      to [2nd percentile, 98th percentile], ignoring outliers for display.
+    """
+    if len(deltaU) < 2:
+        return np.array([]), np.array([])
+
+    kde = gaussian_kde(deltaU)
+
+    # 1) Determine left/right
+    if trim_percentile is not None and 0 < trim_percentile < 50:
+        lower = np.percentile(deltaU, trim_percentile)
+        upper = np.percentile(deltaU, 100 - trim_percentile)
+        if lower == upper:
+            lower -= 0.5
+            upper += 0.5
+    else:
+        lower = np.min(deltaU)
+        upper = np.max(deltaU)
+        if lower == upper:
+            lower -= 0.5
+            upper += 0.5
+
+    span = upper - lower
+    pad = 0.05 * span
+    left = lower - pad
+    right = upper + pad
+
+    xvals = np.linspace(left, right, 200)
+    yvals = kde(xvals)
+
+    # 2) Normalize if requested
+    if normalize:
+        peak = np.max(yvals)
+        if peak > 0:
+            yvals /= peak
+
+    return xvals, yvals
+
+
+def plot_single_dir_dU(base_dir, invert_y=False, ax=None, offset_fix=0, debug=False, trim=0.1, units="kJ"):
     """
     Gather (cLam, nLam, deltaU_values, col_index, subdir_idx), 
     then plot each distribution on 'ax' with color from 0->1 or 1->0.
 
     We'll do a manual KDE so we can enforce "peak = 1" normalization.
     Optionally, use 'trim' (in percent) to clip extreme outliers.
+    The energy units are set via the 'units' parameter ("kJ" [default] or "kcal").
     """
     dU_list = gather_dU_per_subdir(base_dir, offset_fix=offset_fix, debug=debug)
     if len(dU_list) == 0:
@@ -263,6 +311,10 @@ def plot_single_dir_dU(base_dir, invert_y=False, ax=None, offset_fix=0, debug=Fa
 
         if len(deltaU) < 2:
             continue  # skip trivial cases
+
+        # Convert energy values if units are kcal
+        if units.lower() == "kcal":
+            deltaU = deltaU * 0.239
 
         kde = gaussian_kde(deltaU)
 
@@ -297,56 +349,52 @@ def plot_single_dir_dU(base_dir, invert_y=False, ax=None, offset_fix=0, debug=Fa
         ax.legend()
 
 
-def plot_dU_distributions_vertical(base_dir1, base_dir2=None, offset_fix=0, debug=False):
+def plot_dU_distributions_vertical(base_dir1, base_dir2=None, offset_fix=0, debug=False, units="kJ"):
     """
     If only base_dir1 is given -> single subplot
-    If base_dir2 is also given -> 2-subplot vertical
+    If base_dir2 is also given -> 2-subplot vertical layout.
+    The energy units are set via the 'units' parameter ("kJ" [default] or "kcal").
     """
     if base_dir2 is None:
         fig, ax_top = plt.subplots(1, 1, figsize=(10, 5))
-        plot_single_dir_dU(base_dir1, invert_y=False, ax=ax_top, offset_fix=offset_fix, debug=debug)
-        ax_top.set_xlabel(r"ΔU$_{ij}$ (kJ/mol)")
+        plot_single_dir_dU(base_dir1, invert_y=False, ax=ax_top, offset_fix=offset_fix, debug=debug, units=units)
+        ax_top.set_xlabel(r"ΔU$_{ij}$ (" + units + r"/mol)")
         ax_top.set_title("A → B")
 
-        # colorbar from 0->1
+        # colorbar from 0→1
         norm = matplotlib.colors.Normalize(vmin=0, vmax=1)
         sm = plt.cm.ScalarMappable(cmap="viridis", norm=norm)
         sm.set_array([])
         cbar = fig.colorbar(sm, ax=ax_top, orientation="vertical", fraction=0.05)
         cbar.set_label(r"$\lambda_j$")
 
-        #plt.tight_layout()
         plt.savefig("plot_dU_single.pdf")
-        #plt.show()
     else:
         fig, (ax_top, ax_bottom) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
 
-        # top
-        plot_single_dir_dU(base_dir1, invert_y=False, ax=ax_top, offset_fix=offset_fix, debug=debug)
-        ax_top.set_ylabel(r"Norm: $P_{fwd}(\Delta U$")
+        # top subplot: forward distributions
+        plot_single_dir_dU(base_dir1, invert_y=False, ax=ax_top, offset_fix=offset_fix, debug=debug, units=units)
+        ax_top.set_ylabel(r"Norm: $P_{fwd}(\Delta U)$")
         ax_top.set_title("A → B")
 
-        # bottom
-        plot_single_dir_dU(base_dir2, invert_y=True, ax=ax_bottom, offset_fix=offset_fix, debug=debug)
-        ax_bottom.set_ylabel(r"Norm: $P_{bwd}(\Delta U$")
-        ax_bottom.set_xlabel(r"ΔU$_{ij}$ (kJ/mol)")
+        # bottom subplot: backward distributions
+        plot_single_dir_dU(base_dir2, invert_y=True, ax=ax_bottom, offset_fix=offset_fix, debug=debug, units=units)
+        ax_bottom.set_ylabel(r"Norm: $P_{bwd}(\Delta U)$")
+        ax_bottom.set_xlabel(r"ΔU$_{ij}$ (" + units + r"/mol)")
         ax_bottom.set_title("B → A")
 
-        # single colorbar
         norm = matplotlib.colors.Normalize(vmin=0, vmax=1)
         sm = plt.cm.ScalarMappable(cmap="viridis", norm=norm)
         sm.set_array([])
         cbar = fig.colorbar(sm, ax=[ax_top, ax_bottom], orientation="vertical", fraction=0.05)
         cbar.set_label(r"$\lambda_j$")
 
-        #plt.tight_layout()
         plt.savefig("plot_dU_double.pdf")
-        #plt.show()
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Plot ΔU(λ_i->λ_{i+1}) distributions from dhdl.xvg, forcing each peak=1, printing debug info."
+        description="Plot ΔU(λ_i→λ_{i+1}) distributions from dhdl.xvg, forcing each peak=1, printing debug info."
     )
     parser.add_argument("base_dir1", help="First directory with subfolders 'lambda_*'.")
     parser.add_argument("base_dir2", nargs="?", default=None,
@@ -354,12 +402,14 @@ def main():
     parser.add_argument("--offset", type=int, default=0,
                         help="Integer offset to apply to sX->data column (if needed).")
     parser.add_argument("--debug", action="store_true", help="Enable debug prints.")
+    parser.add_argument("--units", type=str, default="kJ", choices=["kJ", "kcal"],
+                        help="Energy units to plot (default: kJ).")
     args = parser.parse_args()
 
     base1 = os.path.abspath(args.base_dir1)
     base2 = os.path.abspath(args.base_dir2) if args.base_dir2 else None
 
-    plot_dU_distributions_vertical(base1, base2, offset_fix=args.offset, debug=args.debug)
+    plot_dU_distributions_vertical(base1, base2, offset_fix=args.offset, debug=args.debug, units=args.units)
 
 
 if __name__ == "__main__":

@@ -235,14 +235,12 @@ def compute_density(deltaU, normalize=False, trim_percentile=None):
         lower = np.percentile(deltaU, trim_percentile)
         upper = np.percentile(deltaU, 100 - trim_percentile)
         if lower == upper:
-            # fallback if data is basically identical
             lower -= 0.5
             upper += 0.5
     else:
         lower = np.min(deltaU)
         upper = np.max(deltaU)
         if lower == upper:
-            # fallback if data is basically identical
             lower -= 0.5
             upper += 0.5
 
@@ -269,13 +267,15 @@ def plot_dU_distributions_consecutive_grid(base_dir1,
                                            debug=False,
                                            normalize=False,
                                            trim=None,
-                                           skip_time=0.0):
+                                           skip_time=0.0,
+                                           units="kJ"):
     """
     Plots each transition i (solid) & i+1 (dashed) for forward (black)
     and backward (red), skipping data before skip_time, optionally trimming
     outliers, and optionally normalizing (peak=1).
-    """
 
+    The energy units can be set via the 'units' parameter ("kJ" [default] or "kcal").
+    """
     # Gather data
     fwd_list = gather_dU_per_subdir(base_dir1, offset_fix=offset_fix,
                                     debug=debug, skip_time=skip_time)
@@ -306,49 +306,50 @@ def plot_dU_distributions_consecutive_grid(base_dir1,
         col = i % ncols
         ax = axs[row, col]
 
-        # Fwd i => black solid
+        # Forward i => black solid
         if i < n_fwd:
             cLam_f_i, nLam_f_i, deltaU_f_i, _, _ = fwd_list[i]
+            if units.lower() == "kcal":
+                deltaU_f_i = deltaU_f_i * 0.239
             x_f_i, y_f_i = compute_density(deltaU_f_i,
                                            normalize=normalize,
                                            trim_percentile=trim)
             if x_f_i.size > 0:
                 ax.plot(x_f_i, y_f_i, '-', color='black', label=f"Fwd i={i}")
 
-        # Fwd i+1 => black dashed
+        # Forward i+1 => black dashed
         if (i + 1) < n_fwd:
             cLam_f_ip1, nLam_f_ip1, deltaU_f_ip1, _, _ = fwd_list[i+1]
+            if units.lower() == "kcal":
+                deltaU_f_ip1 = deltaU_f_ip1 * 0.239
             x_f_ip1, y_f_ip1 = compute_density(deltaU_f_ip1,
                                                normalize=normalize,
                                                trim_percentile=trim)
             if x_f_ip1.size > 0:
                 ax.plot(x_f_ip1, y_f_ip1, '--', color='black', label=f"Fwd i+1={i+1}")
 
-        # Bwd i => red solid
+        # Backward i => red solid
         if i < n_bwd:
             cLam_b_i, nLam_b_i, deltaU_b_i, _, _ = bwd_list[i]
+            if units.lower() == "kcal":
+                deltaU_b_i = deltaU_b_i * 0.239
             x_b_i, y_b_i = compute_density(deltaU_b_i,
                                            normalize=normalize,
                                            trim_percentile=trim)
             if x_b_i.size > 0:
                 ax.plot(x_b_i, y_b_i, '-', color='red', label=f"Bwd i={i}")
 
-        # Bwd i+1 => red dashed
+        # Backward i+1 => red dashed
         if (i + 1) < n_bwd:
             cLam_b_ip1, nLam_b_ip1, deltaU_b_ip1, _, _ = bwd_list[i+1]
+            if units.lower() == "kcal":
+                deltaU_b_ip1 = deltaU_b_ip1 * 0.239
             x_b_ip1, y_b_ip1 = compute_density(deltaU_b_ip1,
                                                normalize=normalize,
                                                trim_percentile=trim)
             if x_b_ip1.size > 0:
                 ax.plot(x_b_ip1, y_b_ip1, '--', color='red', label=f"Bwd i+1={i+1}")
 
-        # Title: show the forward lambdas if available
-        #title_str = []
-        #if i < n_fwd:
-        #    title_str.append(rf"Fwd {cLam_f_i:.3f}→{nLam_f_i:.3f}")
-        #if i < n_bwd:
-        #    title_str.append(rf"Bwd {cLam_b_i:.3f}→{nLam_b_i:.3f}")
-        #ax.set_title(" | ".join(title_str), fontsize=10)
         ax.set_title(rf"$\lambda = ${cLam_f_i:.3f}→{nLam_f_i:.3f}")
 
     # Hide extra subplots
@@ -363,12 +364,11 @@ def plot_dU_distributions_consecutive_grid(base_dir1,
         ax.set_xlabel("")
         ax.set_ylabel("")
 
-    # Common X-axis label
-    fig.text(0.5, 0.08, r"$\Delta U$ (kJ/mol)", ha="center", va="center", fontsize=30)
+    # Common X-axis label with units
+    fig.text(0.5, 0.08, fr"$\Delta U$ ({units}/mol)", ha="center", va="center", fontsize=30)
 
     # Decide Y-axis label depending on whether we have both dirs and whether we are normalizing
     if base_dir2 is None:
-        # Only forward data
         if normalize:
             ybox = TextArea("Scaled Density (Fwd)",
                             textprops=dict(color="k", size=30, rotation=90,
@@ -378,14 +378,11 @@ def plot_dU_distributions_consecutive_grid(base_dir1,
                             textprops=dict(color="k", size=30, rotation=90,
                                            ha='center', va='bottom'))
     else:
-        # Forward + backward
         if normalize:
-            # Composite label for scaled densities
             ybox = TextArea("Scaled Density",
                             textprops=dict(color="k", size=30, rotation=90,
                                            ha='center', va='bottom'))
         else:
-            # Composite label: black for fwd, red for bwd
             ybox1 = TextArea(r"$P_{fwd}(\Delta U)$",
                              textprops=dict(color="k", size=30, rotation=90,
                                             ha='center', va='bottom'))
@@ -422,7 +419,7 @@ def plot_dU_distributions_consecutive_grid(base_dir1,
 def main():
     parser = argparse.ArgumentParser(
         description=(
-            "Plot consecutive ΔU(λ_i->λ_{i+1}) distributions, skipping data before "
+            "Plot consecutive ΔU(λ_i→λ_{i+1}) distributions, skipping data before "
             "a specified time, optionally trimming outliers, optionally normalizing."
         )
     )
@@ -431,7 +428,7 @@ def main():
     parser.add_argument("base_dir2", nargs="?", default=None,
                         help="(Optional) second directory (backward).")
     parser.add_argument("--offset", type=int, default=0,
-                        help="Offset to apply to sX->data column.")
+                        help="Offset to apply to sX→data column.")
     parser.add_argument("--normalize", action="store_true",
                         help="If set, scale each distribution so its peak=1.")
     parser.add_argument("--trim", type=float, default=None,
@@ -443,6 +440,8 @@ def main():
                         help="Ignore all data rows with time < skip_time (ps).")
     parser.add_argument("--debug", action="store_true",
                         help="Enable debug prints.")
+    parser.add_argument("--units", type=str, default="kJ", choices=["kJ", "kcal"],
+                        help="Energy units to plot (default: kJ).")
     args = parser.parse_args()
 
     base1 = os.path.abspath(args.base_dir1)
@@ -455,7 +454,8 @@ def main():
         debug=args.debug,
         normalize=args.normalize,
         trim=args.trim,
-        skip_time=args.skip_time
+        skip_time=args.skip_time,
+        units=args.units
     )
 
 if __name__ == "__main__":

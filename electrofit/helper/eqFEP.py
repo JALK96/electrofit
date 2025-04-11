@@ -508,7 +508,15 @@ class eqFEP:
                 for r in range(1, self.replicas+1):
                     simpath = os.path.join(outLigPath, state, f"run{r}", simType)
                     if predecessor is None:
-                        inStruct = os.path.join(outLigPath, "ions.pdb")
+                        # Choose a fallback depending on what you actually have (for vacuum)
+                        if os.path.exists(os.path.join(outLigPath, "ions.pdb")):
+                            inStruct = os.path.join(outLigPath, "ions.pdb")
+                        elif os.path.exists(os.path.join(outLigPath, "water.pdb")):
+                            inStruct = os.path.join(outLigPath, "water.pdb")
+                        elif os.path.exists(os.path.join(outLigPath, "box.pdb")):
+                            inStruct = os.path.join(outLigPath, "box.pdb")
+                        else:
+                            inStruct = os.path.join(outLigPath, "init.pdb")
                     else:
                         inStruct = os.path.join(outLigPath, state, f"run{r}", predecessor, "confout.gro")
                     if simType == "em":
