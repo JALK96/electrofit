@@ -366,7 +366,7 @@ def plot_3curves_for_each_transition(base_dir,
     with open(txt_file, "w") as f:
         f.write("# cLam, nLam, sigma\n")
         for (cLam_, nLam_, s_) in sigma_records:
-            f.write(f"{cLam_:.6f} -> {nLam_:.6f}, sigma = {s_:.4f}\n")
+            f.write(f"{cLam_:.4f} -> {nLam_:.4f}, sigma = {s_:.4f}\n")
 
     print(f"[INFO] Saved sigma values to {txt_file}")
 

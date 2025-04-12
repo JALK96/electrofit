@@ -350,7 +350,7 @@ def plot_dU_distributions_consecutive_grid(base_dir1,
             if x_b_ip1.size > 0:
                 ax.plot(x_b_ip1, y_b_ip1, '--', color='red', label=f"Bwd i+1={i+1}")
 
-        ax.set_title(rf"$\lambda = ${cLam_f_i:.3f}→{nLam_f_i:.3f}")
+        ax.set_title(rf"{cLam_f_i:.4f}→{nLam_f_i:.4f}")
 
     # Hide extra subplots
     total_subplots = nrows * ncols
