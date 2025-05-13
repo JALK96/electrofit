@@ -1572,7 +1572,7 @@ sys.path.append(project_path)
 from electrofit.helper.file_manipulation import find_file_with_extension
 from electrofit.commands.run_commands import run_command
 # Define the base process directory
-process_dir = os.path.join(project_path, "process.nobackup")
+process_dir = os.path.join(project_path, "process")
 
 
 # Loop through each subdirectory in the process directory

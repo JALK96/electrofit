@@ -297,10 +297,11 @@ def plot_single_dir_dU(base_dir, invert_y=False, ax=None, offset_fix=0, debug=Fa
     cmap = plt.get_cmap("viridis")
 
     for i, (cLam, nLam, deltaU, col_idx, sdir_idx) in enumerate(dU_list):
-        print(f"Reading transition λ={cLam:.4f} to λ={nLam:.4f} "
-              f"from state {sdir_idx} (folder 'lambda_{sdir_idx}'), "
-              f"extracting data from column {col_idx}.\n"
-              f"First 10 ΔU values: {deltaU[:10]}")
+        if debug:
+            print(f"Reading transition λ={cLam:.4f} to λ={nLam:.4f} "
+                f"from state {sdir_idx} (folder 'lambda_{sdir_idx}'), "
+                f"extracting data from column {col_idx}.\n"
+                f"First 10 ΔU values: {deltaU[:10]}")
 
         color_val = i / (n_trans - 1) if n_trans > 1 else 0.0
         color = cmap(color_val)
@@ -367,7 +368,7 @@ def plot_dU_distributions_vertical(base_dir1, base_dir2=None, offset_fix=0, debu
         sm.set_array([])
         cbar = fig.colorbar(sm, ax=ax_top, orientation="vertical", fraction=0.05)
         cbar.set_label(r"$\lambda_j$")
-
+        plt.tight_layout()
         plt.savefig("plot_dU_single.pdf")
     else:
         fig, (ax_top, ax_bottom) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)

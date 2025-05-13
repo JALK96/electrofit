@@ -46,7 +46,19 @@ except ImportError:
         )
 
 
-sns.set_context("talk")
+
+sns.set_context("talk", font_scale=0.9)
+
+# ─────────────────────────────────────────────────────────────
+# MBAR solver settings – tweak here if convergence is difficult
+MBAR_OPTS: dict[str, float] = {
+    # stop Newton–Raphson after this many iterations (default 10000)
+    "maximum_iterations": 2000,
+    # fractional change in ΔG vector required for convergence (default 1e‑12)
+    "relative_tolerance": 1e-6,
+    "verbose": False,
+}
+# ─────────────────────────────────────────────────────────────
 
 # =============================================================================
 # 2. Import functions from alchemlyb used in the ABFE workflow
@@ -67,10 +79,7 @@ from alchemlyb.postprocessors.units import get_unit_converter
 from alchemlyb.preprocessing.subsampling import decorrelate_dhdl, decorrelate_u_nk
 
 # Plotting functions for diagnostics
-from alchemlyb.visualisation import (
-    plot_mbar_overlap_matrix,
-    plot_dF_state,
-)
+from alchemlyb.visualisation import plot_mbar_overlap_matrix
 
 # Function to concatenate a list of DataFrames
 from alchemlyb import concat
@@ -474,7 +483,7 @@ def plot_ti_dhdl(dhdl_data, labels=None, colors=None, units=None, ax=None):
             )
 
     if colors is None:
-        colors = ["r", "g", "#7F38EC", "#9F000F", "b", "y"]
+        colors = ["#6698FF", "r", "g", "#7F38EC", "#9F000F", "b", "y"]
     else:
         if len(colors) >= len(dhdl_list):
             pass
@@ -539,7 +548,7 @@ def plot_ti_dhdl(dhdl_data, labels=None, colors=None, units=None, ax=None):
         else:
             xt.append("")
 
-    plt.xticks(xs[1:], xt[1:], fontsize=16)
+    plt.xticks(xs[1:], xt[1:], fontsize=15)
     ax.yaxis.label.set_size(16)
 
     # Remove the abscissa ticks and set up the axes limits.
@@ -558,7 +567,7 @@ def plot_ti_dhdl(dhdl_data, labels=None, colors=None, units=None, ax=None):
         ax.annotate(
             ("{:.2f}".format(i - 1.0 if i > 1.0 else i) if not j == "" else ""),
             xy=(i, 0),
-            size=16,
+            size=15,
             rotation=90,
             va="bottom",
             ha="center",
@@ -589,12 +598,264 @@ def plot_ti_dhdl(dhdl_data, labels=None, colors=None, units=None, ax=None):
         ha="center",
         color="#151B54",
     )
-    lege = ax.legend(prop=FP(size=16), frameon=False, loc=1)
-    for l in lege.legend_handles:
-        l.set_linewidth(10)
+    #lege = ax.legend(prop=FP(size=16), frameon=False, loc=1)
+    #for l in lege.legend_handles:
+    #    l.set_linewidth(10)
     return ax
 
+def plot_dF_state(
+    estimators, labels=None, colors=None, units=None, orientation="portrait", nb=10
+):
+    """Plot the dhdl of TI.
 
+    Parameters
+    ----------
+    estimators : :class:`~alchemlyb.estimators` or list
+        One or more :class:`~alchemlyb.estimators`, where the
+        dhdl value will be taken from. For more than one estimators
+        with more than one alchemical transformation, a list of list format
+        is used.
+    labels : List
+        list of labels for labelling different estimators.
+    colors : List
+        list of colors for plotting different estimators.
+    units : str
+        The unit of the estimate. The default is `None`, which is to use the
+        unit in the input. Setting this will change the output unit.
+    orientation : string
+        The orientation of the figure. Can be `portrait` or `landscape`
+    nb : int
+        Maximum number of dF states in one row in the `portrait` mode
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        An Figure with the dF states drawn.
+
+    Note
+    ----
+    The code is taken and modified from
+    `Alchemical Analysis <https://github.com/MobleyLab/alchemical-analysis>`_.
+
+
+    .. versionchanged:: 1.0.0
+        If no units is given, the `units` in the input will be used.
+
+    .. versionchanged:: 0.5.0
+        The `units` will be used to change the underlying data instead of only
+        changing the figure legend.
+
+    .. versionadded:: 0.4.0
+    """
+    try:
+        len(estimators)
+    except TypeError:
+        estimators = [
+            estimators,
+        ]
+
+    formatted_data = []
+    for dhdl in estimators:
+        try:
+            len(dhdl)
+            formatted_data.append(dhdl)
+        except TypeError:
+            formatted_data.append(
+                [
+                    dhdl,
+                ]
+            )
+
+    if units is None:
+        units = formatted_data[0][0].delta_f_.attrs["energy_unit"]
+
+    estimators = formatted_data
+
+    # Get the dF
+    dF_list = []
+    error_list = []
+    max_length = 0
+    convert = get_unit_converter(units)
+    for dhdl_list in estimators:
+        len_dF = sum([len(dhdl.delta_f_) - 1 for dhdl in dhdl_list])
+        if len_dF > max_length:
+            max_length = len_dF
+        dF = []
+        error = []
+        for dhdl in dhdl_list:
+            for i in range(len(dhdl.delta_f_) - 1):
+                dF.append(convert(dhdl.delta_f_).iloc[i, i + 1])
+                error.append(convert(dhdl.d_delta_f_).iloc[i, i + 1])
+
+        dF_list.append(dF)
+        error_list.append(error)
+
+    # Get the determine orientation
+    if orientation == "landscape":
+        if max_length < 8:
+            fig, ax = plt.subplots(figsize=(8, 6))
+        else:
+            fig, ax = plt.subplots(figsize=(max_length, 6))
+        axs = [
+            ax,
+        ]
+        xs = [
+            np.arange(max_length),
+        ]
+    elif orientation == "portrait":
+        if max_length < nb:
+            xs = [
+                np.arange(max_length),
+            ]
+            fig, ax = plt.subplots(figsize=(8, 6))
+            axs = [
+                ax,
+            ]
+        else:
+            xs = np.array_split(np.arange(max_length), max_length / nb + 1)
+            fig, axs = plt.subplots(nrows=len(xs), figsize=(8, 6))
+        mnb = max([len(i) for i in xs])
+    else:
+        raise ValueError(
+            "Not recognising {}, only supports 'landscape' or 'portrait'.".format(
+                orientation
+            )
+        )
+
+    # Sort out the colors
+    if colors is None:
+        colors_dict = {
+            "TI": "#C45AEC",
+            "TI-CUBIC": "#33CC33",
+            "DEXP": "#F87431",
+            "IEXP": "#FF3030",
+            "GINS": "#EAC117",
+            "GDEL": "#347235",
+            "BAR": "#6698FF",
+            "UBAR": "#817339",
+            "RBAR": "#C11B17",
+            "MBAR": "#F9B7FF",
+        }
+        colors = []
+        for dhdl in estimators:
+            dhdl = dhdl[0]
+            if isinstance(dhdl, TI):
+                colors.append(colors_dict["TI"])
+            elif isinstance(dhdl, BAR):
+                colors.append(colors_dict["BAR"])
+            elif isinstance(dhdl, MBAR):
+                colors.append(colors_dict["MBAR"])
+    else:
+        if len(colors) >= len(estimators):
+            pass
+        else:
+            raise ValueError(
+                "Number of colors ({}) should be larger than the number of data ({})".format(
+                    len(colors), len(estimators)
+                )
+            )
+
+    # Sort out the labels
+    if labels is None:
+        labels = []
+        for dhdl in estimators:
+            dhdl = dhdl[0]
+            if isinstance(dhdl, TI):
+                labels.append("TI")
+            elif isinstance(dhdl, BAR):
+                labels.append("BAR")
+            elif isinstance(dhdl, MBAR):
+                labels.append("MBAR")
+    else:
+        if len(labels) == len(estimators):
+            pass
+        else:
+            raise ValueError(
+                "Length of labels ({}) should be the same as the number of data ({})".format(
+                    len(labels), len(estimators)
+                )
+            )
+
+    # Plot the figure
+    width = 1.0 / (len(estimators) + 1)
+    elw = 30 * width
+    ndx = 1
+    for x, ax in zip(xs, axs):
+        lines = []
+        for i, (dF, error) in enumerate(zip(dF_list, error_list)):
+            y = [dF[j] for j in x]
+            ye = [error[j] for j in x]
+            if orientation == "landscape":
+                lw = 0.1 * elw
+            elif orientation == "portrait":
+                lw = 0.05 * elw
+            line = ax.bar(
+                x + len(lines) * width,
+                y,
+                width,
+                color=colors[i],
+                yerr=ye,
+                lw=lw,
+                error_kw=dict(elinewidth=elw, ecolor="black", capsize=0.5 * elw),
+            )
+            lines += (line[0],)
+        for dir in ["left", "right", "top", "bottom"]:
+            if dir == "left":
+                ax.yaxis.set_ticks_position(dir)
+            else:
+                ax.spines[dir].set_color("none")
+
+        if orientation == "landscape":
+            plt.yticks(fontsize=12)
+            ax.set_xlim(x[0] - width, x[-1] + len(lines) * width)
+            plt.xticks(
+                x + 0.5 * width * len(estimators),
+                tuple([f"{i}--{i+1}" for i in x]),
+                fontsize=12,
+            )
+        elif orientation == "portrait":
+            #plt.yticks(fontsize=10)
+            ax.xaxis.set_ticks([])
+            for i in x + 0.5 * width * len(estimators):
+                ax.annotate(
+                    r"$\mathrm{%d-%d}$" % (i, i + 1),
+                    xy=(i, 0),
+                    xycoords=("data", "axes fraction"),
+                    xytext=(0, -2),
+                    size=10,
+                    textcoords="offset points",
+                    va="top",
+                    ha="center",
+                    rotation=15
+                )
+            ax.set_xlim(x[0] - width, x[-1] + len(lines) * width + (mnb - len(x)))
+        ndx += 1
+    x = np.arange(max_length)
+
+    ax = plt.gca()
+
+    for tick in ax.get_xticklines():
+        tick.set_visible(False)
+    if orientation == "landscape":
+        leg = plt.legend(lines, labels, loc=3, ncol=2, prop=FP(size=18), fancybox=True)
+        plt.title("The free energy change breakdown", fontsize=18)
+        plt.xlabel("States", fontsize=18, color="#151B54")
+        plt.ylabel(r"$\Delta G$ ({})".format(units), fontsize=18, color="#151B54")
+    elif orientation == "portrait":
+        leg = ax.legend(
+            lines,
+            labels,
+            loc=0,
+            ncol=2,
+            #title=r"$\Delta G$ ({})".format(units),
+            prop=FP(size=12),
+            fancybox=True,
+        )
+        #plt.ylabel(r"$\Delta G$ ({})".format(units), fontsize=18, color="#151B54")
+        fig.supylabel(r"$\Delta G$ ({})".format(units), fontsize=18, color="#151B54")
+
+    leg.get_frame().set_alpha(0.5)
+    return fig
 
 # =============================================================================
 # Command-Line Argument Parsing
@@ -623,6 +884,11 @@ def parse_args():
         "--skiptime", type=float, default=300,
         help="Skiptime in ps."
     )
+    parser.add_argument(
+        "--raw-only", action="store_true",
+        help="If set, skip all decorrelation and use only raw data."
+    )
+
     return parser.parse_args()
 
 # =============================================================================
@@ -630,6 +896,7 @@ def parse_args():
 # =============================================================================
 def main():
     args = parse_args()
+    raw_only = args.raw_only
     
     # Use command-line arguments for the base parameters.
     dir_input = args.inputdir
@@ -721,18 +988,22 @@ def main():
     # =============================================================================
     # 8. Preprocessing: Remove equilibration and decorrelate the data.
     # =============================================================================
-    logging.info(f"Preprocessing data (skiptime={skiptime}, uncorr={uncorr}, threshold={threshold}).")
+    logging.info(f"Preprocessing data (skiptime={skiptime}, uncorr={uncorr}, threshold={threshold}, raw_only={raw_only}).")
     u_nk_sample_list = []
     if u_nk_list:
         for index, df in enumerate(u_nk_list):
             df_proc = df[df.index.get_level_values("time") >= skiptime]
-            subsample = decorrelate_u_nk(df_proc, uncorr, remove_burnin=True)
-            if len(subsample) < threshold:
-                logging.warning(f"u_nk for state {index} has only {len(subsample)} uncorrelated samples (< {threshold}). Using full data.")
-                subsample = df_proc
+            if raw_only:
+                logging.info(f"State {index}: raw‑only flag set, skipping u_nk decorrelation.")
+                u_nk_sample_list.append(df_proc)
             else:
-                logging.info(f"State {index}: using {len(subsample)} uncorrelated u_nk samples.")
-            u_nk_sample_list.append(subsample)
+                subsample = decorrelate_u_nk(df_proc, uncorr, remove_burnin=True)
+                if len(subsample) < threshold:
+                    logging.warning(f"u_nk for state {index} has only {len(subsample)} uncorrelated samples (< {threshold}). Using full data.")
+                    subsample = df_proc
+                else:
+                    logging.info(f"State {index}: using {len(subsample)} uncorrelated u_nk samples.")
+                u_nk_sample_list.append(subsample)
     else:
         logging.info("No u_nk data available for decorrelation.")
 
@@ -740,13 +1011,17 @@ def main():
     if dHdl_list:
         for index, df in enumerate(dHdl_list):
             df_proc = df[df.index.get_level_values("time") >= skiptime]
-            subsample = decorrelate_dhdl(df_proc, remove_burnin=True)
-            if len(subsample) < threshold:
-                logging.warning(f"dHdl for state {index} has only {len(subsample)} uncorrelated samples (< {threshold}). Using full data.")
-                subsample = df_proc
+            if raw_only:
+                logging.info(f"State {index}: raw‑only flag set, skipping dHdl decorrelation.")
+                dHdl_sample_list.append(df_proc)
             else:
-                logging.info(f"State {index}: using {len(subsample)} uncorrelated dHdl samples.")
-            dHdl_sample_list.append(subsample)
+                subsample = decorrelate_dhdl(df_proc, remove_burnin=True)
+                if len(subsample) < threshold:
+                    logging.warning(f"dHdl for state {index} has only {len(subsample)} uncorrelated samples (< {threshold}). Using full data.")
+                    subsample = df_proc
+                else:
+                    logging.info(f"State {index}: using {len(subsample)} uncorrelated dHdl samples.")
+                dHdl_sample_list.append(subsample)
     else:
         logging.info("No dHdl data available for decorrelation.")
 
@@ -781,7 +1056,7 @@ def main():
         if estimator in FEP_ESTIMATORS:
             if estimator == "MBAR":
                 logging.info("Running MBAR estimator on decorrelated data.")
-                estimators_results["MBAR"] = MBAR().fit(u_nk_concat)
+                estimators_results["MBAR"] = MBAR(**MBAR_OPTS).fit(u_nk_concat)
             elif estimator == "BAR":
                 logging.info("Running BAR estimator on decorrelated data.")
                 estimators_results["BAR"] = BAR().fit(u_nk_concat)
@@ -813,7 +1088,7 @@ def main():
         if estimator in FEP_ESTIMATORS:
             if estimator == "MBAR":
                 logging.info("Running MBAR estimator on raw data.")
-                estimators_results_raw["MBAR"] = MBAR().fit(u_nk_raw_concat)
+                estimators_results_raw["MBAR"] = MBAR(**MBAR_OPTS).fit(u_nk_raw_concat)
             elif estimator == "BAR":
                 logging.info("Running BAR estimator on raw data.")
                 estimators_results_raw["BAR"] = BAR().fit(u_nk_raw_concat)
@@ -910,64 +1185,81 @@ def main():
     # =============================================================================
     # 12. Generate diagnostic plots for decorrelated data.
     # =============================================================================
-    # 12a. MBAR Overlap Matrix.
-    if "MBAR" in estimators_results:
-        logging.info("Plotting MBAR overlap matrix (decorrelated).")
-        ax_overlap = plot_mbar_overlap_matrix(estimators_results["MBAR"].overlap_matrix)
-        overlap_file = os.path.join(dir_output, "O_MBAR.pdf")
-        ax_overlap.figure.savefig(overlap_file)
-        plt.close(ax_overlap.figure)
-        logging.info(f"Overlap matrix (decorrelated) saved to {overlap_file}")
-    else:
-        logging.warning("MBAR estimator not available for decorrelated data; skipping overlap plot.")
-    
-    # 12b. TI dH/dλ Plot.
-    if "TI" in estimators_results:
-        logging.info("Plotting TI dH/dλ curve (decorrelated).")
-        # Here, we pass the TI estimator object; its separate_dhdl() method will be used.
-        ax_ti = plot_ti_dhdl(estimators_results["TI"], units=energy_units)
-        ti_file = os.path.join(dir_output, "dhdl_TI.pdf")
-        ax_ti.figure.tight_layout()
-        ax_ti.figure.savefig(ti_file)
-        plt.close(ax_ti.figure)
-        logging.info(f"TI dH/dλ plot (decorrelated) saved to {ti_file}")
-    else:
-        logging.warning("TI estimator not available for decorrelated data; skipping TI dH/dλ plot.")
-    
-    # 12c. Free Energy State Differences.
-    logging.info("Plotting free energy state differences (decorrelated).")
-    fig_df = plot_dF_state(estimators_results.values(), units=energy_units, orientation="portrait", nb=10, colors = ["#C45AEC", "#6698FF", "#F9B7FF", "#33CC33", "#F87431", "#817339"])
-    df_state_file = os.path.join(dir_output, "dF_state.pdf")
-    fig_df.tight_layout()
-    fig_df.savefig(df_state_file)
-    plt.close(fig_df)
-    logging.info(f"Free energy state differences (portrait, decorrelated) saved to {df_state_file}")
-    fig_df_land = plot_dF_state(estimators_results.values(), units=energy_units, orientation="landscape", nb=10, colors = ["#C45AEC", "#6698FF", "#F9B7FF", "#33CC33", "#F87431", "#817339"])
-    df_state_long_file = os.path.join(dir_output, "dF_state_long.pdf")
-    fig_df_land.tight_layout()
-    fig_df_land.savefig(df_state_long_file)
-    plt.close(fig_df_land)
-    logging.info(f"Free energy state differences (landscape, decorrelated) saved to {df_state_long_file}")
-    
-    # 12d. Convergence Analysis.
-    if "MBAR" in estimators_results:
-        data_for_conv = u_nk_sample_list if u_nk_sample_list else u_nk_list
-        conv_estimator = "MBAR"
-    elif "TI" in estimators_results:
-        data_for_conv = dHdl_sample_list if dHdl_sample_list else dHdl_list
-        conv_estimator = "TI"
-    else:
-        raise ValueError("No suitable estimator available for decorrelated convergence analysis.")
-    logging.info(f"Performing convergence analysis (decorrelated) with {conv_estimator}.")
-    convergence_df = forward_backward_convergence(data_for_conv, estimator=conv_estimator, num=convergence_num_points)
-    converted_conv = get_unit_converter(energy_units)(convergence_df)
-    converted_conv["data_fraction"] = convergence_df["data_fraction"]
-    ax_conv = plot_convergence(converted_conv, units=energy_units)
-    conv_file = os.path.join(dir_output, "dF_t.pdf")
-    ax_conv.figure.tight_layout()
-    ax_conv.figure.savefig(conv_file)
-    plt.close(ax_conv.figure)
-    logging.info(f"Convergence plot (decorrelated) saved to {conv_file}")
+    if not raw_only:
+        # 12a. MBAR Overlap Matrix.
+        if "MBAR" in estimators_results:
+            logging.info("Plotting MBAR overlap matrix (decorrelated).")
+            ax_overlap = plot_mbar_overlap_matrix(estimators_results["MBAR"].overlap_matrix)
+            overlap_file = os.path.join(dir_output, "O_MBAR.pdf")
+            ax_overlap.figure.savefig(overlap_file)
+            plt.close(ax_overlap.figure)
+            logging.info(f"Overlap matrix (decorrelated) saved to {overlap_file}")
+        else:
+            logging.warning("MBAR estimator not available for decorrelated data; skipping overlap plot.")
+        
+        # 12b. TI dH/dλ Plot.
+        if "TI" in estimators_results:
+            logging.info("Plotting TI dH/dλ curve (decorrelated).")
+            # Here, we pass the TI estimator object; its separate_dhdl() method will be used.
+            ax_ti = plot_ti_dhdl(estimators_results["TI"], units=energy_units)
+            ti_file = os.path.join(dir_output, "dhdl_TI.pdf")
+            ax_ti.figure.tight_layout()
+            ax_ti.figure.savefig(ti_file)
+            plt.close(ax_ti.figure)
+            logging.info(f"TI dH/dλ plot (decorrelated) saved to {ti_file}")
+        else:
+            logging.warning("TI estimator not available for decorrelated data; skipping TI dH/dλ plot.")
+        
+        # 12c. Free Energy State Differences.
+        logging.info("Plotting free energy state differences (decorrelated).")
+        print(estimators_results.values())
+        print(estimators_results)
+        fig_df = plot_dF_state(estimators_results.values(), units=energy_units, orientation="portrait", nb=10)
+        df_state_file = os.path.join(dir_output, "dF_state.pdf")
+        fig_df.tight_layout()
+        fig_df.savefig(df_state_file)
+        plt.close(fig_df)
+        logging.info(f"Free energy state differences (portrait, decorrelated) saved to {df_state_file}")
+        fig_df_land = plot_dF_state(estimators_results.values(), units=energy_units, orientation="landscape", nb=10)
+        df_state_long_file = os.path.join(dir_output, "dF_state_long.pdf")
+        fig_df_land.tight_layout()
+        fig_df_land.savefig(df_state_long_file)
+        plt.close(fig_df_land)
+        logging.info(f"Free energy state differences (landscape, decorrelated) saved to {df_state_long_file}")
+        
+        # 12d. Convergence Analysis.
+
+        if "MBAR" in estimators_results:
+            data_for_conv = u_nk_sample_list if u_nk_sample_list else u_nk_list
+            conv_estimator = "MBAR"
+        elif "TI" in estimators_results:
+            data_for_conv = dHdl_sample_list if dHdl_sample_list else dHdl_list
+            conv_estimator = "TI"
+        else:
+            raise ValueError("No suitable estimator available for decorrelated convergence analysis.")
+        
+        #------------override for testing purposes
+        #data_for_conv = dHdl_sample_list if dHdl_sample_list else dHdl_list
+        #conv_estimator = "TI"
+        #------------override for testing purposes
+
+        logging.info(f"Performing convergence analysis (decorrelated) with {conv_estimator}.")
+        if conv_estimator == "MBAR":
+            convergence_df = forward_backward_convergence(data_for_conv, estimator=conv_estimator, num=convergence_num_points, **MBAR_OPTS)
+        elif conv_estimator == "TI":
+            convergence_df = forward_backward_convergence(data_for_conv, estimator=conv_estimator, num=convergence_num_points)
+        else:
+            raise ValueError(f"Estimator {conv_estimator} is not recognized for convergence analysis.")
+        logging.info("Convergence analysis results:")
+        logging.info(convergence_df.to_string())
+        converted_conv = get_unit_converter(energy_units)(convergence_df)
+        converted_conv["data_fraction"] = convergence_df["data_fraction"]
+        ax_conv = plot_convergence(converted_conv, units=energy_units)
+        conv_file = os.path.join(dir_output, "dF_t.pdf")
+        ax_conv.figure.tight_layout()
+        ax_conv.figure.savefig(conv_file)
+        plt.close(ax_conv.figure)
+        logging.info(f"Convergence plot (decorrelated) saved to {conv_file}")
 
     # =============================================================================
     # 13. Raw (correlated) Data: Repeat summary and plots for raw data.
@@ -1062,13 +1354,13 @@ def main():
         logging.warning("TI estimator not available for raw data; skipping TI dH/dλ plot.")
     
     logging.info("Plotting free energy state differences (raw data).")
-    fig_df_raw = plot_dF_state(estimators_results_raw.values(), units=energy_units, orientation="portrait", nb=10, colors = ["#C45AEC", "#6698FF", "#F9B7FF", "#33CC33", "#F87431", "#817339"])
+    fig_df_raw = plot_dF_state(estimators_results_raw.values(), units=energy_units, orientation="portrait", nb=10)
     df_state_file_raw = os.path.join(dir_output, "dF_state_raw.pdf")
     fig_df_raw.tight_layout()
     fig_df_raw.savefig(df_state_file_raw)
     plt.close(fig_df_raw)
     logging.info(f"Free energy state differences (portrait, raw data) saved to {df_state_file_raw}")
-    fig_df_raw_land = plot_dF_state(estimators_results_raw.values(), units=energy_units, orientation="landscape", nb=10, colors = ["#C45AEC", "#6698FF", "#F9B7FF", "#33CC33", "#F87431", "#817339"])
+    fig_df_raw_land = plot_dF_state(estimators_results_raw.values(), units=energy_units, orientation="landscape", nb=10)
     df_state_long_file_raw = os.path.join(dir_output, "dF_state_long_raw.pdf")
     fig_df_raw_land.tight_layout()
     fig_df_raw_land.savefig(df_state_long_file_raw)
@@ -1083,8 +1375,22 @@ def main():
         conv_estimator_raw = "TI"
     else:
         raise ValueError("No suitable estimator available for raw convergence analysis.")
+    
+    #------------override for testing purposes
+    #data_for_conv_raw = dHdl_list
+    #conv_estimator_raw = "TI"
+    #------------override for testing purposes
+
     logging.info(f"Performing convergence analysis (raw data) with {conv_estimator_raw}.")
-    convergence_df_raw = forward_backward_convergence(data_for_conv_raw, estimator=conv_estimator_raw, num=convergence_num_points)
+    if conv_estimator_raw == "MBAR":
+        convergence_df_raw = forward_backward_convergence(data_for_conv_raw, estimator=conv_estimator_raw, num=convergence_num_points, **MBAR_OPTS)
+    elif conv_estimator_raw == "TI":
+        convergence_df_raw = forward_backward_convergence(data_for_conv_raw, estimator=conv_estimator_raw, num=convergence_num_points)
+    else:
+        raise ValueError(f"Estimator {conv_estimator_raw} is not recognized for convergence analysis.")
+    logging.info("Convergence analysis results:")
+    logging.info(convergence_df_raw.to_string())
+
     converted_conv_raw = get_unit_converter(energy_units)(convergence_df_raw)
     converted_conv_raw["data_fraction"] = convergence_df_raw["data_fraction"]
     ax_conv_raw = plot_convergence(converted_conv_raw, units=energy_units)

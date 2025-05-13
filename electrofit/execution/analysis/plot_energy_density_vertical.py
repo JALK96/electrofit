@@ -37,6 +37,7 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 import seaborn as sns
+from matplotlib.ticker import ScalarFormatter
 
 sns.set_context("talk", font_scale=1.2)
 
@@ -118,6 +119,15 @@ def plot_single_subdir_set(base_dir, energy_term=10, invert_y=False, ax=None, ti
 
     ax.set_title(title)
     ax.set_ylabel(r"$P_{fwd}(E)$")
+
+    # ✅ Enable scientific notation on the y-axis
+    formatter = ScalarFormatter(useMathText=True)
+    formatter.set_scientific(True)
+    formatter.set_powerlimits((-1, 1))  # scientific notation outside [10^-2, 10^3]
+    ax.yaxis.set_major_formatter(formatter)
+
+    # Optional: show exponent as offset text
+    ax.ticklabel_format(axis='y', style='sci', scilimits=(-2, 3))
     if invert_y:
         ax.invert_yaxis()
 
@@ -131,6 +141,8 @@ def plot_energy_density_vertical(base_dir1, base_dir2=None, energy_term=10, unit
     Instead of legends for each lambda window, we include a colorbar indicating
     the lambda index range from 0 to 1 (top) or 1 to 0 (bottom).
     """
+    import matplotlib.ticker as ticker  # Optional: used for MaxNLocator if preferred
+
     # If only one directory is given: single subplot
     if base_dir2 is None:
         fig, ax_top = plt.subplots(1, 1, figsize=(10, 5))
@@ -143,12 +155,18 @@ def plot_energy_density_vertical(base_dir1, base_dir2=None, energy_term=10, unit
         )
         ax_top.set_xlabel(f"Energy ({units}/mol)")
         
+        # Adjust x-tick label font size to avoid overlapping
+        #ax_top.tick_params(axis='x', labelsize=8)
+        # Alternatively, if you prefer to reduce the number of labels:
+        ax_top.xaxis.set_major_locator(ticker.MaxNLocator(nbins=5))
+
         # Create a colorbar from 0→1
         norm = matplotlib.colors.Normalize(vmin=0, vmax=1)
         sm = plt.cm.ScalarMappable(cmap="viridis", norm=norm)
         sm.set_array([])
         cbar = fig.colorbar(sm, ax=ax_top, orientation="vertical", fraction=0.05)
         cbar.set_label(r"$\lambda$")
+        
         plt.tight_layout()
         plt.savefig("plot_single_E.pdf")
 
@@ -165,6 +183,10 @@ def plot_energy_density_vertical(base_dir1, base_dir2=None, energy_term=10, unit
             title="A → B"
         )
         ax_top.set_ylabel(r"$P_{fwd}(E)$")
+        # Optional: adjust top subplot x-tick label size if needed
+        #ax_top.tick_params(axis='x', labelsize=8)
+        # Or, to limit number of labels:
+        # ax_top.xaxis.set_major_locator(ticker.MaxNLocator(nbins=5))
 
         # Bottom subplot: 1→0 color scale
         plot_single_subdir_set(
@@ -176,12 +198,12 @@ def plot_energy_density_vertical(base_dir1, base_dir2=None, energy_term=10, unit
         )
         ax_bottom.set_ylabel(r"$P_{bwd}(E)$")
         ax_bottom.set_xlabel(f"Energy ({units}/mol)")
+        # Adjust x-tick label font size to avoid overlapping
+        #ax_bottom.tick_params(axis='x', labelsize=8)
+        # Alternatively, to reduce the number of ticks:
+        ax_bottom.xaxis.set_major_locator(ticker.MaxNLocator(nbins=5))
 
-        # Create a colorbar for each subplot that indicates the indexing:
-        #   top: 0→1, bottom: 1→0
-        # We can do it with two colorbars or a single colorbar. 
-        # For clarity, let's do a single colorbar showing 0→1:
-
+        # Create a colorbar for both subplots indicating the indexing:
         norm = matplotlib.colors.Normalize(vmin=0, vmax=1)
         sm = plt.cm.ScalarMappable(cmap="viridis", norm=norm)
         sm.set_array([])

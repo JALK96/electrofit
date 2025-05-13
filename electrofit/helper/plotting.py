@@ -1132,6 +1132,15 @@ def plot_charges_by_atom_new_4(atoms_dict1, initial_charges_dict, base_dir, atom
         color_map[H7_label] = 'dimgrey'
 
     # Plotting
+    # 1) Set global font sizes:
+    plt.rcParams['font.family']    = 'serif'
+    plt.rcParams['font.serif']  = ['Times', 'DejaVu Serif']
+    plt.rcParams['font.size']      = 13     # base font size
+    plt.rcParams['axes.titlesize'] = 15
+    plt.rcParams['axes.labelsize'] = 15
+    plt.rcParams['xtick.labelsize']= 13
+    plt.rcParams['ytick.labelsize']= 13
+    plt.rcParams['legend.fontsize']= 13
     fig, ax = plt.subplots(figsize=(8, 6))  # Adjust the figure size as needed
 
     positions = np.arange(len(atom_names))
@@ -1205,7 +1214,7 @@ def plot_charges_by_atom_new_4(atoms_dict1, initial_charges_dict, base_dir, atom
         'color':  'black',
         'weight': 'normal',
         'style': 'normal',
-        'size': 10,
+        'size': 12,
     }
 
     # Bracket coefficient (controls curvature)
@@ -1245,10 +1254,10 @@ def plot_charges_by_atom_new_4(atoms_dict1, initial_charges_dict, base_dir, atom
 
     # Labeling
     ax.set_ylabel('Atomic Partial Charge (e)')
-    if avg_sum2 is not None:
-        ax.set_title(f'Charge Distribution for Each Atom\n(Average Sum Dataset 1: {round(avg_sum1, 4)}, Dataset 2: {round(avg_sum2, 4)})')
-    else:
-        ax.set_title(f'Charge Distribution for Each Atom (Average Sum: {round(avg_sum1, 4)})')
+    #if avg_sum2 is not None:
+    #    ax.set_title(f'Charge Distribution for Each Atom\n(Average Sum Dataset 1: {round(avg_sum1, 4)}, Dataset 2: {round(avg_sum2, 4)})')
+    #else:
+    #    ax.set_title(f'Charge Distribution for Each Atom (Average Sum: {round(avg_sum1, 4)})')
 
     # Create custom legend
     handles = []
@@ -1271,7 +1280,7 @@ def plot_charges_by_atom_new_4(atoms_dict1, initial_charges_dict, base_dir, atom
             plt.Line2D([], [], color='grey', alpha=0.7, marker='s', linestyle='None', markersize=10, label='Dataset 1')
         )
 
-    ax.legend(handles=handles, title='Legend', frameon=False)
+    ax.legend(handles=handles, title='Legend', frameon=False, title_fontsize=16)
 
     # Save and close the plot
     plt.tight_layout()

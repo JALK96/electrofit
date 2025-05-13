@@ -277,12 +277,12 @@ def plot_3curves_for_each_transition(base_dir,
 
             ax.plot(xvals, pvals, 'k-', label="P(ΔU)")
             ax.plot(xvals, expvals, 'k--', label="exp(-βΔU)")
-            ax.plot(xvals, productvals, 'b-', label="P(ΔU)*exp(-βΔU)")
+            ax.plot(xvals, productvals, ls='-', c="#6698FF", label="P(ΔU)*exp(-βΔU)")
             ax.set_ylim(bottom=0, top=1.05)
         else:
             ax.plot(xvals, pvals, 'k-', label="P(ΔU)")
             ax.plot(xvals, expvals, 'k--', label="exp(-βΔU)")
-            ax.plot(xvals, productvals, 'b-', label="P(ΔU)*exp(-βΔU)")
+            ax.plot(xvals, productvals, ls='-', c="#6698FF", label="P(ΔU)*exp(-βΔU)")
             pmax = np.max(pvals)
             if pmax > 0:
                 ax.set_ylim(bottom=0, top=1.05 * pmax)
@@ -313,7 +313,7 @@ def plot_3curves_for_each_transition(base_dir,
                          textprops=dict(color="k", size=30, rotation=90,
                                         ha='center', va='bottom'))
         ybox3 = TextArea(r"$P(\Delta U) \times \exp[-\beta \Delta U]$",
-                         textprops=dict(color="blue", size=30, rotation=90,
+                         textprops=dict(color="#6698FF", size=30, rotation=90,
                                         ha='center', va='bottom'))
         ybox = VPacker(children=[ybox3, ybox2, ybox1],
                        align="center", pad=0, sep=2)
@@ -336,7 +336,7 @@ def plot_3curves_for_each_transition(base_dir,
                          textprops=dict(color="k", size=30, rotation=90,
                                         ha='center', va='bottom'))
         ybox3 = TextArea(r"$P(\Delta U) \times \exp[-\beta \Delta U]$",
-                         textprops=dict(color="blue", size=30, rotation=90,
+                         textprops=dict(color="#6698FF", size=30, rotation=90,
                                         ha='center', va='bottom'))
         ybox = VPacker(children=[ybox3, ybox2, ybox1],
                        align="center", pad=0, sep=2)

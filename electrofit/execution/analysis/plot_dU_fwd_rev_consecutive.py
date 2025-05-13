@@ -337,7 +337,7 @@ def plot_dU_distributions_consecutive_grid(base_dir1,
                                            normalize=normalize,
                                            trim_percentile=trim)
             if x_b_i.size > 0:
-                ax.plot(x_b_i, y_b_i, '-', color='red', label=f"Bwd i={i}")
+                ax.plot(x_b_i, y_b_i, '-', color='crimson', label=f"Bwd i={i}")
 
         # Backward i+1 => red dashed
         if (i + 1) < n_bwd:
@@ -348,7 +348,7 @@ def plot_dU_distributions_consecutive_grid(base_dir1,
                                                normalize=normalize,
                                                trim_percentile=trim)
             if x_b_ip1.size > 0:
-                ax.plot(x_b_ip1, y_b_ip1, '--', color='red', label=f"Bwd i+1={i+1}")
+                ax.plot(x_b_ip1, y_b_ip1, '--', color='crimson', label=f"Bwd i+1={i+1}")
 
         ax.set_title(rf"{cLam_f_i:.4f}→{nLam_f_i:.4f}")
 
@@ -390,7 +390,7 @@ def plot_dU_distributions_consecutive_grid(base_dir1,
                              textprops=dict(color="k", size=30, rotation=90,
                                             ha='center', va='bottom'))
             ybox3 = TextArea(r"$P_{bwd}(\Delta U)$",
-                             textprops=dict(color="red", size=30, rotation=90,
+                             textprops=dict(color="crimson", size=30, rotation=90,
                                             ha='center', va='bottom'))
             ybox = VPacker(children=[ybox3, ybox2, ybox1],
                            align="center", pad=0, sep=2)

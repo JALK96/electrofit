@@ -3,6 +3,9 @@ import logging
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
+# Set the style for seaborn
+sns.set_context("talk")
 
 def find_project_root(current_dir, project_name="electrofit"):
     """
@@ -100,9 +103,9 @@ def plot_all_distances_subplots(output_prefix, num_groups, plot_filename='all_di
                     fontsize=12, bbox=dict(facecolor='white', alpha=0, edgecolor='none'))
 
             ax.set_title(f"{group_label} - Na$^+$", fontsize=14)
-            ax.set_xlabel('Time (ns)', fontsize=12)
+            ax.set_xlabel('Time (ns)')
             if i % ncols == 1:
-                ax.set_ylabel('Distance (nm)', fontsize=12)
+                ax.set_ylabel('Distance (nm)')
             ax.grid(False)
         except Exception as e:
             ax.text(0.5, 0.5, 'Error loading data', ha='center',
@@ -110,7 +113,7 @@ def plot_all_distances_subplots(output_prefix, num_groups, plot_filename='all_di
             ax.set_title(f"Distance: P{i} - NA (Error)", fontsize=14)
 
     plt.tight_layout()
-    fig.suptitle('Minimum Distances Between Phosphorus Groups and Na-Ions', fontsize=18, y=1.05)
+    #fig.suptitle('Minimum Distances Between Phosphorus Groups and Na-Ions', fontsize=18, y=1.05)
     plt.savefig(plot_filename, dpi=300, bbox_inches='tight')
     # plt.show()  # Uncomment if you want to display
     logging.disable(logging.NOTSET)
@@ -173,9 +176,9 @@ def plot_ion_counts_subplots(output_prefix, groups, plot_filename='ion_counts_su
                     fontsize=12, bbox=dict(facecolor='white', alpha=0.7, edgecolor='none'))
 
             ax.set_title(f"{group} Ion Count", fontsize=14)
-            ax.set_xlabel('Time (ns)', fontsize=12)
+            ax.set_xlabel('Time (ns)')
             if i % ncols == 0:
-                ax.set_ylabel('# of Na+ ions', fontsize=12)
+                ax.set_ylabel('# of Na+ ions')
             ax.grid(False)
         except Exception as e:
             ax.text(0.5, 0.5, 'Error loading data', ha='center',
@@ -187,7 +190,7 @@ def plot_ion_counts_subplots(output_prefix, groups, plot_filename='ion_counts_su
         fig.delaxes(axes[j])
 
     plt.tight_layout()
-    fig.suptitle('Number of Na+ Ions Within Cutoff Distance', fontsize=18, y=1.05)
+    #fig.suptitle('Number of Na+ Ions Within Cutoff Distance', fontsize=18, y=1.05)
     plt.savefig(plot_filename, dpi=300, bbox_inches='tight')
     # plt.show()
     logging.disable(logging.NOTSET)
@@ -230,7 +233,7 @@ def plot_whole_molecule_ion_count(xvg_file, plot_filename='ion_count_whole_mol.p
         plt.text(0.95, 0.1, f"Mean: {mean_count:.1f}",
                  ha='right', va='top', transform=plt.gca().transAxes, color='red',
                  fontsize=12, bbox=dict(facecolor='white', alpha=0.7, edgecolor='none'))
-        plt.title('Na+ Ion Count Near Entire Molecule')
+        #plt.title('Na+ Ion Count Near Entire Molecule')
         plt.xlabel('Time (ns)')
         plt.ylabel('# of Na+ ions')
         plt.tight_layout()
@@ -245,7 +248,7 @@ def plot_whole_molecule_ion_count(xvg_file, plot_filename='ion_count_whole_mol.p
 # ----------------------------
 def main():
     # Define the base process directory
-    process_dir = os.path.join(project_path, "process.nobackup")
+    process_dir = os.path.join(project_path, "process")
 
     # Loop through each subdirectory in the process directory
     for folder_name in os.listdir(process_dir):

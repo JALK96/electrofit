@@ -3,6 +3,9 @@ import logging
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
+# Set the style for seaborn
+sns.set_context("talk")
 
 def find_project_root(current_dir, project_name="electrofit"):
     root = None
@@ -126,9 +129,9 @@ def plot_all_distances_subplots(output_prefix, num_groups, plot_filename='all_di
                     bbox=dict(facecolor='white', alpha=0, edgecolor='none'))
 
             ax.set_title(f"{group_label} - Na$^+$", fontsize=14)
-            ax.set_xlabel('Time (ns)', fontsize=12)
+            ax.set_xlabel('Time (ns)')
             if i % ncols == 1:  # Set y-label only on the first column
-                ax.set_ylabel('Distance (nm)', fontsize=12)
+                ax.set_ylabel('Distance (nm)')
             ax.grid(False)
         except Exception as e:
             ax.text(0.5, 0.5, 'Error loading data', horizontalalignment='center', 
@@ -158,7 +161,7 @@ def plot_all_distances_subplots(output_prefix, num_groups, plot_filename='all_di
 
 def main():
     # Define the base process directory
-    process_dir = os.path.join(project_path, "process.nobackup")
+    process_dir = os.path.join(project_path, "process")
 
     # Loop through each subdirectory in the process directory
     for folder_name in os.listdir(process_dir):

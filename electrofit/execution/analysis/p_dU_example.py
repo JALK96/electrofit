@@ -54,4 +54,4 @@ ax.set_xlim([-1.0, 0.6])
 ax.set_ylim([0.0, 2.4])
 
 plt.tight_layout()
-plt.savefig("plot.pdf")
+plt.savefig("plot.pdf", transparent=True)

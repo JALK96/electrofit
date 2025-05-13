@@ -322,58 +322,41 @@ def expand_phosphate_data_for_violins(df_phosphate):
 import matplotlib.pyplot as plt
 import networkx as nx
 
-def draw_phosphorus_diagram(species_id, top_three_map):
+def draw_phosphorus_diagram_old(species_id, top_three_map, edge_weights=None):
     """
-    Draws a simple directed graph (P1..P6) showing donor->target relationships:
-      - first-target edges (red), straight (rad=0.0)
-      - second-target edges (black), slight positive curve (rad=+0.2)
-      - third-target edges (blue), slight negative curve (rad=-0.2)
-    Also re-maps the node positions so that P1 is placed where P3 normally sits
-    in the default NetworkX circular layout.
-    
-    Parameters
-    ----------
-    species_id : str
-        Unique identifier (e.g. "101111") that appears in the figure's title
-    top_three_map : dict
-        Dictionary mapping donor (1..6) -> {rank: target}, for ranks in {"first","second","third"}.
-        Example:
-          {
-            1: {"first": 1, "second": 2, "third": 6},
-            2: {"first": 3, "second": 1, "third": 5},
-            3: {"first": 4, "second": 2},
-            ...
-          }
+    Draws a directed graph (P1..P6) showing donor->target relationships:
+      - first‑target edges (red), straight except reciprocals
+      - second‑target edges (black), curved rad=+0.2
+      - third‑target edges (blue), curved rad=-0.2
+    Reciprocals in the first‑tier are each given a slight opposite curvature
+    so their arrows don’t exactly overlap.
     """
+    if edge_weights is None:
+        edge_weights = {}
 
-    # 1) Build a DiGraph with nodes P1..P6
+    # 1) Nodes
     G = nx.DiGraph()
     for i in range(1, 7):
         G.add_node(i)
 
-    # 2) Add edges, storing rank in edge attribute
-    for donor, ranks_dict in top_three_map.items():
-        for rank, target in ranks_dict.items():
+    # 2) Add edges with rank attribute
+    for donor, ranks in top_three_map.items():
+        for rank, target in ranks.items():
             G.add_edge(donor, target, rank=rank)
 
-    # 3) Compute a circular layout, then re-map so P1 => oldpos[3], etc.
+    # 3) Custom circular layout (rotate so P1 sits where P3 normally is)
     oldpos = nx.circular_layout(G)
-    # We want P1 to go where P3 was, then continue around the circle
-    newpos = {
-        1: oldpos[3],  # P1 placed at old P3's location
+    pos = {
+        1: oldpos[3],
         2: oldpos[4],
         3: oldpos[5],
         4: oldpos[6],
         5: oldpos[1],
         6: oldpos[2],
     }
-    pos = newpos 
 
-
-    # 4) Prepare figure
-    plt.figure(figsize=(8,6))
-
-    # Draw nodes
+    # 4) Prep figure & draw nodes
+    plt.figure(figsize=(8, 6))
     nx.draw_networkx_nodes(
         G, pos,
         node_color="lightgray",
@@ -381,64 +364,215 @@ def draw_phosphorus_diagram(species_id, top_three_map):
         node_size=1300
     )
 
-    # 5) Separate edges by rank => different color/arc
-    edges_first  = [(u,v) for (u,v,d) in G.edges(data=True) if d['rank'] == "first"]
-    edges_second = [(u,v) for (u,v,d) in G.edges(data=True) if d['rank'] == "second"]
-    edges_third  = [(u,v) for (u,v,d) in G.edges(data=True) if d['rank'] == "third"]
+    # 5) Split edges by rank
+    edges_first  = [(u, v) for u, v, d in G.edges(data=True) if d['rank'] == "first"]
+    edges_second = [(u, v) for u, v, d in G.edges(data=True) if d['rank'] == "second"]
+    edges_third  = [(u, v) for u, v, d in G.edges(data=True) if d['rank'] == "third"]
 
-    # 6) Draw edges
-    # First => red, rad=0.0 (straight)
+    #  ––– edge‑width scaling
+    min_w, max_w = 1.0, 6.0
+    if edge_weights:
+        max_val = max(edge_weights.values()) or 1.0
+        def scale(t):
+            return min_w + (max_w - min_w) * (t / max_val)
+    else:
+        scale = lambda t: min_w
+
+    # 6a) Handle first‑tier (red) edges, separating reciprocals
+    # find all mutual pairs (u->v AND v->u) with u<v to avoid double‑count
+    mutual = [(u, v) for (u, v) in edges_first if (v, u) in edges_first and u < v]
+    mutual_set = set(mutual) | set((v, u) for (u, v) in mutual)
+    nonmutual = [e for e in edges_first if e not in mutual_set]
+
+    # draw the non‑reciprocal straight
     nx.draw_networkx_edges(
         G, pos,
-        edgelist=edges_first,
+        edgelist=nonmutual,
+        width=[scale(edge_weights.get(e, 0.0)) for e in nonmutual],
         edge_color="red",
-        arrows=True,
-        arrowstyle='-|>',
-        arrowsize=20,
+        arrows=True, arrowstyle='-|>', arrowsize=20,
         connectionstyle="arc3,rad=0.0",
-        min_source_margin=45,
-        min_target_margin=45
+        min_source_margin=45, min_target_margin=45
     )
-    # Second => black, rad=+0.2
+
+    # draw each reciprocal with slight +/‑ curvature
+    for u, v in mutual:
+        w_uv = scale(edge_weights.get((u, v), 0.0))
+        w_vu = scale(edge_weights.get((v, u), 0.0))
+        nx.draw_networkx_edges(
+            G, pos,
+            edgelist=[(u, v)],
+            width=[w_uv],
+            edge_color="red",
+            arrows=True, arrowstyle='-|>', arrowsize=20,
+            connectionstyle="arc3,rad=+0.2",
+            min_source_margin=45, min_target_margin=45
+        )
+        nx.draw_networkx_edges(
+            G, pos,
+            edgelist=[(v, u)],
+            width=[w_vu],
+            edge_color="red",
+            arrows=True, arrowstyle='-|>', arrowsize=20,
+            connectionstyle="arc3,rad=+0.2",
+            min_source_margin=45, min_target_margin=45
+        )
+
+    # 6b) Second‑tier (black)
     nx.draw_networkx_edges(
         G, pos,
         edgelist=edges_second,
+        width=[scale(edge_weights.get(e, 0.0)) for e in edges_second],
         edge_color="black",
-        arrows=True,
-        arrowstyle='-|>',
-        arrowsize=20,
-        connectionstyle="arc3,rad=0.2",
-        min_source_margin=45,
-        min_target_margin=45
+        arrows=True, arrowstyle='-|>', arrowsize=20,
+        connectionstyle="arc3,rad=+0.2",
+        min_source_margin=45, min_target_margin=45
     )
-    # Third => blue, rad=-0.2
+
+    # 6c) Third‑tier (blue)
     nx.draw_networkx_edges(
         G, pos,
         edgelist=edges_third,
+        width=[scale(edge_weights.get(e, 0.0)) for e in edges_third],
         edge_color="blue",
-        arrows=True,
-        arrowstyle='-|>',
-        arrowsize=20,
+        arrows=True, arrowstyle='-|>', arrowsize=20,
         connectionstyle="arc3,rad=-0.2",
-        min_source_margin=45,
-        min_target_margin=45
+        min_source_margin=45, min_target_margin=45
     )
 
-    # 7) Label the nodes as "P1", "P2", etc.
+    # 7) Labels & finish
     nx.draw_networkx_labels(
         G, pos,
-        labels={i: f"P{i}" for i in G.nodes},
+        labels={i: f"P{i}" for i in G.nodes()},
         font_size=14
     )
-
-    # 8) Final styling
     plt.title(f"Species: {species_id}", fontsize=12)
     plt.axis("off")
-    #plt.tight_layout()
+    plt.savefig(f"species_{species_id}.pdf")
+    plt.close()
 
-    outname = f"species_{species_id}.pdf"
-    plt.savefig(outname)
-    #plt.show()
+
+def draw_phosphorus_diagram(species_id, top_three_map, edge_weights=None):
+    """
+    Draws a directed graph (P1..P6) showing donor->target relationships,
+    with the species label centered and pure‐acceptor nodes in white.
+    """
+    if edge_weights is None:
+        edge_weights = {}
+
+    # 1) Build graph
+    G = nx.DiGraph()
+    for i in range(1, 7):
+        G.add_node(i)
+    for donor, ranks in top_three_map.items():
+        for rank, target in ranks.items():
+            G.add_edge(donor, target, rank=rank)
+
+    # 2) Custom circular layout (rotated so P1 sits where P3 normally is)
+    oldpos = nx.circular_layout(G)
+    pos = {1: oldpos[3], 2: oldpos[4], 3: oldpos[5],
+           4: oldpos[6], 5: oldpos[1], 6: oldpos[2]}
+
+    # 3) Determine node colors: 
+    #    white for nodes with in_degree>0 and out_degree==0 ("pure acceptors"), else lightgray
+    node_colors = []
+    for n in G.nodes():
+        if G.in_degree(n) > 0 and G.out_degree(n) == 0:
+            node_colors.append("white")
+        else:
+            node_colors.append("lightgray")
+
+    # 4) Prepare figure
+    fig, ax = plt.subplots(figsize=(8,6))
+
+    # 5) Draw nodes
+    nx.draw_networkx_nodes(
+        G, pos, node_color=node_colors,
+        edgecolors="black", node_size=1300, ax=ax
+    )
+
+    # 6) Split edges by rank
+    edges_first  = [(u,v) for u,v,d in G.edges(data=True) if d['rank']=="first"]
+    edges_second = [(u,v) for u,v,d in G.edges(data=True) if d['rank']=="second"]
+    edges_third  = [(u,v) for u,v,d in G.edges(data=True) if d['rank']=="third"]
+
+    #  – edge-width scaling
+    min_w, max_w = 1.0, 6.0
+    if edge_weights:
+        max_val = max(edge_weights.values()) or 1.0
+        def scale(t):
+            return min_w + (max_w - min_w) * (t / max_val)
+    else:
+        scale = lambda t: min_w
+
+    # 7) Draw first‐tier (red), handling reciprocals
+    mutual = [(u,v) for (u,v) in edges_first if (v,u) in edges_first and u<v]
+    mutual_set = set(mutual) | set((v,u) for (u,v) in mutual)
+    nonmutual = [e for e in edges_first if e not in mutual_set]
+
+    nx.draw_networkx_edges(
+        G, pos, edgelist=nonmutual,
+        width=[scale(edge_weights.get(e,0.0)) for e in nonmutual],
+        edge_color="red", arrows=True, arrowstyle='-|>', arrowsize=20,
+        connectionstyle="arc3,rad=0.0",
+        min_source_margin=45, min_target_margin=45, ax=ax
+    )
+    for u,v in mutual:
+        w_uv = scale(edge_weights.get((u,v),0.0))
+        nx.draw_networkx_edges(
+            G, pos, edgelist=[(u,v)],
+            width=[w_uv], edge_color="red", arrows=True,
+            arrowstyle='-|>', arrowsize=20,
+            connectionstyle="arc3,rad=+0.2",
+            min_source_margin=45, min_target_margin=45, ax=ax
+        )
+        w_vu = scale(edge_weights.get((v,u),0.0))
+        nx.draw_networkx_edges(
+            G, pos, edgelist=[(v,u)],
+            width=[w_vu], edge_color="red", arrows=True,
+            arrowstyle='-|>', arrowsize=20,
+            connectionstyle="arc3,rad=+0.2",
+            min_source_margin=45, min_target_margin=45, ax=ax
+        )
+
+    # 8) Second‐tier (black)
+    nx.draw_networkx_edges(
+        G, pos, edgelist=edges_second,
+        width=[scale(edge_weights.get(e,0.0)) for e in edges_second],
+        edge_color="black", arrows=True, arrowstyle='-|>', arrowsize=20,
+        connectionstyle="arc3,rad=+0.2",
+        min_source_margin=45, min_target_margin=45, ax=ax
+    )
+
+    # 9) Third‐tier (blue)
+    nx.draw_networkx_edges(
+        G, pos, edgelist=edges_third,
+        width=[scale(edge_weights.get(e,0.0)) for e in edges_third],
+        edge_color="blue", arrows=True, arrowstyle='-|>', arrowsize=20,
+        connectionstyle="arc3,rad=-0.2",
+        min_source_margin=45, min_target_margin=45, ax=ax
+    )
+
+    # 10) Draw node labels
+    nx.draw_networkx_labels(
+        G, pos, labels={i: f"P{i}" for i in G.nodes()}, font_size=14, ax=ax
+    )
+
+    # 11) Add centered species label in the middle of the plot
+    #    Use axis‐coordinates (0.5,0.5) so it's always at the visual center
+    ax.text(
+        0.5, 0.5, f"({species_id})",
+        fontsize=18, fontweight="bold",
+        ha="center", va="center",
+        transform=ax.transAxes,
+        bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor="black", alpha=0)
+    )
+
+    ax.set_axis_off()
+    plt.tight_layout()
+    plt.savefig(f"species_{species_id}.pdf")
+    plt.close()
+
 
 # ------------------------------------------------------------------------------
 # 1) 2×2 Figure (Lifetime, Distance, Time/Atom, H-Bond Count)
@@ -615,12 +749,13 @@ def three_by_two_plots_box_violin(
             palette=color_dict,
             showmeans=True,
             meanprops={'marker':'o','markerfacecolor':'black','markeredgecolor':'black','markersize':8},
-            showfliers=False,
+            showfliers=True,
             ax=ax_life
         )
         ax_life.set_title("(a) Lifetime (Box)")
         ax_life.set_xlabel("Lifetime (ns)")
         ax_life.set_ylabel("Species")
+        ax_life.set_xscale("log")
 
         # Hide spacer row labels
         new_lbls = []
@@ -1132,13 +1267,23 @@ def print_donor_acceptor_table(species_id, data, logger, summary_format='arrow',
 
     # Finally, if desired, draw the figure
     if draw_figure:
-        draw_phosphorus_diagram(species_id, top_three_map)
+        # Build a simple phosphate→phosphate weight map in ns
+        edge_weights = {}
+        for donor_pg, info in data.items():
+            u = int(donor_pg.replace('P',''))
+            for (acceptor_pg, _atom), t_ns in info['targets'].items():
+                if acceptor_pg.startswith('P'):
+                    v = int(acceptor_pg.replace('P',''))
+                    edge_weights[(u,v)] = edge_weights.get((u,v), 0.0) + t_ns
+        # Now call the figure, passing this map:
+        draw_phosphorus_diagram(species_id, top_three_map, edge_weights)
+        #draw_phosphorus_diagram(species_id, top_three_map)
 
 # ------------------------------------------------------------------------------
 # Main
 # ------------------------------------------------------------------------------
 def main(hbond_type):
-    logger.info("Starting combined analysis with 2x2 figure, summary plot, phosphate violin, textual table...")
+    logger.info("Starting combined analysis with 3x2 figure, summary plot, phosphate violin, textual table...")
 
     # 1) Find project root & process directory
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -1148,7 +1293,7 @@ def main(hbond_type):
         logger.error(str(e))
         sys.exit(1)
 
-    process_dir = os.path.join(project_path, "process.nobackup")
+    process_dir = os.path.join(project_path, "process")
     if not os.path.isdir(process_dir):
         logger.error(f"Invalid process directory => {process_dir}")
         sys.exit(1)
@@ -1397,4 +1542,4 @@ def main(hbond_type):
 
 
 if __name__=="__main__":
-    main("inter")
+    main("intra")
