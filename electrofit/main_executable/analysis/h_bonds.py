@@ -1571,8 +1571,9 @@ sys.path.append(project_path)
 
 from electrofit.helper.file_manipulation import find_file_with_extension
 from electrofit.commands.run_commands import run_command
+
 # Define the base process directory
-process_dir = os.path.join(project_path, "process")
+process_dir = os.path.join(project_path, "dummy_process")
 
 
 # Loop through each subdirectory in the process directory
@@ -1602,7 +1603,6 @@ for folder_name in (f for f in os.listdir(process_dir) if f == "IP_010101"):
 
             run_command(f'echo "2\n2\n" | gmx hbond -s {gro_file_path} -f {xtc_file_path} -hbn intra_hb_idx.ndx -num intra_hb_num.xvg -dist intra_hb_dist.xvg -g intra_hb.log -hbm intra_hb_matrix.xpm', cwd=dest_dir)
             run_command(f'echo "2\n5\n" | gmx hbond -s {gro_file_path} -f {xtc_file_path} -hbn inter_hb_idx.ndx -num inter_hb_num.xvg -dist inter_hb_dist.xvg -g inter_hb.log -hbm inter_hb_matrix.xpm', cwd=dest_dir)
-            
 
 
             # ---- Plot inter ----

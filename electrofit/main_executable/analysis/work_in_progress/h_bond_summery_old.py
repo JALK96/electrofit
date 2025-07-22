@@ -2018,5 +2018,5 @@ from electrofit.commands.run_commands import run_command
 #--------------------
 
 if __name__ == "__main__":
-    process_directory = os.path.join(project_path, "process.nobackup")
+    process_directory = os.path.join(project_path, "dummy_process")
     create_four_plots_for_intra_hbonds_grouped2(process_dir=process_directory)

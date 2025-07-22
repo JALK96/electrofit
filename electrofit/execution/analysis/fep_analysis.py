@@ -888,7 +888,6 @@ def parse_args():
         "--raw-only", action="store_true",
         help="If set, skip all decorrelation and use only raw data."
     )
-
     return parser.parse_args()
 
 # =============================================================================
@@ -1054,9 +1053,12 @@ def main():
     estimators_results = {}
     for estimator in estimators_to_use:
         if estimator in FEP_ESTIMATORS:
+            # ------------------------------------------------------------------
+            # MBAR on decorrelated data
+            # ------------------------------------------------------------------
             if estimator == "MBAR":
                 logging.info("Running MBAR estimator on decorrelated data.")
-                estimators_results["MBAR"] = MBAR(**MBAR_OPTS).fit(u_nk_concat)
+                estimators_results["MBAR"] = MBAR(**MBAR_OPTS, n_bootstraps=10).fit(u_nk_concat)
             elif estimator == "BAR":
                 logging.info("Running BAR estimator on decorrelated data.")
                 estimators_results["BAR"] = BAR().fit(u_nk_concat)
@@ -1239,8 +1241,8 @@ def main():
             raise ValueError("No suitable estimator available for decorrelated convergence analysis.")
         
         #------------override for testing purposes
-        #data_for_conv = dHdl_sample_list if dHdl_sample_list else dHdl_list
-        #conv_estimator = "TI"
+        data_for_conv = dHdl_sample_list if dHdl_sample_list else dHdl_list
+        conv_estimator = "TI"
         #------------override for testing purposes
 
         logging.info(f"Performing convergence analysis (decorrelated) with {conv_estimator}.")
@@ -1377,8 +1379,8 @@ def main():
         raise ValueError("No suitable estimator available for raw convergence analysis.")
     
     #------------override for testing purposes
-    #data_for_conv_raw = dHdl_list
-    #conv_estimator_raw = "TI"
+    data_for_conv_raw = dHdl_list
+    conv_estimator_raw = "TI"
     #------------override for testing purposes
 
     logging.info(f"Performing convergence analysis (raw data) with {conv_estimator_raw}.")

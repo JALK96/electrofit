@@ -23,7 +23,7 @@ project_path = find_project_root(current_dir=script_dir)
 sys.path.append(project_path)
 
 from electrofit.commands.run_commands import run_command, create_gaussian_input, run_gaussian_calculation, run_espgen, gaussian_out_to_prepi, run_resp, run_acpype, generate_mol2_with_resp_charges
-from electrofit.helper.file_manipulation import find_file_with_extension, strip_extension, extract_charge_from_folder_name, mol2_to_pdb_and_back
+from electrofit.helper.file_manipulation import find_file_with_extension, mol2_to_pdb_and_back
 from electrofit.helper.setup_finalize_scratch import (
     finalize_scratch_directory,
     setup_scratch_directory,

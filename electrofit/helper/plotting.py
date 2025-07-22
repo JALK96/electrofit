@@ -1300,6 +1300,8 @@ def plot_charges_by_atom_new_4(atoms_dict1, initial_charges_dict, base_dir, atom
             for i in avg_charges2_symmetric:
                 output.write(str(round(i, 4)) + '\n')
 
+
+
 def create_atom_color_mapping(atom_names, symmetry_groups):
     # List of colors to use for the groups
     group_colors_list = ['darkred', 'darkgreen', 'darkorange', 'purple', 'royalblue', 'lightcoral', 'deepskyblue', 'mediumvioletred', 'orange', 'olive', 'teal', 'dodgerblue', 'darkkhaki', 'salmon', 'firebrick', 'olivedrab', 'palevioletred']

@@ -32,6 +32,18 @@ from scipy.stats import gaussian_kde
 
 sns.set_context("talk", font_scale=1.2)
 
+
+# --- Helper: Find the potential energy column ---
+def find_potential_energy_col(legends_map, offset_fix=0):
+    """
+    Return the data column index that contains 'Potential Energy (kJ/mol)'
+    (time column already removed).  If not found, return None.
+    """
+    for s_idx, legend in legends_map.items():
+        if "Potential Energy" in legend:
+            return s_idx + offset_fix
+    return None
+
 def parse_dhdl_xvg_current_and_targets(dhdl_file, debug=False):
     """
     Parse a GROMACS dhdl.xvg to find:
@@ -161,12 +173,12 @@ def find_next_lambda_and_column(current_lambda, targets_map, data_shape, offset_
     return next_lambda, col_index
 
 
-def parse_single_subdir(dhdl_file, offset_fix=0, debug=False):
+def parse_single_subdir(dhdl_file, offset_fix=0, debug=False, skip_time=0.0):
     """
     1) parse the file to get current_lambda, target_map
     2) find next_lambda & col_index
-    3) return (current_lambda, next_lambda, deltaU_values, col_index)
-       or (None, None, None, None) if fails
+    3) return (current_lambda, next_lambda, deltaU_values, col_index, rho)
+       or (None, None, None, None, None) if fails
     """
     (current_lambda,
      targets_map,
@@ -174,24 +186,48 @@ def parse_single_subdir(dhdl_file, offset_fix=0, debug=False):
      data_arr,
      legends_map) = parse_dhdl_xvg_current_and_targets(dhdl_file, debug=debug)
 
+    # discard all data before skip_time
+    if skip_time > 0.0 and time_arr.size > 0:
+        mask = time_arr >= skip_time
+        time_arr = time_arr[mask]
+        data_arr = data_arr[mask]
+
     if current_lambda is None or data_arr.size == 0:
-        return None, None, None, None
+        # Early exit: supply 8 fields, new σ fields as None
+        return None, None, None, None, None, None, None, None
 
     next_lambda, col_index = find_next_lambda_and_column(
         current_lambda, targets_map, data_arr.shape,
         offset_fix=offset_fix, debug=debug
     )
     if next_lambda is None or col_index is None:
-        return current_lambda, None, None, None
+        # Early exit: supply 8 fields, new σ fields as None
+        return current_lambda, None, None, None, None, None, None, None
 
     deltaU_values = data_arr[:, col_index]
-    return current_lambda, next_lambda, deltaU_values, col_index
+
+    # σ values
+    sigma_dU = float(np.std(deltaU_values, ddof=1))
+    sigma_UA = sigma_UB = None
+
+    # --- compute linear correlation between U_A(r_A) and U_B(r_A) ---
+    rho = None
+    pot_col = find_potential_energy_col(legends_map, offset_fix=offset_fix)
+    if pot_col is not None:
+        U_A = data_arr[:, pot_col]
+        U_B = U_A + deltaU_values
+        if U_A.size > 1:
+            rho = float(np.corrcoef(U_A, U_B)[0, 1])
+            sigma_UA = float(np.std(U_A, ddof=1))
+            sigma_UB = float(np.std(U_B, ddof=1))
+
+    return current_lambda, next_lambda, deltaU_values, col_index, rho, sigma_UA, sigma_UB, sigma_dU
 
 
-def gather_dU_per_subdir(base_dir, offset_fix=0, debug=False):
+def gather_dU_per_subdir(base_dir, offset_fix=0, debug=False, skip_time=0.0):
     """
     For each subdirectory 'lambda_*', parse its dhdl.xvg, returning:
-      (cLam, nLam, deltaU, col_index, subdir_index)
+      (cLam, nLam, deltaU, col_index, subdir_index, rho)
     sorted by cLam.
 
     subdir_index is the integer Y from the folder name "lambda_Y"
@@ -218,7 +254,9 @@ def gather_dU_per_subdir(base_dir, offset_fix=0, debug=False):
 
     out_list = []
     for (sdir_idx, dhdl_file) in subdirs:
-        cLam, nLam, deltaU, col_idx = parse_single_subdir(dhdl_file, offset_fix=offset_fix, debug=debug)
+        cLam, nLam, deltaU, col_idx, rho, sUA, sUB, sDU = parse_single_subdir(
+            dhdl_file, offset_fix=offset_fix, debug=debug, skip_time=skip_time
+        )
         if cLam is None:
             print(f"[WARNING] Could not parse current lambda in {dhdl_file}")
             continue
@@ -226,7 +264,12 @@ def gather_dU_per_subdir(base_dir, offset_fix=0, debug=False):
             print(f"[INFO] No next-lambda found for subdir with current λ={cLam:.4f} in {dhdl_file}. Skipping.")
             continue
 
-        out_list.append((cLam, nLam, deltaU, col_idx, sdir_idx))
+        if rho is not None:
+            print(f"λ={cLam:.4f}→{nLam:.4f}: ρ={rho:+.3f}, σ_UA={sUA:.2f}, σ_UB={sUB:.2f}, σ_ΔU={sDU:.2f}")
+        else:
+            print(f"λ={cLam:.4f}→{nLam:.4f}: σ_UA={sUA}, σ_UB={sUB}, σ_ΔU={sDU} (ρ n/a)")
+
+        out_list.append((cLam, nLam, deltaU, col_idx, sdir_idx, rho, sUA, sUB, sDU))
 
     # sort final results by cLam
     out_list.sort(key=lambda x: x[0])
@@ -279,7 +322,7 @@ def compute_density(deltaU, normalize=False, trim_percentile=None):
     return xvals, yvals
 
 
-def plot_single_dir_dU(base_dir, invert_y=False, ax=None, offset_fix=0, debug=False, trim=0.1, units="kJ"):
+def plot_single_dir_dU(base_dir, invert_y=False, ax=None, offset_fix=0, debug=False, trim=0.1, units="kJ", skip_time=0.0):
     """
     Gather (cLam, nLam, deltaU_values, col_index, subdir_idx), 
     then plot each distribution on 'ax' with color from 0->1 or 1->0.
@@ -288,7 +331,7 @@ def plot_single_dir_dU(base_dir, invert_y=False, ax=None, offset_fix=0, debug=Fa
     Optionally, use 'trim' (in percent) to clip extreme outliers.
     The energy units are set via the 'units' parameter ("kJ" [default] or "kcal").
     """
-    dU_list = gather_dU_per_subdir(base_dir, offset_fix=offset_fix, debug=debug)
+    dU_list = gather_dU_per_subdir(base_dir, offset_fix=offset_fix, debug=debug, skip_time=skip_time)
     if len(dU_list) == 0:
         print(f"[WARNING] No ΔU transitions found in {base_dir}.")
         return
@@ -296,7 +339,7 @@ def plot_single_dir_dU(base_dir, invert_y=False, ax=None, offset_fix=0, debug=Fa
     n_trans = len(dU_list)
     cmap = plt.get_cmap("viridis")
 
-    for i, (cLam, nLam, deltaU, col_idx, sdir_idx) in enumerate(dU_list):
+    for i, (cLam, nLam, deltaU, col_idx, sdir_idx, _rho, _sUA, _sUB, _sDU) in enumerate(dU_list):
         if debug:
             print(f"Reading transition λ={cLam:.4f} to λ={nLam:.4f} "
                 f"from state {sdir_idx} (folder 'lambda_{sdir_idx}'), "
@@ -350,7 +393,7 @@ def plot_single_dir_dU(base_dir, invert_y=False, ax=None, offset_fix=0, debug=Fa
         ax.legend()
 
 
-def plot_dU_distributions_vertical(base_dir1, base_dir2=None, offset_fix=0, debug=False, units="kJ"):
+def plot_dU_distributions_vertical(base_dir1, base_dir2=None, offset_fix=0, debug=False, units="kJ", skip_time=0.0):
     """
     If only base_dir1 is given -> single subplot
     If base_dir2 is also given -> 2-subplot vertical layout.
@@ -358,7 +401,7 @@ def plot_dU_distributions_vertical(base_dir1, base_dir2=None, offset_fix=0, debu
     """
     if base_dir2 is None:
         fig, ax_top = plt.subplots(1, 1, figsize=(10, 5))
-        plot_single_dir_dU(base_dir1, invert_y=False, ax=ax_top, offset_fix=offset_fix, debug=debug, units=units)
+        plot_single_dir_dU(base_dir1, invert_y=False, ax=ax_top, offset_fix=offset_fix, debug=debug, units=units, skip_time=skip_time)
         ax_top.set_xlabel(r"ΔU$_{ij}$ (" + units + r"/mol)")
         ax_top.set_title("A → B")
 
@@ -374,12 +417,12 @@ def plot_dU_distributions_vertical(base_dir1, base_dir2=None, offset_fix=0, debu
         fig, (ax_top, ax_bottom) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
 
         # top subplot: forward distributions
-        plot_single_dir_dU(base_dir1, invert_y=False, ax=ax_top, offset_fix=offset_fix, debug=debug, units=units)
+        plot_single_dir_dU(base_dir1, invert_y=False, ax=ax_top, offset_fix=offset_fix, debug=debug, units=units, skip_time=skip_time)
         ax_top.set_ylabel(r"Norm: $P_{fwd}(\Delta U)$")
         ax_top.set_title("A → B")
 
         # bottom subplot: backward distributions
-        plot_single_dir_dU(base_dir2, invert_y=True, ax=ax_bottom, offset_fix=offset_fix, debug=debug, units=units)
+        plot_single_dir_dU(base_dir2, invert_y=True, ax=ax_bottom, offset_fix=offset_fix, debug=debug, units=units, skip_time=skip_time)
         ax_bottom.set_ylabel(r"Norm: $P_{bwd}(\Delta U)$")
         ax_bottom.set_xlabel(r"ΔU$_{ij}$ (" + units + r"/mol)")
         ax_bottom.set_title("B → A")
@@ -405,12 +448,20 @@ def main():
     parser.add_argument("--debug", action="store_true", help="Enable debug prints.")
     parser.add_argument("--units", type=str, default="kJ", choices=["kJ", "kcal"],
                         help="Energy units to plot (default: kJ).")
+    parser.add_argument(
+        "--skip-time",
+        type=float,
+        default=0.0,
+        help="Time threshold (same units as dhdl.xvg) to skip at the start of each dataset."
+    )
     args = parser.parse_args()
 
     base1 = os.path.abspath(args.base_dir1)
     base2 = os.path.abspath(args.base_dir2) if args.base_dir2 else None
 
-    plot_dU_distributions_vertical(base1, base2, offset_fix=args.offset, debug=args.debug, units=args.units)
+    plot_dU_distributions_vertical(
+        base1, base2, offset_fix=args.offset, debug=args.debug, units=args.units, skip_time=args.skip_time
+    )
 
 
 if __name__ == "__main__":

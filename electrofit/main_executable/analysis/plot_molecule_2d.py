@@ -27,7 +27,7 @@ sys.path.append(project_path)
 from electrofit.helper.file_manipulation import find_file_with_extension
 
 # Define the base process directory
-process_dir = os.path.join(project_path, "process.nobackup")
+process_dir = os.path.join(project_path, "data/todo")
 
 
 # Loop through each subdirectory in the process directory
