@@ -176,6 +176,7 @@ lauren/
 process/
 old/
 intermediate_data/
+results/
 dummy_process/
 process.nobackup/
 AA_test.nobackup/
