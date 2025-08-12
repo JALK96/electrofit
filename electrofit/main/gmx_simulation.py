@@ -272,9 +272,13 @@ def set_up_production(m_gro, MDP_dir, base_scratch_dir, molecule_name, box_type=
         "gmx mdrun -deffnm md -nt 16 -pin on -nobackup", cwd=scratch_dir
     )  # -v makes gmx verbose (prints out intermediat steps or chunks of information, for the inpatient)
 
+    run_command(
+        "gmx trjconv -s md.tpr -f md.xtc -o md_nojump.xtc -pbc nojump", cwd=scratch_dir
+    )
+
     # Center molecule
     run_command(
-        'echo "1\n0\n" | gmx trjconv -s md.tpr -f md.xtc -o md_center.xtc -center -pbc mol',
+        'echo "1\n0\n" | gmx trjconv -s md.tpr -f md_nojump.xtc -o md_center.xtc -center -pbc mol',
         cwd=scratch_dir,
     )
 

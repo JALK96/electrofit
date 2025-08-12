@@ -75,7 +75,7 @@ if __name__ == "__main__":
     sys.path.append(project_path)
 
     # Define the base process directory
-    process_dir = os.path.join(project_path, "process.nobackup")
+    process_dir = os.path.join(project_path, "process")
 
     # Loop through each subdirectory in the process directory
     for folder_name in os.listdir(process_dir):

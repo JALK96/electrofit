@@ -1573,13 +1573,11 @@ from electrofit.helper.file_manipulation import find_file_with_extension
 from electrofit.commands.run_commands import run_command
 
 # Define the base process directory
-process_dir = os.path.join(project_path, "dummy_process")
+process_dir = os.path.join(project_path, "process")
 
 
 # Loop through each subdirectory in the process directory
-#for folder_name in os.listdir(process_dir):
-for folder_name in (f for f in os.listdir(process_dir) if f == "IP_010101"):
-
+for folder_name in os.listdir(process_dir):
     folder_path = os.path.join(process_dir, folder_name)
     
     # Check if it's a directory

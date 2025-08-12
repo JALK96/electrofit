@@ -148,6 +148,46 @@ def run_ion_count_commands(trajectory, topology, index_file, groups, selection_g
     
     logging.info("All ion count commands executed successfully.")
 
+# --------------------------------------------------------------------
+# NEW FEATURE (volume grid): buried IP6 volume per frame via gmx sasa
+# --------------------------------------------------------------------
+
+def run_buried_volume_commands(
+        trajectory, topology, index_file, groups,
+        ip6_group="Other", cutoff=0.5, output_prefix="buriedVol_",
+        ndots=384):
+    """
+    For every phosphate group make GROMACS evaluate, per frame, how much
+    van‑der‑Waals volume of IP6 atoms falls inside radius *cutoff*.
+
+    Implementation:
+      gmx sasa -probe 0  -surface '<dynamic selection>' -tv <out.xvg>
+
+    The dynamic selection is:
+        group "{ip6_group}" and within {cutoff} of group "{P_i}"
+    which is re‑evaluated each frame by the selection engine.
+
+    Output: <output_prefix><group>.xvg, two columns (time [ps], volume [nm^3])
+    """
+    cmd_common = [
+        "gmx", "sasa",
+        "-f", trajectory,
+        "-s", topology,
+        "-n", index_file,
+        "-probe", "0",
+        "-ndots", str(ndots),     # ↑ accuracy
+        "-quiet"                  # keep logs succinct
+    ]
+
+    logging.info("Starting buried-volume calculations…")
+    for grp in groups:
+        outfile = f"{output_prefix}{grp}.xvg"
+        sel    = f'group "{ip6_group}" and within {cutoff} of group "{grp}"'
+        cmd    = cmd_common + ["-surface", sel, "-tv", outfile]
+        logging.info(f"  {outfile}  ←  {sel}")
+        run_command(cmd)
+    logging.info("Finished.")
+
 def plot_ion_counts_subplots(output_prefix, groups, plot_filename='ion_counts_subplots.pdf'):
     """
     Plots the number of ions within a cutoff for each group as subplots (count vs. time).
@@ -175,10 +215,10 @@ def plot_ion_counts_subplots(output_prefix, groups, plot_filename='ion_counts_su
                     ha='right', va='top', transform=ax.transAxes, color='red',
                     fontsize=12, bbox=dict(facecolor='white', alpha=0.7, edgecolor='none'))
 
-            ax.set_title(f"{group} Ion Count", fontsize=14)
+            ax.set_title(f"{group}", fontsize=14)
             ax.set_xlabel('Time (ns)')
             if i % ncols == 0:
-                ax.set_ylabel('# of Na+ ions')
+                ax.set_ylabel('Na+ ions')
             ax.grid(False)
         except Exception as e:
             ax.text(0.5, 0.5, 'Error loading data', ha='center',
@@ -195,6 +235,209 @@ def plot_ion_counts_subplots(output_prefix, groups, plot_filename='ion_counts_su
     # plt.show()
     logging.disable(logging.NOTSET)
     logging.info("Ion count subplot plotting completed successfully.")
+
+
+# --------------------------------------------------------------------
+#  Third-order (frame-specific) excess definition
+#
+#  N_excess(t) = N_in_sphere(t) / [ c · ( 4/3·π·r³  −  V_IP6(t) ) ]
+#
+#  c           = N_total_Na / V_box  (bulk concentration)
+#  V_IP6(t)    = n_IP6_atoms_in_sphere(t) · v_atom_IP6  (per-atom excluded volume)
+#  r           = cutoff_radius used in the gmx select commands.
+#
+#  The code logs every piece of the formula so you can reconstruct how
+#  each number was obtained when reading the log file.
+
+def _parse_box_volume_from_gro(gro_file):
+    """
+    Returns simulation box volume (nm³) from the last line of a .gro file.
+    For orthorhombic boxes the last line contains three floats lx ly lz.
+    For triclinic boxes the first three floats are the box vector lengths
+    (off‑diagonal terms are ignored → gives upper bound to actual volume).
+    """
+    with open(gro_file, "r") as fh:
+        lines = fh.readlines()
+        # last non‑empty line should contain box vectors
+        box_line = lines[-1].strip().split()
+        if len(box_line) < 3:
+            raise ValueError("Could not read box vectors from .gro file.")
+        lx, ly, lz = map(float, box_line[:3])
+        return lx * ly * lz   # nm³
+
+
+def run_ip6_exclusion_count_commands(trajectory, topology, index_file, groups,
+                                     ip6_group="Other",
+                                     cutoff=0.5, output_prefix="ip6_count_"):
+    """
+    Uses gmx select to count how many IP6 atoms (or whatever group name is
+    passed via `ip6_group`) are found within `cutoff` nm of each phosphate
+    group *for every frame* of the trajectory.
+
+    The output is written to <output_prefix><group>.xvg files in exactly the
+    same format that `run_ion_count_commands` produces, enabling frame‑wise
+    combination with the Na⁺ counts.
+
+    Parameters
+    ----------
+    trajectory : str
+        Path to the .xtc/.trr trajectory file.
+    topology : str
+        Path to the .tpr (or any structure readable by GROMACS).
+    index_file : str
+        .ndx file containing both the phosphate groups and the IP6 group.
+    groups : list[str]
+        List of phosphate group names (e.g. ["P", "P1", ...]).
+    ip6_group : str, optional
+        Name of the index group that represents all IP6 atoms. Default "Other".
+    cutoff : float, optional
+        Cut‑off radius in nm (must be identical to the one used for the Na⁺
+        counts). Default 0.5 nm.
+    output_prefix : str, optional
+        Prefix for the generated .xvg files. Default "ip6_count_".
+    """
+    logging.info(f"Starting IP6 exclusion count within {cutoff} nm for groups: {groups}")
+    for group in groups:
+        out_file = f"{output_prefix}{group}.xvg"
+        select_expr = f'group \"{ip6_group}\" and within {cutoff} of group \"{group}\"'
+        cmd = (
+            f'gmx select -f {trajectory} -s {topology} -n {index_file} '
+            f'-select \'{select_expr}\' '
+            f'-os {out_file} '           # writes time‑series of #selected atoms
+            f'-on dummy_ip6_index.ndx '   # dummy index output (ignored later)
+            f'2>&1'
+        )
+        logging.info(f"gmx select (IP6) for group \"{group}\" → \"{out_file}\"")
+        run_command(cmd)
+    logging.info("IP6 exclusion counting completed for all groups.")
+
+def _count_na_atoms_in_gro(gro_file):
+    """
+    Counts how many atoms have the string 'NA' in columns 11‑15 (atom name)
+    of a .gro file. Works for standard GROMACS naming.
+    """
+    count = 0
+    with open(gro_file, "r") as fh:
+        lines = fh.readlines()
+    # skip first 2 title/atom‑number lines, last line is box
+    for line in lines[2:-1]:
+        atom_name = line[10:15].strip()
+        if atom_name.startswith("NA"):
+            count += 1
+    if count == 0:
+        raise ValueError("No Na⁺ atoms found in structure file; check naming.")
+    return count
+
+def compute_excess_ion_counts(ion_count_prefix, buried_prefix, groups,
+                              structure_file, cutoff_radius,
+                              output_prefix="excess_"):
+    """
+    Excess‑ion factor using *true* solvent‑accessible volume per frame:
+
+        N_excess(t) = N_in_sphere(t) /
+                      [ c_Na · (4/3·π·r³ − V_buried(t)) ]
+
+    where V_buried(t) is obtained from gmx sasa (-tv) and already has units nm³.
+    """
+    import math
+
+    # Bulk Na⁺ concentration
+    n_na_total = _count_na_atoms_in_gro(structure_file)
+    v_box      = _parse_box_volume_from_gro(structure_file)
+    c_na       = n_na_total / v_box
+
+    v_sphere = (4.0 / 3.0) * math.pi * cutoff_radius**3
+    logging.info("============================================================")
+    logging.info("EXCESS‑ION FORMULA (grid/SAV version):")
+    logging.info("  N_excess(t) = N_in / [ c_Na · (4/3·π·r³ − V_buried(t)) ]")
+    logging.info(f"  r = {cutoff_radius:.3f} nm ; 4/3·π·r³ = {v_sphere:.6f} nm³")
+    logging.info(f"  c_Na = N_Na_tot / V_Box = {n_na_total}/{v_box:.6f} = {c_na:.6f} nm⁻³")
+    logging.info("============================================================")
+
+    for group in groups:
+        na_file    = f"{ion_count_prefix}{group}.xvg"
+        buried_file= f"{buried_prefix}{group}.xvg"
+        out_file   = f"{output_prefix}{group}.xvg"
+        try:
+            na_data     = np.loadtxt(na_file,     comments=('#', '@'))
+            buried_data = np.loadtxt(buried_file, comments=('#', '@'))
+            if na_data.shape[0] != buried_data.shape[0]:
+                raise ValueError("Frame mismatch between Na and buried‑volume files")
+
+            time_ps   = na_data[:,0]
+            n_in      = na_data[:,1]
+            v_buried  = buried_data[:,1]
+            v_eff     = v_sphere - v_buried
+            # ensure positive effective volume
+            v_eff[v_eff <= 1e-9] = 1e-9
+
+            n_solution = c_na * v_eff
+            n_excess   = n_in / n_solution
+
+            header = (
+                '@    title "Excess Na+ ions (grid SAV)"\n'
+                '@    xaxis  label "Time (ps)"\n'
+                '@    yaxis  label "N_excess"\n'
+            )
+            np.savetxt(out_file,
+                       np.column_stack((time_ps, n_excess)),
+                       header=header, comments='')
+
+            # log means
+            logging.info(f"[{group}] mean N_in = {np.mean(n_in):.4f}, "
+                         f"mean V_buried = {np.mean(v_buried):.4f} nm³, "
+                         f"mean V_eff = {np.mean(v_eff):.4f} nm³, "
+                         f"mean N_excess = {np.mean(n_excess):.4f}")
+        except Exception as e:
+            logging.error(f"Failed for {group}: {e}")
+
+def plot_excess_ion_counts_subplots(output_prefix, groups,
+                                    plot_filename='excess_ion_counts_subplots.pdf'):
+    """
+    Generates subplots (N_excess vs time) for each group.
+    """
+    logging.info("Plotting excess ion counts as subplots...")
+    logging.disable(logging.CRITICAL)
+
+    num_groups = len(groups)
+    nrows, ncols = 2, 3
+    fig, axes = plt.subplots(nrows, ncols, figsize=(8, 6), sharex=True, sharey=True)
+    axes = axes.flatten()
+
+    for i, group in enumerate(groups):
+        filename = f"{output_prefix}{group}.xvg"
+        ax = axes[i]
+        try:
+            data = np.loadtxt(filename, comments=('#', '@'))
+            time = data[:, 0] / 1000.0     # ps → ns
+            n_excess = data[:, 1]
+            mean_excess = np.mean(n_excess)
+
+            ax.plot(time, n_excess, linestyle='-', linewidth=0.5)
+            ax.axhline(y=mean_excess, linestyle='--', linewidth=1.5)
+            ax.text(0.95, 0.95, f"Mean: {mean_excess:.2f}",
+                    ha='right', va='top', transform=ax.transAxes,
+                    fontsize=12, bbox=dict(facecolor='white', alpha=0.7, edgecolor='none'))
+
+            ax.set_title(f"{group}", fontsize=14)
+            ax.set_xlabel('Time (ns)')
+            if i % ncols == 0:
+                ax.set_ylabel('N_excess')
+            ax.grid(False)
+        except Exception as e:
+            ax.text(0.5, 0.5, 'Error loading data', ha='center',
+                    va='center', transform=ax.transAxes, color='red')
+            ax.set_title(f"{group} (Error)", fontsize=14)
+
+    # hide unused axes
+    for j in range(num_groups, nrows * ncols):
+        fig.delaxes(axes[j])
+
+    plt.tight_layout()
+    plt.savefig(plot_filename, dpi=300, bbox_inches='tight')
+    # plt.show()
+    logging.disable(logging.NOTSET)
+    logging.info("Excess ion count subplot plotting completed successfully.")
 
 # Optional: Count how many ions are near the *entire molecule* (e.g., 'MOL' group)
 def run_ion_count_whole_molecule(trajectory, topology, index_file, whole_group="Other",
@@ -332,6 +575,34 @@ def main():
                     output_prefix=ion_count_prefix,
                     groups=p_groups,
                     plot_filename='ion_counts_subplots.pdf'
+                )
+
+                # ----------------------------------------------------------------
+                # NEW FEATURE 2: compute & plot excess Na⁺ counts
+                # ----------------------------------------------------------------
+                excess_prefix = "excess_NaP_"
+                buried_prefix = "buriedVol_"
+                run_buried_volume_commands(
+                    trajectory=trajectory_file,
+                    topology=topology_file,
+                    index_file=index_file,
+                    groups=p_groups,
+                    ip6_group="Other",
+                    cutoff=cutoff_distance,
+                    output_prefix=buried_prefix
+                )
+                compute_excess_ion_counts(
+                    ion_count_prefix=ion_count_prefix,
+                    buried_prefix=buried_prefix,
+                    groups=p_groups,
+                    structure_file=structure_file,
+                    cutoff_radius=cutoff_distance,
+                    output_prefix=excess_prefix
+                )
+                plot_excess_ion_counts_subplots(
+                    output_prefix=excess_prefix,
+                    groups=p_groups,
+                    plot_filename='excess_ion_counts_subplots.pdf'
                 )
 
                 # OPTIONAL: If you have an index group for the entire molecule
