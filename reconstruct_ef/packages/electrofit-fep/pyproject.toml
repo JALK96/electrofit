@@ -1,0 +1,21 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "electrofit-fep"
+version = "0.1.0"
+requires-python = ">=3.10"
+description = "FEP algorithms and runners (eq/neq) for Electrofit"
+dependencies = [
+  "electrofit>=0.1.0",
+  "pymbar>=4",
+  "mdtraj>=1.9",
+  "typer>=0.12",
+]
+
+[project.scripts]
+electrofit-fep = "electrofit_fep.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/electrofit_fep"]

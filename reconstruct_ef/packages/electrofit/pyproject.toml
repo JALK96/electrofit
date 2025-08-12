@@ -1,0 +1,20 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "electrofit"
+version = "0.1.0"
+requires-python = ">=3.10"
+description = "Core workflows for molecular prep, RESP/MOL2, and GROMACS orchestration"
+readme = "README.md"
+dependencies = ["numpy>=1.26"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-cov", "ruff", "mypy", "typer>=0.12"]
+
+[project.scripts]
+electrofit = "electrofit.cli.app:main"  # we'll add app.py shortly
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/electrofit"]

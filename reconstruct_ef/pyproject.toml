@@ -1,0 +1,13 @@
+[project]
+name = "electrofit-workspace"
+version = "0.0.0"
+requires-python = ">=3.10"
+
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+# Tell uv to use the local workspace copies, not PyPI
+electrofit = { workspace = true }
+electrofit-fep = { workspace = true }
+electrofit-analysis = { workspace = true }

@@ -1,0 +1,20 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "electrofit-analysis"
+version = "0.1.0"
+requires-python = ">=3.10"
+description = "Analysis and plotting (FEP post-processing, structure/charges) for Electrofit"
+dependencies = [
+  "electrofit>=0.1.0",
+  "pandas>=2",
+  "matplotlib>=3.8"
+]
+
+[project.scripts]
+electrofit-analysis = "electrofit_analysis.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/electrofit_analysis"]
