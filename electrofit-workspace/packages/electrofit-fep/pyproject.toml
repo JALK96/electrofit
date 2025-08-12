@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "electrofit-fep"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "matplotlib",
+  "numpy",
+  "pandas",
+  "pmx @ git+https://github.com/deGrootLab/pmx@develop",
+  "typer"
+]
+
+[tool.uv]
+# Ensure legacy setup.py projects (like pmx) get a modern build toolchain
+build-constraint-dependencies = [
+  "setuptools>=70",
+  "wheel>=0.43",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = [{ include = "electrofit_fep", from = "src" }]

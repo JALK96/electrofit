@@ -1,0 +1,26 @@
+name: AmberTools23
+channels:
+  - defaults
+dependencies:
+  - ambertools=23
+  - openbabel
+  - ipykernel
+  - gromacs=2022
+  - mdtraj
+  - babel
+  - mdanalysis
+  - parmed
+  - rdkit
+  - mesa-libgl-conda-x86_64
+  - mesa-libglu-conda-x86_64
+  - pymbar
+  - paramiko
+  - libstdcxx-ng
+  - matplotlib
+  - pdf2image
+  - pillow
+  - pymupdf
+  - jinja2
+  - typer
+  - uv
+prefix: /home/johannal96/miniconda3/envs/AmberTools23

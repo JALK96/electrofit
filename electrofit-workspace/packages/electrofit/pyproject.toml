@@ -1,0 +1,24 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "electrofit"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "app",
+  "matplotlib",
+  "mdtraj",
+  "numpy",
+  "openbabel-wheel",
+  "openmol",
+  "pandas",
+  "typer"
+]
+
+[project.scripts]
+electrofit = "electrofit.cli.app:main"
+
+[tool.hatch.build.targets.wheel]
+packages = [{ include = "electrofit", from = "src" }]
