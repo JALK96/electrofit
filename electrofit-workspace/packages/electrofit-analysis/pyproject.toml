@@ -5,6 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "electrofit-analysis"
 version = "0.1.0"
+description = "Electrofit Analysis workflows"
 requires-python = ">=3.12,<3.13"
 dependencies = [
   "MDAnalysis",

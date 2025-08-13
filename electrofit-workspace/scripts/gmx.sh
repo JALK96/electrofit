@@ -1,99 +1,83 @@
 #!/bin/bash
-
-# Exit immediately if a command exits with a non-zero status
 set -e
 
 # -----------------------------
-# Configuration and Setup
+# Setup & logging
 # -----------------------------
-
-# Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-# Define the log file
 LOG_FILE="$SCRIPT_DIR/process.log"
 
-
-# Function to log messages with timestamps
-log() {
-    local MESSAGE="$1"
-    echo "$(date '+%Y-%m-%d %H:%M:%S') - $MESSAGE" | tee -a "$LOG_FILE"
-}
-
-# -----------------------------
-# Start of the Script
-# -----------------------------
-
-# Initialize the log file
+log() { echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a "$LOG_FILE"; }
 touch "$LOG_FILE"
 log "=== Script Started ==="
-
 log "Script Directory: $SCRIPT_DIR"
 
-# Extract the path up to and including 'electrofit' from SCRIPT_DIR
-PROJECT_ROOT="${SCRIPT_DIR%%electrofit*}electrofit"
-log "Project Root: $PROJECT_ROOT"
+# -----------------------------
+# Load env (written by Step 2)
+# -----------------------------
+ENV_FILE="$SCRIPT_DIR/.electrofit_env"
+if [[ -f "$ENV_FILE" ]]; then
+  # shellcheck disable=SC1090
+  . "$ENV_FILE"
+  log "Loaded env from $ENV_FILE"
+else
+  log "No .electrofit_env found; using defaults."
+fi
 
-# Name of the Python script to execute
-PYTHON_SCRIPT="$PROJECT_ROOT/electrofit/execution/run_gmx.py"  # Adjusted to avoid duplication
-log "Python Script Path: $PYTHON_SCRIPT"
+# Defaults if not set
+: "${REMOTE_HOST:=qcm04}"
+: "${REMOTE_USER:=$USER}"
+: "${REMOTE_SHELL_INIT:=~/.bashrc}"
+: "${REMOTE_CONDA_ENV:=AmberTools23}"
+: "${USE_SCREEN:=1}"
+: "${SCREEN_NAME_PREFIX:=ef}"
+: "${PYTHON_ENTRYPOINT:=python -m electrofit.external.gromacs}"
 
-# ---------- --------- ------------ -----------
-# Remote machine details
-REMOTE_MACHINE="qcm04"
-log "Remote Machine: $REMOTE_MACHINE"
-# ---------- --------- ------------ -----------
+log "REMOTE_HOST=$REMOTE_HOST"
+log "REMOTE_USER=$REMOTE_USER"
+log "REMOTE_CONDA_ENV=$REMOTE_CONDA_ENV"
+log "USE_SCREEN=$USE_SCREEN"
+log "PYTHON_ENTRYPOINT=$PYTHON_ENTRYPOINT"
 
-
-# Generate a unique Screen session name to prevent conflicts
-SCREEN_SESSION="$(basename "$(dirname "$SCRIPT_DIR")")_$(date +%Y%m%d%H%M%S)"
+# Screen session name
+PARENT_DIR="$(basename "$(dirname "$SCRIPT_DIR")")"
+SCREEN_SESSION="${SCREEN_NAME_PREFIX}_${PARENT_DIR}_$(date +%Y%m%d%H%M%S)"
 log "Screen Session Name: $SCREEN_SESSION"
 
 # -----------------------------
-# Function Definitions
+# Build remote command
 # -----------------------------
+# Run from the directory where this script lives so relative paths resolve.
+REMOTE_CMD="cd \"$SCRIPT_DIR\" && \
+source \"$REMOTE_SHELL_INIT\" && \
+conda activate \"$REMOTE_CONDA_ENV\" && \
+$PYTHON_ENTRYPOINT"
 
-# Function to execute SSH command
-execute_ssh_command() {
-    local HOST="$1"
-    local CMD="$2"
+if [[ "$USE_SCREEN" == "1" ]]; then
+  REMOTE_CMD="cd \"$SCRIPT_DIR\" && source \"$REMOTE_SHELL_INIT\" && conda activate \"$REMOTE_CONDA_ENV\" && screen -dmS \"$SCREEN_SESSION\" bash -lc '$PYTHON_ENTRYPOINT; exec bash'"
+fi
 
-    log "Connecting to $HOST to execute the command."
-    ssh "$HOST" "$CMD"
-    SSH_STATUS=$?
-    
-    if [ $SSH_STATUS -ne 0 ]; then
-        log "Error: SSH command failed with status $SSH_STATUS."
-        exit 1
-    else
-        log "SSH command executed successfully on $HOST."
-    fi
-}
+log "Remote Command: $REMOTE_CMD"
 
 # -----------------------------
-# Build the SSH Command
+# Execute over SSH
 # -----------------------------
+SSH_TARGET="${REMOTE_USER}@${REMOTE_HOST}"
+log "Connecting to $SSH_TARGET"
+set +e
+ssh "$SSH_TARGET" "$REMOTE_CMD"
+SSH_STATUS=$?
+set -e
 
-SSH_COMMAND="cd \"$SCRIPT_DIR\" && \
-source ~/.bashrc && \
-screen -dmS \"$SCREEN_SESSION\" bash -c \"conda activate AmberTools23; python '$PYTHON_SCRIPT'; exec bash\""
+if [[ $SSH_STATUS -ne 0 ]]; then
+  log "Error: SSH command failed with status $SSH_STATUS."
+  exit $SSH_STATUS
+fi
 
-log "Built SSH Command: $SSH_COMMAND"
-
-# -----------------------------
-# Execute the SSH Command
-# -----------------------------
-
-execute_ssh_command "$REMOTE_MACHINE" "$SSH_COMMAND"
-
-# -----------------------------
-# Post-Execution Confirmation
-# -----------------------------
-
-log "Successfully started run_gmx.py in Screen session '$SCREEN_SESSION' on $REMOTE_MACHINE in conda environment AmberTools23."
-
-# -----------------------------
-# End of the Script
-# -----------------------------
+if [[ "$USE_SCREEN" == "1" ]]; then
+  log "Started in screen session '$SCREEN_SESSION' on $SSH_TARGET."
+else
+  log "Command completed on $SSH_TARGET."
+fi
 
 log "=== Script Completed Successfully ==="

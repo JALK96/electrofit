@@ -1,7 +1,7 @@
 [project]
 name = "electrofit-workspace"
 version = "0.0.0"
-requires-python = ">=3.10"
+requires-python = ">=3.12,<3.13"
 
 [tool.uv.workspace]
 members = ["packages/*"]

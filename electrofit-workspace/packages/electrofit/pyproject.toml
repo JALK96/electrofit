@@ -14,11 +14,12 @@ dependencies = [
   "openbabel-wheel",
   "openmol",
   "pandas",
-  "typer"
+  "typer",
+  "tomllib",
 ]
 
 [project.scripts]
 electrofit = "electrofit.cli.app:main"
 
 [tool.hatch.build.targets.wheel]
-packages = [{ include = "electrofit", from = "src" }]
+packages = ["src/electrofit"]
