@@ -1,2 +1,2 @@
 """Electrofit CLI package."""
-from .app import main, app  # re-export
+from .app import main # re-export

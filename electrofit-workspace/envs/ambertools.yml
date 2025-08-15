@@ -1,0 +1,12 @@
+# envs/ambertools.yml
+name: ef-ambertools
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.12
+  - ambertools
+  - acpype
+  - pip
+  - pip:
+      - -e /home/johannal96/PhD.nobackup/electrofit/electrofit-workspace/packages/electrofit

@@ -59,8 +59,7 @@ def replace_posres_in_file(file_path):
     except Exception as e:
         logging.error(f"An error occurred: {e}")
 
-
-def include_tip3p(file_path):
+def include_tip3p(file_path, forcefield="amber14sb.ff"):
     try:
         # Open the file and read the content
         with open(file_path, "r") as file:
@@ -68,12 +67,18 @@ def include_tip3p(file_path):
 
         # Check if '[ system ]' is present
         if "[ system ]" in content:
-            # Find where to insert the tip3p topology (itp file)
+            # Avoid duplicate insertion
+            include_line = f'#include "{forcefield}/tip3p.itp"'
+            if include_line in content:
+                logging.info(f"tip3p.itp already included in {file_path}")
+                return
+
+            # Insert the tip3p topology block before [ system ]
             updated_content = content.replace(
                 "[ system ]",
-                """
+                f"""
 ; Include water topology
-#include "amber14sb.ff/tip3p.itp"
+#include "{forcefield}/tip3p.itp"
 
 #ifdef POSRES_WATER
 ; Position restraint for each water oxygen
@@ -83,7 +88,7 @@ def include_tip3p(file_path):
 #endif
 
 [ system ]
-                                              """,
+""",
             )
         else:
             logging.error(
@@ -104,8 +109,7 @@ def include_tip3p(file_path):
     except Exception as e:
         logging.error(f"An error occurred: {e}")
 
-
-def include_ions(file_path):
+def include_ions(file_path, forcefield="amber14sb.ff"):
     try:
         # Open the file and read the content
         with open(file_path, "r") as file:
@@ -113,19 +117,25 @@ def include_ions(file_path):
 
         # Check if '[ system ]' is present
         if "[ system ]" in content:
-            # Find where to insert the topology (itp file)
+            # Avoid duplicate insertion
+            include_line = f'#include "{forcefield}/ions.itp"'
+            if include_line in content:
+                logging.info(f"ions.itp already included in {file_path}")
+                return
+
+            # Insert the ions topology block before [ system ]
             updated_content = content.replace(
                 "[ system ]",
-                """
+                f"""
 ; Include ion topology
-#include "amber14sb.ff/ions.itp"
+#include "{forcefield}/ions.itp"
 
 [ system ]
-                                              """,
+""",
             )
         else:
             logging.error(
-                "No '[ system ]' section found in the file to include ions.itp)."
+                "No '[ system ]' section found in the file to include ions.itp."
             )
             return
 
@@ -139,7 +149,6 @@ def include_ions(file_path):
         logging.error(f"The file {file_path} does not exist.")
     except Exception as e:
         logging.error(f"An error occurred: {e}")
-
 
 def remove_defaults_section_lines(file_path):
     """
@@ -202,8 +211,7 @@ def remove_defaults_section_lines(file_path):
         logging.error(f"An error occurred while removing '[ defaults ]' section: {e}")
         raise
 
-
-def include_ff(file_path):
+def include_ff(file_path, forcefield="amber14sb.ff"):
     try:
         # Open the file and read all lines
         with open(file_path, "r") as file:
@@ -211,17 +219,17 @@ def include_ff(file_path):
 
         # Define the lines to insert
         include_comment = "; Include forcefield\n"
-        include_line = '#include "amber14sb.ff/forcefield.itp"\n'
+        include_line = f'#include "{forcefield}/forcefield.itp"\n'
 
         # Check if the include line already exists to prevent duplication
-        if include_line in lines:
+        if any(forcefield in line and "forcefield.itp" in line for line in lines):
             logging.info(
-                f'"amber14sb.ff/forcefield.itp" is already included in {file_path}.'
+                f'"{forcefield}/forcefield.itp" is already included in {file_path}.'
             )
             return
 
         # Insert the include lines as the second and third lines
-        if len(lines) >= 1:
+        if lines:
             lines.insert(1, include_comment)
             lines.insert(2, include_line)
         else:
@@ -234,7 +242,7 @@ def include_ff(file_path):
             file.writelines(lines)
 
         logging.info(
-            f'Successfully included "amber14sb.ff/forcefield.itp" in {file_path}.'
+            f'Successfully included "{forcefield}/forcefield.itp" in {file_path}.'
         )
 
     except FileNotFoundError:
@@ -262,8 +270,7 @@ binary_to_ip = {
 def copy_and_rename_folders(
     source,
     destination,
-    bash_script_source=f"{project_path}/electrofit/bash/pis.sh",
-    python_script_source=f"{project_path}/electrofit/execution/check_symmetry_and_write.py",
+    bash_script_source=f"{project_path}/scripts/pis.sh",
     nested_folder="run_gau_create_gmx_in",
 ):
     """

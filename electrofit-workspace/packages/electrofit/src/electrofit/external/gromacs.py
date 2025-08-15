@@ -14,6 +14,7 @@ from electrofit.io.files import (
     strip_extension,
 )
 from electrofit.logging import setup_logging
+from electrofit.cli.safe_run import register_scratch
 from electrofit.scratch.manager import (
     finalize_scratch_directory,
     setup_scratch_directory,
@@ -25,11 +26,11 @@ def plot_svg(svg):
     logging.disable(logging.CRITICAL)
     name = strip_extension(svg)
 
-    df = pd.read_csv(f"{svg}", sep="\s+", header=None, names=["time", f"{name}"])
+    df = pd.read_csv(svg, sep=r"\s+", header=None, names=["time", name])
 
     plt.figure(figsize=(8, 6))
     plt.plot(
-        df["time"], df[f"{name}"], color="darkblue", linestyle="-", label=f"{name}"
+        df["time"], df[name], color="darkblue", linestyle="-", label=f"{name}"
     )
     plt.xlabel("time (s)", fontsize=14)
     plt.ylabel(f"{name}", fontsize=14)
@@ -53,6 +54,10 @@ def set_up_production(
     d="1.2",
     conc="0.15",
     exit_screen=True,
+    ff="amber14sb.ff",
+    *,
+    threads: int | None = None,
+    pin: bool | None = None,
 ):
     """
     Set up and execute a production molecular dynamics (MD) simulation using GROMACS following input generation by acpype.
@@ -120,6 +125,12 @@ def set_up_production(
         conc (str or float, optional):
             Ion concentration (in mol/L) to add to the system.
             Default is `"0.15"`. This sets the molar concentration of ions in the simulation.
+        
+        ff (str, optional):
+            Force field folder used for includes (e.g., `tip3p.itp`, `ions.itp`, `forcefield.itp`).
+            Default is `"amber14sb.ff"`
+        threads (int | None, optional): Number of threads for gmx mdrun. If None, omit -nt.
+        pin (bool | None, optional): Whether to add `-pin on/off`. If None, omit -pin.
 
     Raises:
         FileNotFoundError:
@@ -168,6 +179,7 @@ def set_up_production(
     m_itp = f"{m_gro_name}.itp"
     m_top = f"{m_gro_name}.top"
     m_posres = f"posre_{m_gro_name.replace('_GMX', '')}.itp"
+    mdp_dirname = os.path.basename(os.path.normpath(MDP_dir))
 
     if not os.path.isfile(m_itp):
         raise FileNotFoundError(f"The file {m_itp} does not exist.")
@@ -180,9 +192,9 @@ def set_up_production(
     replace_posres_in_file(m_top)
 
     # Add parameters for tip3p and ions to the topology file (include atomtypes.itp/tip3p.itp/ions.itp)
-    include_ff(m_top)
-    include_tip3p(m_top)
-    include_ions(m_top)
+    include_ff(m_top, ff)
+    include_tip3p(m_top, ff)
+    include_ions(m_top, ff)
     remove_defaults_section_lines(m_top)
 
     # Setup scratch directory
@@ -192,8 +204,19 @@ def set_up_production(
         m_top,
         m_posres,
         MDP_dir,
-    ]  # Only include existing input files/directories
+    ]  
+    
+    # Only include existing input files/directories
     scratch_dir, original_dir = setup_scratch_directory(input_files, base_scratch_dir)
+
+    register_scratch(
+    original_dir=original_dir,
+    scratch_dir=scratch_dir,
+    input_files=input_files,
+    # output_files=None,               # optional (default: copy everything else)
+    # overwrite=True,                  # optional
+    # remove_parent_if_empty=True,     # optional (default: True)
+    )
 
     # Go to scratch to call the xvg-files with pandas for plotting
     os.chdir(scratch_dir)
@@ -233,7 +256,7 @@ def set_up_production(
 
     # Energy minimization
     run_command(
-        f"gmx grompp -f MDP/em_steep.mdp -c {m_gro_name}_tip3p_ions.gro -p {m_gro_name}.top -o em_steep.tpr",
+        f"gmx grompp -f {mdp_dirname}/em_steep.mdp -c {m_gro_name}_tip3p_ions.gro -p {m_gro_name}.top -o em_steep.tpr",
         cwd=scratch_dir,
     )
     run_command("gmx mdrun -deffnm em_steep -nobackup", cwd=scratch_dir)
@@ -245,13 +268,23 @@ def set_up_production(
     )
     plot_svg("potential.xvg")
 
+    # Helper to assemble runtime flags
+    def _mdrun_flags():
+        flags = []
+        if threads is not None:
+            flags += ["-nt", str(threads)]
+        if pin is not None:
+            flags += ["-pin", "on" if pin else "off"]
+        flags.append("-nobackup")
+        return " ".join(flags)
+
     # Equilibrate the system
     # NVT Equilibration
     run_command(
-        f"gmx grompp -f MDP/NVT.mdp -c em_steep.gro -r em_steep.gro -p {m_gro_name}.top -o nvt.tpr -nobackup",
+        f"gmx grompp -f {mdp_dirname}/NVT.mdp -c em_steep.gro -r em_steep.gro -p {m_gro_name}.top -o nvt.tpr -nobackup",
         cwd=scratch_dir,
     )
-    run_command("gmx mdrun -deffnm nvt -nt 16 -pin on -nobackup", cwd=scratch_dir)
+    run_command(f"gmx mdrun -deffnm nvt {_mdrun_flags()}", cwd=scratch_dir)
     run_command(
         'echo "Temperature" | gmx energy -f nvt.edr -o temperature.xvg -xvg none -b 20',
         cwd=scratch_dir,
@@ -260,10 +293,10 @@ def set_up_production(
 
     # NPT Equilibration
     run_command(
-        f"gmx grompp -f MDP/NPT.mdp -c nvt.gro -r nvt.gro -p {m_gro_name}.top -o npt.tpr -nobackup",
+        f"gmx grompp -f {mdp_dirname}/NPT.mdp -c nvt.gro -r nvt.gro -p {m_gro_name}.top -o npt.tpr -nobackup",
         cwd=scratch_dir,
     )
-    run_command("gmx mdrun -deffnm npt -nt 16 -pin on -nobackup", cwd=scratch_dir)
+    run_command(f"gmx mdrun -deffnm npt {_mdrun_flags()}", cwd=scratch_dir)
     run_command(
         'echo "Pressure" | gmx energy -f npt.edr -o pressure.xvg -xvg none',
         cwd=scratch_dir,
@@ -272,14 +305,14 @@ def set_up_production(
 
     # Production: create input for production run
     run_command(
-        f"gmx grompp -f MDP/Production.mdp -c npt.gro -t npt.cpt -p {m_gro_name}.top -o md.tpr",
+        f"gmx grompp -f {mdp_dirname}/Production.mdp -c npt.gro -t npt.cpt -p {m_gro_name}.top -o md.tpr",
         cwd=scratch_dir,
     )
 
     # Production run
     run_command(
-        "gmx mdrun -deffnm md -nt 16 -pin on -nobackup", cwd=scratch_dir
-    )  # -v makes gmx verbose (prints out intermediat steps or chunks of information, for the inpatient)
+        f"gmx mdrun -deffnm md {_mdrun_flags()}", cwd=scratch_dir
+    )  # -v optional
 
     run_command(
         "gmx trjconv -s md.tpr -f md.xtc -o md_nojump.xtc -pbc nojump", cwd=scratch_dir

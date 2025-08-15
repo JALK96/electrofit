@@ -17,6 +17,7 @@ from electrofit.scratch.manager import (
     finalize_scratch_directory,
     setup_scratch_directory,
 )
+from electrofit.cli.safe_run import register_scratch
 
 
 def plot_svg(svg):
@@ -109,6 +110,14 @@ def set_up_fep_production(
     # Set up scratch directory and copy input files
     input_files = [m_gro, m_itp, m_top, m_posres, MDP_dir]
     scratch_dir, original_dir = setup_scratch_directory(input_files, base_scratch_dir)
+    register_scratch(
+    original_dir=original_dir,
+    scratch_dir=scratch_dir,
+    input_files=input_files,
+    # output_files=None,               # optional (default: copy everything else)
+    # overwrite=True,                  # optional
+    # remove_parent_if_empty=True,     # optional 
+)
     os.chdir(scratch_dir)
     logging.info(f"Changed working directory to scratch directory: {scratch_dir}")
 

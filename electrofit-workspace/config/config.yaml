@@ -1,0 +1,9 @@
+# config/config.yaml
+project_dir: "/home/johannal96/PhD.nobackup/electrofit/electrofit-workspace/tests/integration"
+
+# List of run directories (each contains electrofit.toml, mol2, equiv_groups.json, etc.)
+runs:
+  - "process/IP_011101/run_gau_create_gmx_in"
+
+# where final "done" flags/logs go (just small marker files)
+markers_dir: ".snakemake_markers"

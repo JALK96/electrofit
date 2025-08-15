@@ -1,35 +1,44 @@
 import logging
+from logging.handlers import WatchedFileHandler
+from pathlib import Path
 
 
-def setup_logging(log_file_path):
+def setup_logging(log_path, also_console: bool = True) -> None:
     """
-    Sets up logging to output to both console and a log file.
-
-    Parameters:
-    - log_file_path (str): Path to the log file.
+    Ensure the root logger writes to the given log file.
+    Idempotent: if a FileHandler to this log_path already exists, do nothing.
+    Optionally add a console handler once.
     """
-    # Prevent adding multiple handlers if this function is called multiple times
-    if not logging.getLogger().hasHandlers():
-        # Create a custom logger
-        logger = logging.getLogger()
-        logger.setLevel(logging.DEBUG)
+    path = Path(log_path).resolve()
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
 
-        # Define the log message format
-        formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+    # If we already have a FileHandler for this exact path, bail out
+    for h in root.handlers:
+        if isinstance(h, logging.FileHandler):
+            try:
+                if Path(getattr(h, "baseFilename", "")).resolve() == path:
+                    return
+            except Exception:
+                pass
 
-        # Console handler
+    fmt = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+
+    # File handler (monitors file replacement/rotation safely)
+    fh = WatchedFileHandler(path, mode="a", encoding="utf-8", delay=False)
+    fh.setLevel(logging.INFO)
+    fh.setFormatter(fmt)
+    root.addHandler(fh)
+
+    # Add a single console handler if none exists yet
+    if also_console and not any(isinstance(h, logging.StreamHandler) for h in root.handlers):
         ch = logging.StreamHandler()
-        ch.setLevel(logging.DEBUG)
-        ch.setFormatter(formatter)
+        ch.setLevel(logging.INFO)
+        ch.setFormatter(fmt)
+        root.addHandler(ch)
 
-        # File handler
-        fh = logging.FileHandler(log_file_path)
-        fh.setLevel(logging.DEBUG)
-        fh.setFormatter(formatter)
-
-        # Add handlers to the logger
-        logger.addHandler(ch)
-        logger.addHandler(fh)
+    # Log once that we’re wired to this file
+    root.info(f"Logging initialized. Log file: {path}")
 
 
 def reset_logging():

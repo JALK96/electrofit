@@ -16,6 +16,7 @@ from electrofit.scratch.manager import (
     finalize_scratch_directory,
     setup_scratch_directory,
 )
+from electrofit.cli.safe_run import register_scratch
 from electrofit.io.mol2 import update_mol2_charges
 from electrofit.core.symmetry import write_symmetry
 from electrofit.io.resp import edit_resp_input
@@ -55,6 +56,15 @@ def process_initial_structure(
     mol2_to_pdb_and_back(mol2_file, mol2_file, residue_name)
 
     scratch_dir, original_dir = setup_scratch_directory(input_files, base_scratch_dir)
+
+    register_scratch(
+    original_dir=original_dir,
+    scratch_dir=scratch_dir,
+    input_files=input_files,
+    # output_files=None,               # optional (default: copy everything else)
+    # overwrite=True,                  # optional
+    # remove_parent_if_empty=True,     # optional (default: True)
+    )
 
     if protocol == "opt":
         try:

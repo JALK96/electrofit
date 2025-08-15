@@ -1,8 +1,9 @@
 import fnmatch
 import os
 import shutil
+import json
 
-from electrofit.config import load_config, write_hpc_env_file
+from electrofit.config.loader import load_config
 
 PROJECT_PATH = os.environ.get("ELECTROFIT_PROJECT_PATH", os.getcwd())
 CONFIG_PATH = os.environ.get("ELECTROFIT_CONFIG_PATH")  # optional
@@ -14,10 +15,28 @@ process_dir = os.path.join(project_path, "process")
 # Path to the MD directory
 mdp_source_dir = os.path.join(project_path, "data/MDP")
 
-# Path to gmx.sh executable (in workspace scripts/)
-bash_script_source = os.path.join(project_path, "scripts/gmx.sh")
-
 cfg = load_config(project_path, CONFIG_PATH)
+
+# Helper to write a manifest for step3
+def _write_manifest(dest_dir: str, files: dict[str, str], mdp_subdir: str = "MDP") -> None:
+    """Write a small run.json manifest so step3 can run deterministically."""
+    # molecule: derive from .gro without extension, strip a trailing "_GMX" if present
+    gro = files.get("gro")
+    molecule = None
+    if gro:
+        base = os.path.splitext(os.path.basename(gro))[0]
+        molecule = base[:-4] if base.endswith("_GMX") else base
+    manifest = {
+        "molecule": molecule,
+        "gro": os.path.basename(files.get("gro", "")),
+        "top": os.path.basename(files.get("top", "")),
+        "itp": os.path.basename(files.get("itp", "")),
+        "posres": os.path.basename(files.get("posres", "")),
+        "mdp_dir": mdp_subdir,
+    }
+    with open(os.path.join(dest_dir, "run.json"), "w") as f:
+        json.dump(manifest, f, indent=2)
+    print(f"Wrote manifest: {os.path.join(dest_dir, 'run.json')}")
 
 # File patterns to search for
 file_patterns = ["*GMX.gro", "*GMX.itp", "*GMX.top", "posre_*.itp"]
@@ -77,16 +96,36 @@ for folder_name in os.listdir(process_dir):
     else:
         print(f"MDP source directory does not exist: {mdp_source_dir}")
 
-    # Copy gmx.sh
-    if os.path.exists(bash_script_source):
-        bash_dest_path = os.path.join(dest_dir, os.path.basename(bash_script_source))
-        shutil.copy2(bash_script_source, bash_dest_path)
-        print(f"Copied {os.path.basename(bash_script_source)} to {dest_dir}")
-    else:
-        print(f"Bash script does not exist: {bash_script_source}")
 
-    # NEW: write the HPC env file for gmx.sh
-    env_path = write_hpc_env_file(cfg, dest_dir)
-    print(f"Wrote {env_path}")
+    # Build and write manifest for step3
+    selected = {"gro": None, "itp": None, "top": None, "posres": None}
+    for name in os.listdir(dest_dir):
+        if name.endswith(".gro") and name.endswith("GMX.gro"):
+            selected["gro"] = os.path.join(dest_dir, name)
+        elif name.endswith(".itp") and name.endswith("GMX.itp"):
+            selected["itp"] = os.path.join(dest_dir, name)
+        elif name.endswith(".top"):
+            selected["top"] = os.path.join(dest_dir, name)
+        elif name.startswith("posre_") and name.endswith(".itp"):
+            selected["posres"] = os.path.join(dest_dir, name)
+    # Fallback scan if patterns above didn't match
+    if not selected["gro"]:
+        for name in os.listdir(dest_dir):
+            if name.endswith(".gro"):
+                selected["gro"] = os.path.join(dest_dir, name); break
+    if not selected["itp"]:
+        for name in os.listdir(dest_dir):
+            if name.endswith(".itp") and not name.startswith("posre_"):
+                selected["itp"] = os.path.join(dest_dir, name); break
+    if not selected["top"]:
+        for name in os.listdir(dest_dir):
+            if name.endswith(".top"):
+                selected["top"] = os.path.join(dest_dir, name); break
+    if not selected["posres"]:
+        for name in os.listdir(dest_dir):
+            if name.startswith("posre_") and name.endswith(".itp"):
+                selected["posres"] = os.path.join(dest_dir, name); break
+
+    _write_manifest(dest_dir, selected, mdp_subdir="MDP")
 
 print("Done!")

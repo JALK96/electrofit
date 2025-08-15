@@ -17,7 +17,7 @@ from electrofit.scratch.manager import (
     setup_scratch_directory,
 )
 from electrofit_fep.core.eqfep import eqFEP, generate_cos_lambda_scheme
-
+from electrofit.cli.safe_run import register_scratch
 
 def main():
     parser = argparse.ArgumentParser(
@@ -173,6 +173,14 @@ def main():
         input_files = [args.input_dir]
         scratch_dir, original_dir = setup_scratch_directory(
             input_files, args.base_scratch_dir
+        )
+        register_scratch(
+        original_dir=original_dir,
+        scratch_dir=scratch_dir,
+        input_files=input_files,
+        # output_files=None,               # optional (default: copy everything else)
+        # overwrite=True,                  # optional
+        # remove_parent_if_empty=True,     # optional 
         )
         os.chdir(scratch_dir)
         logging.info(f"Changed working directory to scratch directory: {scratch_dir}")

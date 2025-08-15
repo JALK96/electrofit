@@ -1,103 +1,178 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
+[[ "${EF_DEBUG:-0}" == "1" ]] && set -x
 
-# Exit immediately if a command exits with a non-zero status
-set -e
-
-# -----------------------------
-# Configuration and Setup
-# -----------------------------
-
-# Get the directory where this script is located
+# --- tiny logger ---
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-echo "Script Directory: $SCRIPT_DIR"
-
-# Extract the path up to and including 'electrofit' from SCRIPT_DIR
-PROJECT_ROOT="${SCRIPT_DIR%%electrofit*}electrofit"
-echo "Project Root: $PROJECT_ROOT"
-
-# Name of the Python script to execute
-PYTHON_SCRIPT="$PROJECT_ROOT/electrofit/execution/run_process_initial_structure.py"
-echo "Python Script: $PYTHON_SCRIPT"
-
-# ------------ ---------------- ------------- -----------
-# Remote machine details
-REMOTE_HOST="qcm05"
-echo "Remote Host: $REMOTE_HOST"
-# ------------ ---------------- ------------- -----------
-
-# Generate a unique Screen session name to prevent conflicts
-SCREEN_SESSION="$(basename "$(dirname "$SCRIPT_DIR")")_$(date +%Y%m%d%H%M%S)"
-echo "Screen Session Name: $SCREEN_SESSION"
-
-# -----------------------------
-# Logging Setup
-# -----------------------------
-
-# Define the log file (placed in the same directory as the script)
 LOG_FILE="$SCRIPT_DIR/process.log"
+: >"$LOG_FILE"
+log(){ echo "$(date '+%F %T') - $*" | tee -a "$LOG_FILE"; }
+fail(){ log "FATAL: $*"; exit 2; }
+trap 's=$?; [[ $s -ne 0 ]] && log "ERROR: pis.sh exited with status $s"; exit $s' EXIT
 
-# Function to log messages with timestamps
-log() {
-    local MESSAGE="$1"
-    echo "$(date '+%Y-%m-%d %H:%M:%S') - $MESSAGE" | tee -a "$LOG_FILE"
+log "=== pis.sh started ==="
+log "SCRIPT_DIR=$SCRIPT_DIR"
+
+# --- project + config paths ---
+# NOTE: when called directly, three levels up is the project root (…/tests/integration)
+PROJECT_DIR="${ELECTROFIT_PROJECT_PATH:-"$(cd "$SCRIPT_DIR/../../.." && pwd)"}"
+CONFIG_FILE="${ELECTROFIT_CONFIG_PATH:-"$SCRIPT_DIR/electrofit.toml"}"
+[[ -f "$CONFIG_FILE" ]] || fail "config not found: $CONFIG_FILE"
+log "PROJECT_DIR=$PROJECT_DIR"
+log "CONFIG_FILE=$CONFIG_FILE"
+
+# --- defaults (overridden by TOML) ---
+REMOTE_HOST=""
+CONDA_ENV="AmberTools23"
+USE_SCREEN=1
+
+# --- read [compute] from TOML ---
+PY_IN="${PYTHON_EXE:-python3}"
+set +e
+readarray -t CFG < <("$PY_IN" - "$CONFIG_FILE" <<'PY'
+import sys
+try:
+    try: import tomllib
+    except ModuleNotFoundError: import tomli as tomllib
+    with open(sys.argv[1],'rb') as f: d=tomllib.load(f)
+    c=d.get('compute') or {}
+    print(c.get('remote_host',''))
+    print(c.get('conda_env','AmberTools23'))
+    v=c.get('use_screen',True)
+    print('1' if (v is True or str(v).lower() in ('1','true','yes','y','on')) else '0')
+except Exception as e:
+    print('__ERR__:'+repr(e))
+PY
+)
+st=$?
+set -e
+if [[ $st -ne 0 || "${CFG[0]}" =~ ^__ERR__ ]]; then
+  log "TOML parse warning: ${CFG[0]#__ERR__:}; using defaults."
+else
+  REMOTE_HOST="${CFG[0]}"
+  CONDA_ENV="${CFG[1]}"
+  USE_SCREEN="${CFG[2]}"
+fi
+
+# Normalize markers for local
+case "${REMOTE_HOST,,}" in ""|"local"|"<local>") REMOTE_HOST="";; esac
+
+log "compute.remote_host=${REMOTE_HOST:-<local>}"
+log "compute.conda_env=$CONDA_ENV"
+log "compute.use_screen=$USE_SCREEN"
+
+# --- helpers ---
+conda_init() {
+  if [[ -f "$HOME/miniconda3/etc/profile.d/conda.sh" ]]; then
+    # shellcheck disable=SC1090
+    source "$HOME/miniconda3/etc/profile.d/conda.sh"
+  elif [[ -f "$HOME/anaconda3/etc/profile.d/conda.sh" ]]; then
+    # shellcheck disable=SC1090
+    source "$HOME/anaconda3/etc/profile.d/conda.sh"
+  elif [[ -f "$HOME/.bashrc" ]]; then
+    # shellcheck disable=SC1090
+    source "$HOME/.bashrc"
+  fi
 }
 
-# Initialize the log file
-touch "$LOG_FILE"
-log "=== Script Started ==="
-
-# Log initial configurations
-log "Script Directory: $SCRIPT_DIR"
-log "Project Root: $PROJECT_ROOT"
-log "Python Script Path: $PYTHON_SCRIPT"
-log "Remote Host: $REMOTE_HOST"
-log "Screen Session Name: $SCREEN_SESSION"
-
-# -----------------------------
-# Function Definitions
-# -----------------------------
-
-# Function to execute SSH command
-execute_ssh_command() {
-    local HOST="$1"
-    local CMD="$2"
-
-    log "Connecting to $HOST to execute the command."
-    ssh "$HOST" "$CMD"
-    SSH_STATUS=$?
-    
-    if [ $SSH_STATUS -ne 0 ]; then
-        log "Error: SSH command failed with status $SSH_STATUS."
-        exit 1
-    else
-        log "SSH command executed successfully on $HOST."
-    fi
+ensure_conda_env() {
+  conda_init
+  if ! command -v conda >/dev/null 2>&1; then
+    fail "conda not found; cannot activate env '$CONDA_ENV'"
+  fi
+  log "Activating conda env: $CONDA_ENV"
+  set +e
+  conda activate "$CONDA_ENV"
+  rc=$?
+  set -e
+  [[ $rc -ne 0 ]] && fail "failed to activate conda env '$CONDA_ENV'"
 }
 
-# -----------------------------
-# Build the SSH Command
-# -----------------------------
+# --- local launch ---
+run_local() {
+  log "Mode: LOCAL"
+  cd "$SCRIPT_DIR"
+  ensure_conda_env
 
-SSH_COMMAND="cd \"$SCRIPT_DIR\" && \
-source ~/.bashrc && \
-screen -dmS \"$SCREEN_SESSION\" bash -c \"conda activate AmberTools23; python '$PYTHON_SCRIPT'; exec bash\""
+  if [[ "$USE_SCREEN" == "1" && ! $(command -v screen) ]]; then
+    log "screen not found locally; running in foreground"
+    USE_SCREEN=0
+  fi
 
-log "Built SSH Command: $SSH_COMMAND"
+  if [[ "$USE_SCREEN" == "1" ]]; then
+    SESSION="ef_pis_local_$(date +%Y%m%d%H%M%S)"
+    CMD="cd '$SCRIPT_DIR' && electrofit run-process-initial-structure --project '$PROJECT_DIR' --config '$CONFIG_FILE'"
+    log "Launching in screen session: $SESSION"
+    screen -dmS "$SESSION" bash -lc "$CMD; exec bash"
+    log "Started. Attach with: screen -r $SESSION"
+  else
+    log "Running in foreground…"
+    electrofit run-process-initial-structure --project "$PROJECT_DIR" --config "$CONFIG_FILE"
+  fi
+}
 
-# -----------------------------
-# Execute the SSH Command
-# -----------------------------
+# --- remote launch (shared FS assumed for now) ---
+run_remote() {
+  log "Mode: REMOTE (shared FS)"
+  [[ -n "$REMOTE_HOST" ]] || fail "remote_host empty"
 
-execute_ssh_command "$REMOTE_HOST" "$SSH_COMMAND"
+  SESSION="ef_pis_$(basename "$(dirname "$SCRIPT_DIR")")_$(date +%Y%m%d%H%M%S)"
+  log "SSH target: $REMOTE_HOST"
+  log "Screen session: $SESSION"
 
-# -----------------------------
-# Post-Execution Confirmation
-# -----------------------------
+  # Build a robust remote command without fragile inlined quotes:
+  # 1) create a small launcher on the remote; 2) start it in screen -dmS
+  ssh "$REMOTE_HOST" bash -lc "$(printf 'SDIR=%q; PROJ=%q; CFILE=%q; CENV=%q; SESSION=%q; ' \
+    "$SCRIPT_DIR" "$PROJECT_DIR" "$CONFIG_FILE" "$CONDA_ENV" "$SESSION"; cat <<'BASH'
+set -e
+# Init conda in this shell so 'conda activate' works
+if [[ -f "$HOME/miniconda3/etc/profile.d/conda.sh" ]]; then
+  source "$HOME/miniconda3/etc/profile.d/conda.sh"
+elif [[ -f "$HOME/anaconda3/etc/profile.d/conda.sh" ]]; then
+  source "$HOME/anaconda3/etc/profile.d/conda.sh"
+elif [[ -f "$HOME/.bashrc" ]]; then
+  source "$HOME/.bashrc"
+fi
 
-log "Successfully started run_process_initial_structure.py in Screen session '$SCREEN_SESSION' on $REMOTE_HOST in conda environment AmberTools23."
+# Create the launcher script in the run directory
+mkdir -p "$SDIR"
+cat > "$SDIR/.ef_launch.sh" <<'LAUNCH'
+#!/usr/bin/env bash
+set -e
+if [[ -f "$HOME/miniconda3/etc/profile.d/conda.sh" ]]; then
+  source "$HOME/miniconda3/etc/profile.d/conda.sh"
+elif [[ -f "$HOME/anaconda3/etc/profile.d/conda.sh" ]]; then
+  source "$HOME/anaconda3/etc/profile.d/conda.sh"
+elif [[ -f "$HOME/.bashrc" ]]; then
+  source "$HOME/.bashrc"
+fi
+conda activate "$CENV"
+cd "$SDIR"
+exec electrofit run-process-initial-structure --project "$PROJ" --config "$CFILE"
+LAUNCH
+chmod +x "$SDIR/.ef_launch.sh"
 
-# -----------------------------
-# End of the Script
-# -----------------------------
+# Prefer screen; fall back to nohup if needed
+if command -v screen >/dev/null 2>&1; then
+  screen -dmS "$SESSION" bash -lc "$SDIR/.ef_launch.sh; exec bash"
+  echo "SCREEN_OK $SESSION"
+else
+  nohup bash -lc "$SDIR/.ef_launch.sh" > "$SDIR/nohup.out" 2>&1 < /dev/null &
+  echo "NO_SCREEN"
+fi
+BASH
+)"
 
-log "=== Script Completed Successfully ==="
+  log "Remote launch issued. You can attach with: ssh $REMOTE_HOST 'screen -r $SESSION' (if screen is available)."
+}
+
+# --- dispatch ---
+if [[ -z "${REMOTE_HOST}" ]]; then
+  log "Dispatch: run_local()"
+  run_local
+else
+  log "Dispatch: run_remote()"
+  run_remote
+fi
+
+log "=== pis.sh done ==="

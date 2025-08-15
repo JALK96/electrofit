@@ -1,7 +1,7 @@
 import logging
 import os
 
-from electrofit.config_parser import ConfigParser
+from electrofit.config.legacy import ConfigParser
 
 # trunk-ignore(ruff/E402)
 from electrofit.core.process_conform import process_conform

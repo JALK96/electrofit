@@ -17,6 +17,7 @@ from electrofit.io.files import (
     pdb_to_mol2,
     replace_charge_in_ac_file,
 )
+from electrofit.cli.safe_run import register_scratch
 from electrofit.io.resp import edit_resp_input
 from electrofit.scratch.manager import (
     finalize_scratch_directory,
@@ -73,6 +74,15 @@ def process_conform(
             input_files = [pdb_file]
 
     scratch_dir, original_dir = setup_scratch_directory(input_files, base_scratch_dir)
+
+    register_scratch(
+    original_dir=original_dir,
+    scratch_dir=scratch_dir,
+    input_files=input_files,
+    # output_files=None,               # optional (default: copy everything else)
+    # overwrite=True,                  # optional
+    # remove_parent_if_empty=True,     # optional (works with your updated finalize)
+    )
 
     print(f"Following {protocol} protocol.")
 
