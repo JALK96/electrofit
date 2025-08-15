@@ -1,0 +1,19 @@
+# Existing ignores
+
+# Python caches
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual env / build
+.venv/
+build/
+.dist/
+
+# Test dummy data (exclude large or generated fixtures)
+tests/dummy_data/
+
+# Local caches
+.pytest_cache/
+.ruff_cache/
+
