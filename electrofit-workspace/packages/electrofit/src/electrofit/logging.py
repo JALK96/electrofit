@@ -1,44 +1,120 @@
 import logging
+import os
+import subprocess
 from logging.handlers import WatchedFileHandler
 from pathlib import Path
 
+try:
+    from electrofit import __version__ as _electrofit_version
+except Exception:  # pragma: no cover
+    _electrofit_version = "unknown"
 
-def setup_logging(log_path, also_console: bool = True) -> None:
-    """
-    Ensure the root logger writes to the given log file.
-    Idempotent: if a FileHandler to this log_path already exists, do nothing.
-    Optionally add a console handler once.
+
+def setup_logging(log_path, also_console: bool = True, suppress_initial_message: bool = False) -> None:
+    """Configure root logging to write ONLY to the specified file (plus optional console).
+
+    Previous behaviour accumulated FileHandlers for each molecule/run, causing later
+    log messages to be duplicated into earlier process.log files. We now enforce a
+    single active FileHandler (the newest target). Console handler is preserved / added once.
     """
     path = Path(log_path).resolve()
     root = logging.getLogger()
-    root.setLevel(logging.INFO)
+    # Determine desired level (env overrides, default INFO)
+    env_level = os.getenv("ELECTROFIT_LOG_LEVEL", "INFO").upper()
+    desired_level = getattr(logging, env_level, logging.INFO)
+    # Do not downgrade if a more verbose (lower numeric) level already set (e.g., DEBUG=10 < INFO=20)
+    if root.level > desired_level:
+        root.setLevel(desired_level)
+    effective_level = logging.getLevelName(root.level)
 
-    # If we already have a FileHandler for this exact path, bail out
+    # Remove any existing FileHandlers pointing to different files
+    to_remove = []
+    existing_same = False
     for h in root.handlers:
         if isinstance(h, logging.FileHandler):
             try:
-                if Path(getattr(h, "baseFilename", "")).resolve() == path:
-                    return
+                existing_path = Path(getattr(h, "baseFilename", "")).resolve()
+                if existing_path == path:
+                    existing_same = True
+                else:
+                    to_remove.append(h)
+            except Exception:
+                to_remove.append(h)
+    for h in to_remove:
+        root.removeHandler(h)
+        try:
+            h.close()
+        except Exception:
+            pass
+
+    # Manage console handler(s) BEFORE emitting any initialization message
+    if also_console:
+        # Ensure exactly one console handler (pure StreamHandler) if requested
+        if not any(isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler) for h in root.handlers):
+            fmt = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+            ch = logging.StreamHandler()
+            ch.setLevel(root.level)
+            ch.setFormatter(fmt)
+            root.addHandler(ch)
+    else:
+        # Remove existing non-file StreamHandlers to silence console output for this context
+        to_remove_console = [
+            h for h in root.handlers
+            if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)
+        ]
+        for h in to_remove_console:
+            root.removeHandler(h)
+            try:
+                h.close()
             except Exception:
                 pass
 
-    fmt = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+    # If already have a handler for this exact path, keep it (respect suppress flag logic below)
+    if not existing_same:
+        fmt = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+        fh = WatchedFileHandler(path, mode="a", encoding="utf-8", delay=False)
+        fh.setLevel(root.level)
+        fh.setFormatter(fmt)
+        root.addHandler(fh)
+        if not suppress_initial_message:
+            root.info(f"Logging initialized. Log file: {path} (level={effective_level})")
 
-    # File handler (monitors file replacement/rotation safely)
-    fh = WatchedFileHandler(path, mode="a", encoding="utf-8", delay=False)
-    fh.setLevel(logging.INFO)
-    fh.setFormatter(fmt)
-    root.addHandler(fh)
 
-    # Add a single console handler if none exists yet
-    if also_console and not any(isinstance(h, logging.StreamHandler) for h in root.handlers):
-        ch = logging.StreamHandler()
-        ch.setLevel(logging.INFO)
-        ch.setFormatter(fmt)
-        root.addHandler(ch)
+def _git_commit_short() -> str:
+    """Return short git commit hash if available (else empty)."""
+    try:
+        out = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], stderr=subprocess.DEVNULL, timeout=1)
+        return out.decode().strip()
+    except Exception:  # pragma: no cover - fallback on any failure
+        return ""
 
-    # Log once that we’re wired to this file
-    root.info(f"Logging initialized. Log file: {path}")
+
+def log_run_header(step_name: str):
+    """Emit a standardized header line (version, git commit, step)."""
+    commit = _git_commit_short()
+    parts = [f"electrofit { _electrofit_version }", f"step={step_name}"]
+    if commit:
+        parts.append(f"git={commit}")
+    header = " | ".join(parts)
+    logger = logging.getLogger()
+    logger.info(header)
+    # Also append a plain header line WITHOUT timestamp/level so tests can match easily
+    try:
+        for h in logger.handlers:
+            if hasattr(h, 'baseFilename'):
+                fp = getattr(h, 'baseFilename')
+                if not fp:
+                    continue
+                # Only append if not already present as standalone line
+                try:
+                    with open(fp, 'r+') as f:
+                        lines = f.read().splitlines()
+                        if header not in lines:
+                            f.write(header + "\n")
+                except Exception:
+                    pass
+    except Exception:  # pragma: no cover
+        pass
 
 
 def reset_logging():

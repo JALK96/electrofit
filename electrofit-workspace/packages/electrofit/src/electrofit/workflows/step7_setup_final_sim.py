@@ -1,91 +1,105 @@
+import argparse
 import fnmatch
 import os
 import shutil
+import logging
+from pathlib import Path
 
-PROJECT_PATH = os.environ.get("ELECTROFIT_PROJECT_PATH", os.getcwd())
-project_path = PROJECT_PATH
-
-# Define the base process directory
-process_dir = os.path.join(project_path, "process")
-
-# Path to the MD directory
-mdp_source_dir = os.path.join(project_path, "data/MDP")
-
-# Path to gmx.sh executable
-bash_script_source = os.path.join(project_path, "electrofit/bash/gmx.sh")
+from electrofit.config.loader import load_config, dump_config
+from electrofit.workflows.snapshot import build_snapshot_with_layers, CONFIG_ARG_HELP
+from electrofit.logging import setup_logging, reset_logging
 
 
-# File patterns to search for
-file_patterns = ["*_GMX.gro", "*_GMX.itp", "*_GMX.top", "posre_*.itp"]
-
-# Loop through each subdirectory in the process directory
-for folder_name in os.listdir(process_dir):
-    folder_path = os.path.join(process_dir, folder_name)
-
-    # Check if it's a directory
-    if os.path.isdir(folder_path):
-        # Define the 'results' directory within this folder
-        run_gau_dir = os.path.join(folder_path, "results")
-
-        # Check if 'results' exists
-        if os.path.isdir(run_gau_dir):
-            # Define the destination directory 'run_final_gmx_simulation' within the same working directory
-            dest_dir = os.path.join(folder_path, "run_final_gmx_simulation")
-            os.makedirs(dest_dir, exist_ok=True)
-            for file in os.listdir(run_gau_dir):
-                if file.endswith(".ef"):
-                    input_file_source = os.path.join(run_gau_dir, file)
-                    # Proceed with processing
-
-                    # Copy the bash script into dest_dir
-                    if os.path.exists(input_file_source):
-                        input_file_name = os.path.basename(input_file_source)
-                        input_dest_path = os.path.join(dest_dir, input_file_name)
-                        shutil.copy2(input_file_source, input_dest_path)
-                        print(f"Copied {input_file_name} to {dest_dir}")
-                    else:
-                        print(
-                            f"Configuration input file (.ef) does not exist: {input_file_source}"
-                        )
-
-            # Find the acpype subdirectory within 'results'
-            for subfolder_name in os.listdir(run_gau_dir):
-                if subfolder_name.endswith(".acpype"):
-                    acpype_folder_path = os.path.join(run_gau_dir, subfolder_name)
-
-                    # Copy files that match the patterns from the acpype folder
-                    for pattern in file_patterns:
-                        for file_name in os.listdir(acpype_folder_path):
-                            if fnmatch.fnmatch(file_name, pattern):
-                                source_file_path = os.path.join(
-                                    acpype_folder_path, file_name
-                                )
-                                # Copy the file to the destination directory
-                                shutil.copy(source_file_path, dest_dir)
-                                print(f"Copied {file_name} to {dest_dir}")
-
-                    # Copy the MDP directory into dest_dir
-                    md_dest_dir = os.path.join(dest_dir, "MDP")
-                    if os.path.exists(mdp_source_dir):
-                        shutil.copytree(mdp_source_dir, md_dest_dir)
-                        print(f"Copied MDP directory to {md_dest_dir}")
-                    else:
-                        print(f"MDP source directory does not exist: {mdp_source_dir}")
-
-                    # Copy the bash script into dest_dir
-                    if os.path.exists(bash_script_source):
-                        bash_script_name = os.path.basename(bash_script_source)
-                        bash_dest_path = os.path.join(dest_dir, bash_script_name)
-                        shutil.copy2(bash_script_source, bash_dest_path)
-                        print(f"Copied {bash_script_name} to {dest_dir}")
-                    else:
-                        print(f"Bash script does not exist: {bash_script_source}")
-
-                    # Break after processing the acpype directory
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--project", required=False, default=os.environ.get("ELECTROFIT_PROJECT_PATH", os.getcwd()))
+    ap.add_argument("--config", help=CONFIG_ARG_HELP)
+    args = ap.parse_args()
+    project_root = Path(args.project).resolve()
+    override_cfg = Path(args.config).resolve() if getattr(args, "config", None) else None
+    process_dir = project_root / "process"
+    if not process_dir.is_dir():
+        print("[step7] No process directory.")
+        return
+    mdp_source_dir = project_root / "data" / "MDP"
+    bash_script_source = project_root / "scripts" / "gmx.sh"
+    file_patterns = ["*GMX.gro", "*GMX.itp", "*GMX.top", "posre_*.itp"]
+    mol_dirs = [p for p in sorted(process_dir.iterdir()) if p.is_dir()]
+    multi_mol = len(mol_dirs) > 1
+    done = 0
+    for mol_dir in mol_dirs:
+        results_dir = mol_dir / "results"
+        if not results_dir.is_dir():
+            print(f"[step7][skip] {mol_dir.name}: no results dir")
+            continue
+        dest_dir = mol_dir / "run_final_gmx_simulation"
+        dest_dir.mkdir(exist_ok=True)
+        # Set up per-molecule logging (file only, mirror step6 convention)
+        log_path = dest_dir / "process.log"
+        try:
+            setup_logging(str(log_path), also_console=False)
+        except Exception:
+            pass
+        # Snapshot propagation with unified precedence (mirrors step6):
+        #   1. results/electrofit.toml
+        #   2. process/<mol>/electrofit.toml
+        #   3. data/input/<mol>/electrofit.toml
+        #   4. project_root/electrofit.toml
+        snap_dest = build_snapshot_with_layers(
+            dest_dir,
+            project_root,
+            mol_dir.name,
+            multi_molecule=multi_mol,
+            log_fn=logging.info,
+            upstream=results_dir / "electrofit.toml",
+            process_cfg=mol_dir / "electrofit.toml",
+            molecule_input=project_root / "data" / "input" / mol_dir.name / "electrofit.toml",
+            project_defaults=project_root / "electrofit.toml",
+            extra_override=override_cfg,
+        )
+        cfg = load_config(project_root, context_dir=dest_dir, molecule_name=mol_dir.name)
+        try:
+            dump_config(cfg, log_fn=logging.info)
+            # flush handlers so config appears immediately
+            for h in logging.getLogger().handlers:
+                try:
+                    h.flush()
+                except Exception:
+                    pass
+        except Exception as e:  # pragma: no cover
+            logging.debug(f"[step7] config dump failed: {e}")
+        # Locate acpype in results
+        acpype_dir = None
+        for sub in results_dir.iterdir():
+            if sub.is_dir() and sub.name.endswith(".acpype"):
+                acpype_dir = sub; break
+        if not acpype_dir:
+            print(f"[step7][skip] {mol_dir.name}: no .acpype dir in results")
+            continue
+        # Copy matched topology/input files
+        for fn in os.listdir(acpype_dir):
+            for pat in file_patterns:
+                if fnmatch.fnmatch(fn, pat):
+                    shutil.copy(acpype_dir / fn, dest_dir)
+                    logging.info(f"[step7] Copied {fn} -> {dest_dir}")
                     break
-            else:
-                print(f"No acpype directory found in {run_gau_dir}")
+        # Copy MDP dir
+        md_dest = dest_dir / "MDP"
+        if mdp_source_dir.is_dir():
+            if md_dest.exists():
+                shutil.rmtree(md_dest)
+            shutil.copytree(mdp_source_dir, md_dest)
+            logging.info(f"[step7] Copied MDP -> {md_dest}")
         else:
-            print(f"'results' does not exist in {folder_path}")
+            print(f"[step7][warn] no MDP source {mdp_source_dir}")
+        # Copy gmx.sh if present
+        if bash_script_source.is_file():
+            shutil.copy(bash_script_source, dest_dir / "gmx.sh")
+        # Reset logging handlers for this molecule (avoid handler leakage when multiple molecules)
+        reset_logging()
+        done += 1
+    print(f"[step7] Prepared final sim dirs for {done}/{len(mol_dirs)} molecules.")
 
-print("Done!")
+
+if __name__ == "__main__":  # pragma: no cover
+    main()

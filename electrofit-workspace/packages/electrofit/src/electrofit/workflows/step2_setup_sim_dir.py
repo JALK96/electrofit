@@ -1,131 +1,158 @@
+"""Step2: Create run_gmx_simulation directories per molecule.
+
+Copies GROMACS input files from *.acpype subdirectories of run_gau_create_gmx_in/, propagates electrofit.toml snapshot,
+copies MDP templates and builds a run.json manifest for Step3.
+
+Now uses unified logging & snapshot layering (results > process/<mol> > data/input/<mol> > project).
+
+CLI: electrofit step2 --project <path> [--config override.toml]
+"""
+import argparse
 import fnmatch
 import os
 import shutil
 import json
+import logging
+from pathlib import Path
 
-from electrofit.config.loader import load_config
+from electrofit.config.loader import load_config, dump_config
+from electrofit.workflows.snapshot import build_snapshot_with_layers, CONFIG_ARG_HELP
+from electrofit.logging import setup_logging, log_run_header, reset_logging
 
-PROJECT_PATH = os.environ.get("ELECTROFIT_PROJECT_PATH", os.getcwd())
-CONFIG_PATH = os.environ.get("ELECTROFIT_CONFIG_PATH")  # optional
-project_path = PROJECT_PATH
 
-# Define the base process directory
-process_dir = os.path.join(project_path, "process")
-
-# Path to the MD directory
-mdp_source_dir = os.path.join(project_path, "data/MDP")
-
-cfg = load_config(project_path, CONFIG_PATH)
-
-# Helper to write a manifest for step3
 def _write_manifest(dest_dir: str, files: dict[str, str], mdp_subdir: str = "MDP") -> None:
     """Write a small run.json manifest so step3 can run deterministically."""
-    # molecule: derive from .gro without extension, strip a trailing "_GMX" if present
     gro = files.get("gro")
     molecule = None
     if gro:
         base = os.path.splitext(os.path.basename(gro))[0]
         molecule = base[:-4] if base.endswith("_GMX") else base
+    def _basename(val):
+        return os.path.basename(val) if isinstance(val, str) and val else ""
     manifest = {
-        "molecule": molecule,
-        "gro": os.path.basename(files.get("gro", "")),
-        "top": os.path.basename(files.get("top", "")),
-        "itp": os.path.basename(files.get("itp", "")),
-        "posres": os.path.basename(files.get("posres", "")),
+        "molecule": molecule or "unknown",
+        "gro": _basename(files.get("gro")),
+        "top": _basename(files.get("top")),
+        "itp": _basename(files.get("itp")),
+        "posres": _basename(files.get("posres")),
         "mdp_dir": mdp_subdir,
     }
     with open(os.path.join(dest_dir, "run.json"), "w") as f:
         json.dump(manifest, f, indent=2)
-    print(f"Wrote manifest: {os.path.join(dest_dir, 'run.json')}")
-
-# File patterns to search for
-file_patterns = ["*GMX.gro", "*GMX.itp", "*GMX.top", "posre_*.itp"]
-
-for folder_name in os.listdir(process_dir):
-    folder_path = os.path.join(process_dir, folder_name)
-    if not os.path.isdir(folder_path):
-        continue
-
-    run_gau_dir = os.path.join(folder_path, "run_gau_create_gmx_in")
-    if not os.path.isdir(run_gau_dir):
-        print(f"'run_gau_create_gmx_in' does not exist in {folder_path}")
-        continue
-
-    # Destination: run_gmx_simulation
-    dest_dir = os.path.join(folder_path, "run_gmx_simulation")
-    os.makedirs(dest_dir, exist_ok=True)
-
-    # copy .ef file(s) from run_gau_* (your existing logic)
-    for file in os.listdir(run_gau_dir):
-        if file.endswith(".ef"):
-            src = os.path.join(run_gau_dir, file)
-            if os.path.exists(src):
-                shutil.copy2(src, os.path.join(dest_dir, os.path.basename(src)))
-                print(f"Copied {file} to {dest_dir}")
-            else:
-                print(f"Configuration input file (.ef) does not exist: {src}")
-
-    # locate the acpype directory
-    acpype_folder_path = None
-    for subfolder_name in os.listdir(run_gau_dir):
-        if subfolder_name.endswith(".acpype"):
-            acpype_folder_path = os.path.join(run_gau_dir, subfolder_name)
-            break
-    if not acpype_folder_path:
-        print(f"No acpype directory found in {run_gau_dir}")
-        continue
-
-    # Copy matching files from acpype
-    for pattern in file_patterns:
-        for file_name in os.listdir(acpype_folder_path):
-            if fnmatch.fnmatch(file_name, pattern):
-                shutil.copy(
-                    os.path.join(acpype_folder_path, file_name),
-                    dest_dir,
-                )
-                print(f"Copied {file_name} to {dest_dir}")
-
-    # Copy the MDP directory
-    md_dest_dir = os.path.join(dest_dir, "MDP")
-    if os.path.exists(mdp_source_dir):
-        # handle re-runs gracefully
-        if os.path.exists(md_dest_dir):
-            shutil.rmtree(md_dest_dir)
-        shutil.copytree(mdp_source_dir, md_dest_dir)
-        print(f"Copied MDP directory to {md_dest_dir}")
-    else:
-        print(f"MDP source directory does not exist: {mdp_source_dir}")
+    logging.info(f"[step2] Wrote manifest: {os.path.join(dest_dir, 'run.json')}")
 
 
-    # Build and write manifest for step3
-    selected = {"gro": None, "itp": None, "top": None, "posres": None}
-    for name in os.listdir(dest_dir):
-        if name.endswith(".gro") and name.endswith("GMX.gro"):
-            selected["gro"] = os.path.join(dest_dir, name)
-        elif name.endswith(".itp") and name.endswith("GMX.itp"):
-            selected["itp"] = os.path.join(dest_dir, name)
-        elif name.endswith(".top"):
-            selected["top"] = os.path.join(dest_dir, name)
-        elif name.startswith("posre_") and name.endswith(".itp"):
-            selected["posres"] = os.path.join(dest_dir, name)
-    # Fallback scan if patterns above didn't match
-    if not selected["gro"]:
+def main():  # pragma: no cover (CLI wrapper)
+    ap = argparse.ArgumentParser(description="Step2: Prepare run_gmx_simulation directories")
+    ap.add_argument("--project", default=os.environ.get("ELECTROFIT_PROJECT_PATH", os.getcwd()))
+    ap.add_argument("--config", help=CONFIG_ARG_HELP)
+    ap.add_argument("--log-console", action="store_true", help="Also echo logs to console")
+    args = ap.parse_args()
+
+    project_path = Path(args.project).resolve()
+    process_dir = project_path / "process"
+    mdp_source_dir = project_path / "data" / "MDP"
+    if not process_dir.is_dir():
+        print("[step2] No process directory.")
+        return
+    mol_dirs = [p for p in process_dir.iterdir() if p.is_dir()]
+    multi_mol = len(mol_dirs) > 1
+
+    # Global config (for defaults & echo at top-level)
+    top_log = project_path / "step2.log"
+    setup_logging(str(top_log), also_console=args.log_console)
+    log_run_header("step2")
+    base_cfg = load_config(project_path)
+    dump_config(base_cfg, log_fn=logging.info)
+
+    file_patterns = ["*GMX.gro", "*GMX.itp", "*GMX.top", "posre_*.itp"]
+
+    prepared = 0
+    for folder_path in mol_dirs:
+        run_gau_dir = folder_path / "run_gau_create_gmx_in"
+        if not run_gau_dir.is_dir():
+            logging.info(f"[step2][skip] {folder_path.name}: no run_gau_create_gmx_in dir")
+            continue
+        dest_dir = folder_path / "run_gmx_simulation"
+        dest_dir.mkdir(exist_ok=True)
+        # Per-molecule logging
+        reset_logging()
+        setup_logging(str(dest_dir / "process.log"), also_console=False)
+        log_run_header("step2")
+        upstream_snap = run_gau_dir / "electrofit.toml"
+        molecule_input = project_path / "data" / "input" / folder_path.name / "electrofit.toml"
+        process_cfg = folder_path / "electrofit.toml"
+        project_defaults = project_path / "electrofit.toml"
+        extra_override = Path(args.config) if args.config else None
+        snap_dest = build_snapshot_with_layers(
+            dest_dir,
+            project_path,
+            folder_path.name,
+            multi_molecule=multi_mol,
+            log_fn=logging.info,
+            upstream=upstream_snap,
+            process_cfg=process_cfg,
+            molecule_input=molecule_input,
+            project_defaults=project_defaults,
+            extra_override=extra_override,
+        )
+        # Locate acpype
+        acpype_dir = None
+        for sub in run_gau_dir.iterdir():
+            if sub.is_dir() and sub.name.endswith(".acpype"):
+                acpype_dir = sub; break
+        if not acpype_dir:
+            logging.warning(f"[step2][skip] {folder_path.name}: no .acpype dir")
+            continue
+        # Copy matched topology/input files
+        for pattern in file_patterns:
+            for file_name in os.listdir(acpype_dir):
+                if fnmatch.fnmatch(file_name, pattern):
+                    shutil.copy(acpype_dir / file_name, dest_dir)
+                    logging.info(f"[step2] Copied {file_name} -> {dest_dir}")
+        # Copy MDP dir
+        md_dest_dir = dest_dir / "MDP"
+        if mdp_source_dir.is_dir():
+            if md_dest_dir.exists():
+                shutil.rmtree(md_dest_dir)
+            shutil.copytree(mdp_source_dir, md_dest_dir)
+            logging.info(f"[step2] Copied MDP -> {md_dest_dir}")
+        else:
+            logging.warning(f"[step2][warn] no MDP source {mdp_source_dir}")
+        # Build manifest
+        selected = {"gro": None, "itp": None, "top": None, "posres": None}
         for name in os.listdir(dest_dir):
-            if name.endswith(".gro"):
-                selected["gro"] = os.path.join(dest_dir, name); break
-    if not selected["itp"]:
-        for name in os.listdir(dest_dir):
-            if name.endswith(".itp") and not name.startswith("posre_"):
-                selected["itp"] = os.path.join(dest_dir, name); break
-    if not selected["top"]:
-        for name in os.listdir(dest_dir):
-            if name.endswith(".top"):
-                selected["top"] = os.path.join(dest_dir, name); break
-    if not selected["posres"]:
-        for name in os.listdir(dest_dir):
-            if name.startswith("posre_") and name.endswith(".itp"):
-                selected["posres"] = os.path.join(dest_dir, name); break
+            if name.endswith("GMX.gro"):
+                selected["gro"] = os.path.join(dest_dir, name)
+            elif name.endswith("GMX.itp") and not name.startswith("posre_"):
+                selected["itp"] = os.path.join(dest_dir, name)
+            elif name.endswith(".top"):
+                selected["top"] = os.path.join(dest_dir, name)
+            elif name.startswith("posre_") and name.endswith(".itp"):
+                selected["posres"] = os.path.join(dest_dir, name)
+        # Fallback scans
+        if not selected["gro"]:
+            for name in os.listdir(dest_dir):
+                if name.endswith(".gro"):
+                    selected["gro"] = os.path.join(dest_dir, name); break
+        if not selected["itp"]:
+            for name in os.listdir(dest_dir):
+                if name.endswith(".itp") and not name.startswith("posre_"):
+                    selected["itp"] = os.path.join(dest_dir, name); break
+        if not selected["top"]:
+            for name in os.listdir(dest_dir):
+                if name.endswith(".top"):
+                    selected["top"] = os.path.join(dest_dir, name); break
+        if not selected["posres"]:
+            for name in os.listdir(dest_dir):
+                if name.startswith("posre_") and name.endswith(".itp"):
+                    selected["posres"] = os.path.join(dest_dir, name); break
+        _write_manifest(dest_dir, selected, mdp_subdir="MDP")
+        prepared += 1
+        reset_logging()
 
-    _write_manifest(dest_dir, selected, mdp_subdir="MDP")
+    print(f"[step2] Prepared simulation dirs for {prepared}/{len(mol_dirs)} molecules.")
 
-print("Done!")
+
+if __name__ == "__main__":  # pragma: no cover
+    main()

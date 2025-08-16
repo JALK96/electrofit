@@ -2,9 +2,7 @@
 
 [project]
 name               = "IP6"
-molecule_name      = "IP_011101"   # must match the MOL2 filename stem
 residue_name       = "IP6"         # 3–4 char residue code
-charge             = -8
 protocol           = "bcc"         # "bcc" or "opt"
 adjust_symmetry    = true
 ignore_symmetry    = false

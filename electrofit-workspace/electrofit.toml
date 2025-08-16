@@ -4,8 +4,9 @@ molecule_name = "LIG"
 residue_name  = "LIG"
 charge = 0
 protocol = "bcc"
-adjust_symmetry = true
+adjust_symmetry = false
 ignore_symmetry = false
+calculate_group_average = false
 atom_type = "gaff2"
 
 [paths]

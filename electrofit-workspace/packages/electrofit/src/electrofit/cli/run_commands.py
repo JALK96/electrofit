@@ -346,13 +346,42 @@ def run_resp(
     - previous_charges (str): RESP output of first stage resp fitting.
     - scratch_dir (str): Directory where the command is executed.
     """
-    command = (
-        f"resp -O -i {respin_file} -o {resp_output} "
-        f"-p {resp_pch} -t {resp_chg} -e {esp_file}"
-    )
-    if previous_charges:
-        command += (
-            f" -q {previous_charges}"  # Example for adding previous charges if needed
+    # Always use basenames in command to avoid RESP issues with long/absolute paths
+    rf_abs = respin_file
+    ef_abs = esp_file
+    pq_abs = previous_charges
+    rf = os.path.basename(respin_file)
+    ef = os.path.basename(esp_file)
+    pq = os.path.basename(previous_charges) if previous_charges else None
+    if rf_abs != rf or ef_abs != ef:
+        logging.debug(
+            "[resp-path] Using basenames for RESP command: -i %s -e %s (orig -i %s -e %s)",
+            rf, ef, rf_abs, ef_abs,
         )
+    if pq_abs and pq_abs != pq:
+        logging.debug(
+            "[resp-path] Using basename for previous charges: -q %s (orig %s)", pq, pq_abs
+        )
+    # Sanity: ensure files exist in cwd
+    for needed in [rf, ef] + ([pq] if pq else []):
+        if not os.path.isfile(os.path.join(scratch_dir, needed)):
+            logging.error("[resp-path] Required file '%s' not found in scratch; aborting RESP", needed)
+            raise FileNotFoundError(needed)
+    command = (
+        f"resp -O -i {rf} -o {resp_output} "
+        f"-p {resp_pch} -t {resp_chg} -e {ef}"
+    )
+    if pq:
+        command += f" -q {pq}"
     run_command(command, cwd=scratch_dir)
+    # Validate expected output artifacts
+    missing = [f for f in (resp_output, resp_pch, resp_chg) if not os.path.isfile(os.path.join(scratch_dir, f))]
+    if missing:
+        # One retry (only if first run used absolute original path forms, but we already switched to basename) -> list directory
+        listing = sorted(os.listdir(scratch_dir))
+        logging.error(
+            "[resp-validate] Missing expected RESP output file(s): %s (cwd listing: %s)",
+            ", ".join(missing), ", ".join(listing)
+        )
+        raise RuntimeError(f"RESP failed to produce: {', '.join(missing)}")
     logging.info(f"RESP fitting using '{respin_file}' completed.")

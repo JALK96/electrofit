@@ -25,3 +25,6 @@ def test_step2_builds_run_dir(tmp_path, shim_bin, monkeypatch):
     assert any(p.name.endswith(("_GMX.gro","_GMX.itp",".top")) for p in run_dir.iterdir())
     # MDP copied/linked
     assert (run_dir/"MDP").is_dir()
+    # Header present in per-molecule log
+    plog = (run_dir/"process.log").read_text().splitlines()
+    assert any(line.startswith("electrofit ") and "step=step2" in line for line in plog), "Missing header line in process.log"

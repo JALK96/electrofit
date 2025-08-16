@@ -2,6 +2,8 @@ import logging
 import os
 import subprocess
 import sys
+import time
+import shutil
 
 from electrofit.cli.run_commands import (
     create_gaussian_input,
@@ -17,11 +19,11 @@ from electrofit.io.files import (
     pdb_to_mol2,
     replace_charge_in_ac_file,
 )
-from electrofit.cli.safe_run import register_scratch
+from electrofit.cli.safe_run import ensure_finalized
 from electrofit.io.resp import edit_resp_input
 from electrofit.scratch.manager import (
-    finalize_scratch_directory,
     setup_scratch_directory,
+    finalize_scratch_directory,
 )
 from electrofit.io.mol2 import update_mol2_charges
 from electrofit.core.symmetry import write_symmetry
@@ -29,277 +31,213 @@ from electrofit.core.symmetry import write_symmetry
 PROJECT_PATH = os.environ.get("ELECTROFIT_PROJECT_PATH", os.getcwd())
 project_path = PROJECT_PATH
 
+
 def process_conform(
-    molecule_name,
-    pdb_file,
-    base_scratch_dir,
-    net_charge,
-    residue_name,
-    adjust_sym=False,
-    ignore_sym=False,
-    exit_screen=True,
-    protocol="bcc",
+    molecule_name: str,
+    pdb_file: str,
+    base_scratch_dir: str,
+    net_charge: int,
+    residue_name: str,
+    adjust_sym: bool = False,
+    ignore_sym: bool = False,
+    exit_screen: bool = True,
+    protocol: str = "bcc",
 ):
+    """Process a single conformer: PDB -> MOL2, Gaussian ESP, RESP charges.
+
+    Steps:
+      1. Convert PDB to MOL2 (standard naming/atom ordering)
+      2. Build & run Gaussian single point (or opt+SP if future variant)
+      3. Generate ESP surface file (`espgen`)
+      4. (bcc protocol) Reconstruct RESP input via bondtype + respgen
+      5. Optional symmetry constraint editing (or ignoring) for RESP1
+      6. Run RESP stage 1 & 2
+      7. Write RESP-charged mol2
+    Scratch is auto-finalized (copy back + cleanup) via ensure_finalized.
     """
-    Processes the conformers from the simulation output: Antechamber, Gaussian calculation, espgen, RESP fitting.
 
-    Parameters:
-    - molecule_name (str): Name of the molecule.
-    - pdb_file (str): Path to the input pdb file.
-    - base_scratch_dir (str): Base directory for scratch space.
-    - net_charge (int): Net charge of the molecule.
-    """
-    # Define RESP input
-    if adjust_sym:
-        respin1_file = "ANTECHAMBER_RESP1_MOD.IN"
-    else:
-        respin1_file = "ANTECHAMBER_RESP1.IN"
-
-    respin2_file = "ANTECHAMBER_RESP2.IN"
-
+    # Decide which input files to copy to scratch
     if protocol == "opt":
-        # Setup scratch directory with RESP input files
-        input_files = [
-            pdb_file,
-            respin1_file,
-            respin2_file,
-        ]  # Only include existing input files
-
-    if protocol == "bcc":
+        respin1_base = "ANTECHAMBER_RESP1_MOD.IN" if adjust_sym else "ANTECHAMBER_RESP1.IN"
+        input_files: list[str] = [pdb_file, respin1_base, "ANTECHAMBER_RESP2.IN"]
+    else:  # bcc
         if adjust_sym:
-            # Setup scratch directory with pdb input file, and equiv_groups.json
-            input_files = [pdb_file, find_file_with_extension("json")]
+            json_file = find_file_with_extension("json")
+            input_files = [pdb_file, json_file] if json_file else [pdb_file]
         else:
-            # Setup scratch directory with pdb input file
             input_files = [pdb_file]
 
     scratch_dir, original_dir = setup_scratch_directory(input_files, base_scratch_dir)
-
-    register_scratch(
-    original_dir=original_dir,
-    scratch_dir=scratch_dir,
-    input_files=input_files,
-    # output_files=None,               # optional (default: copy everything else)
-    # overwrite=True,                  # optional
-    # remove_parent_if_empty=True,     # optional (works with your updated finalize)
-    )
-
     print(f"Following {protocol} protocol.")
 
     try:
-        # Step 0: Resolve Structure
-        mol2_file = f"{molecule_name}.mol2"
-        pdb_to_mol2(pdb_file, mol2_file, residue_name, cwd=scratch_dir)
-
-        # Step 1: Generate Gaussian input file
-        create_gaussian_input(mol2_file, molecule_name, net_charge, scratch_dir)
-
-        # Modify gaussian input: replace "opt" with ""
-        gaussian_input = f"{molecule_name}.gcrt"
-        modify_gaussian_input(gaussian_input)
-
-        # Step 2: Run Gaussian calculation
-        run_gaussian_calculation(gaussian_input, molecule_name, scratch_dir)
-
-        # Step 3: Run espgen to generate .esp file
-        gesp_file = f"{molecule_name}.gesp"
-        esp_file = f"{molecule_name}.esp"
-        run_espgen(gesp_file, esp_file, scratch_dir)
-
-        # Step 3.1: Run antechamber to generate RespIN files if bcc protocol
-        if protocol == "bcc":
-            # Step 4: Prepare RESP input files
-            # gaussian_out_to_prepi(g_out, scratch_dir) # needs to be changed. use: "bondtype -i input.mol2 -o input_bondtype.ac -f mol2 -j part"
-            run_command(
-                f"bondtype -i {mol2_file} -o {molecule_name}.ac -f mol2 -j part",
-                cwd=scratch_dir,
-            )
-            replace_charge_in_ac_file(
-                file_path=f"{molecule_name}.ac",
-                new_charge_float=net_charge,
-                cwd=scratch_dir,
-            )
-            run_command(
-                f"respgen -i {molecule_name}.ac -o ANTECHAMBER_RESP1.IN -f resp1",
-                cwd=scratch_dir,
-            )
-            run_command(
-                f"respgen -i {molecule_name}.ac -o ANTECHAMBER_RESP2.IN -f resp2",
-                cwd=scratch_dir,
-            )
-
-            # At this point, antechamber should have generated RESP input files in scratch_dir
-            respin1_file = os.path.join(scratch_dir, "ANTECHAMBER_RESP1.IN")
+        defer_finalize = os.environ.get("ELECTROFIT_DEBUG_DEFER_FINALIZE") == "1"
+        if defer_finalize:
+            print(f"[debug-defer] start body (no auto-finalize) scratch={scratch_dir}", flush=True)
+        context_mgr = None if defer_finalize else ensure_finalized(
+            original_dir=original_dir,
+            scratch_dir=scratch_dir,
+            input_files=input_files,
+            remove_parent_if_empty=False,
+        )
+        if context_mgr is not None:
+            with context_mgr:
+                # Step 0: PDB -> MOL2
+                mol2_file = f"{molecule_name}.mol2"
+                pdb_to_mol2(pdb_file, mol2_file, residue_name, cwd=scratch_dir)
+                # Step 1
+                create_gaussian_input(mol2_file, molecule_name, net_charge, scratch_dir)
+                gaussian_input = f"{molecule_name}.gcrt"
+                modify_gaussian_input(gaussian_input)
+                # Step 2 (Gaussian) with optional debug cache skip
+                gaussian_cache = os.environ.get("ELECTROFIT_DEBUG_GAUSSIAN_CACHE")
+                skipped_gaussian = False
+                if gaussian_cache:
+                    cache_base = os.path.join(gaussian_cache, molecule_name)
+                    # Expect precomputed files; copy if present
+                    copied = []
+                    for ext in ("gcrt", "gcrt.log", "gesp"):
+                        src = f"{cache_base}.{ext}"
+                        if os.path.isfile(src):
+                            dst = os.path.join(scratch_dir, f"{molecule_name}.{ext}")
+                            shutil.copy2(src, dst)
+                            copied.append(os.path.basename(dst))
+                    if any(f.endswith(".gesp") for f in copied):
+                        logging.info("[debug-gaussian-cache] Using cached Gaussian artifacts: %s", copied)
+                        skipped_gaussian = True
+                    else:
+                        logging.warning("[debug-gaussian-cache] Cache enabled but missing .gesp for %s; running Gaussian normally", molecule_name)
+                if not skipped_gaussian:
+                    run_gaussian_calculation(gaussian_input, molecule_name, scratch_dir)
+                # Step 3
+                gesp_file = f"{molecule_name}.gesp"
+                esp_file = f"{molecule_name}.esp"
+                run_espgen(gesp_file, esp_file, scratch_dir)
+                # Step 4 (bcc)
+                if protocol == "bcc":
+                    run_command(f"bondtype -i {mol2_file} -o {molecule_name}.ac -f mol2 -j part", cwd=scratch_dir)
+                    replace_charge_in_ac_file(file_path=f"{molecule_name}.ac", new_charge_float=net_charge, cwd=scratch_dir)
+                    run_command(f"respgen -i {molecule_name}.ac -o ANTECHAMBER_RESP1.IN -f resp1", cwd=scratch_dir)
+                    run_command(f"respgen -i {molecule_name}.ac -o ANTECHAMBER_RESP2.IN -f resp2", cwd=scratch_dir)
+                    if adjust_sym:
+                        json_filename = run_python(find_file_with_extension, "json", cwd=scratch_dir)
+                        if not json_filename:
+                            raise FileNotFoundError("No *.json symmetry file found in scratch.")
+                        json_symmetry_file = json_filename if os.path.isabs(json_filename) else os.path.join(scratch_dir, json_filename)
+                        run_python(
+                            edit_resp_input,
+                            input_file="ANTECHAMBER_RESP1.IN",
+                            equiv_groups_file=json_symmetry_file,
+                            output_file="ANTECHAMBER_RESP1_MOD.IN",
+                            ignore_sym=ignore_sym,
+                            cwd=scratch_dir,
+                        )
+                respin1_file = os.path.join(scratch_dir, "ANTECHAMBER_RESP1_MOD.IN" if adjust_sym else "ANTECHAMBER_RESP1.IN")
+                respin2_file = os.path.join(scratch_dir, "ANTECHAMBER_RESP2.IN")
+                for fpath in (respin1_file, respin2_file):
+                    fname = os.path.basename(fpath)
+                    if os.path.isfile(fpath):
+                        logging.debug("[resp-check] Searching for %s: FOUND (proceeding)", fname)
+                    else:
+                        logging.debug("[resp-check] Searching for %s: MISSING", fname)
+                        raise FileNotFoundError(f"Missing RESP input file: {fname}")
+                logging.info("RESP input files ready.")
+                run_python(write_symmetry, respin1_file, "symmetry_resp_MOD.txt" if adjust_sym else "symmetry_resp.txt", cwd=scratch_dir)
+                resp_output1 = f"{molecule_name}-resp1.out"; resp_pch1 = f"{molecule_name}-resp1.pch"; resp_chg1 = f"{molecule_name}-resp1.chg"
+                if adjust_sym:
+                    logging.debug("Sleeping 1 second before first RESP (MOD file in use)")
+                    time.sleep(1)
+                run_resp(respin1_file, esp_file, resp_output1, resp_pch1, resp_chg1, scratch_dir)
+                resp_output2 = f"{molecule_name}-resp2.out"; resp_pch2 = f"{molecule_name}-resp2.pch"; resp_chg2 = f"{molecule_name}-resp2.chg"
+                run_resp(respin2_file, esp_file, resp_output2, resp_pch2, resp_chg2, scratch_dir, resp_chg1)
+                mol2_resp = f"{molecule_name}_resp.mol2"
+                run_python(update_mol2_charges, mol2_file, resp_chg2, mol2_resp, cwd=scratch_dir)
+        else:
+            # Manual mode without automatic finalize (deferred finalize)
+            mol2_file = f"{molecule_name}.mol2"
+            pdb_to_mol2(pdb_file, mol2_file, residue_name, cwd=scratch_dir)
+            create_gaussian_input(mol2_file, molecule_name, net_charge, scratch_dir)
+            gaussian_input = f"{molecule_name}.gcrt"
+            modify_gaussian_input(gaussian_input)
+            gaussian_cache = os.environ.get("ELECTROFIT_DEBUG_GAUSSIAN_CACHE")
+            skipped_gaussian = False
+            if gaussian_cache:
+                cache_base = os.path.join(gaussian_cache, molecule_name)
+                copied = []
+                for ext in ("gcrt", "gcrt.log", "gesp"):
+                    src = f"{cache_base}.{ext}"
+                    if os.path.isfile(src):
+                        dst = os.path.join(scratch_dir, f"{molecule_name}.{ext}")
+                        shutil.copy2(src, dst)
+                        copied.append(os.path.basename(dst))
+                if any(f.endswith(".gesp") for f in copied):
+                    logging.info("[debug-gaussian-cache] Using cached Gaussian artifacts: %s", copied)
+                    skipped_gaussian = True
+                else:
+                    logging.warning("[debug-gaussian-cache] Cache enabled but missing .gesp for %s; running Gaussian normally", molecule_name)
+            if not skipped_gaussian:
+                run_gaussian_calculation(gaussian_input, molecule_name, scratch_dir)
+            gesp_file = f"{molecule_name}.gesp"; esp_file = f"{molecule_name}.esp"
+            run_espgen(gesp_file, esp_file, scratch_dir)
+            if protocol == "bcc":
+                run_command(f"bondtype -i {mol2_file} -o {molecule_name}.ac -f mol2 -j part", cwd=scratch_dir)
+                replace_charge_in_ac_file(file_path=f"{molecule_name}.ac", new_charge_float=net_charge, cwd=scratch_dir)
+                run_command(f"respgen -i {molecule_name}.ac -o ANTECHAMBER_RESP1.IN -f resp1", cwd=scratch_dir)
+                run_command(f"respgen -i {molecule_name}.ac -o ANTECHAMBER_RESP2.IN -f resp2", cwd=scratch_dir)
+                if adjust_sym:
+                    json_filename = run_python(find_file_with_extension, "json", cwd=scratch_dir)
+                    if not json_filename:
+                        raise FileNotFoundError("No *.json symmetry file found in scratch.")
+                    json_symmetry_file = json_filename if os.path.isabs(json_filename) else os.path.join(scratch_dir, json_filename)
+                    run_python(
+                        edit_resp_input,
+                        input_file="ANTECHAMBER_RESP1.IN",
+                        equiv_groups_file=json_symmetry_file,
+                        output_file="ANTECHAMBER_RESP1_MOD.IN",
+                        ignore_sym=ignore_sym,
+                        cwd=scratch_dir,
+                    )
+            respin1_file = os.path.join(scratch_dir, "ANTECHAMBER_RESP1_MOD.IN" if adjust_sym else "ANTECHAMBER_RESP1.IN")
             respin2_file = os.path.join(scratch_dir, "ANTECHAMBER_RESP2.IN")
+            for fpath in (respin1_file, respin2_file):
+                fname = os.path.basename(fpath)
+                if os.path.isfile(fpath):
+                    logging.debug("[resp-check] Searching for %s: FOUND (proceeding)", fname)
+                else:
+                    logging.debug("[resp-check] Searching for %s: MISSING", fname)
+                    raise FileNotFoundError(f"Missing RESP input file: {fname}")
+            logging.info("RESP input files ready.")
+            run_python(write_symmetry, respin1_file, "symmetry_resp_MOD.txt" if adjust_sym else "symmetry_resp.txt", cwd=scratch_dir)
+            resp_output1 = f"{molecule_name}-resp1.out"; resp_pch1 = f"{molecule_name}-resp1.pch"; resp_chg1 = f"{molecule_name}-resp1.chg"
+            if adjust_sym:
+                logging.debug("Sleeping 1 second before first RESP (MOD file in use)")
+                time.sleep(1)
+            run_resp(respin1_file, esp_file, resp_output1, resp_pch1, resp_chg1, scratch_dir)
+            resp_output2 = f"{molecule_name}-resp2.out"; resp_pch2 = f"{molecule_name}-resp2.pch"; resp_chg2 = f"{molecule_name}-resp2.chg"
+            run_resp(respin2_file, esp_file, resp_output2, resp_pch2, resp_chg2, scratch_dir, resp_chg1)
+            mol2_resp = f"{molecule_name}_resp.mol2"
+            run_python(update_mol2_charges, mol2_file, resp_chg2, mol2_resp, cwd=scratch_dir)
+            print(f"[debug-defer] manual finalize now", flush=True)
+            finalize_scratch_directory(original_dir, scratch_dir, input_files, output_files=None, overwrite=True, remove_parent_if_empty=False, reason="defer-finalize")
 
-            # Verify that RESP input files are created
-            resp_files = [respin1_file, respin2_file]
-            missing_resp_files = [
-                file for file in resp_files if not os.path.isfile(file)
-            ]
-            if missing_resp_files:
-                logging.error(
-                    f"Missing RESP input files: {', '.join(missing_resp_files)}"
-                )
-                raise FileNotFoundError(
-                    "RESP input files were not generated by antechamber."
-                )
-            else:
-                logging.info("RESP input files generated successfully.")
-
-            if adjust_sym and not ignore_sym:
-                # Find self defined symmetry file in scratch
-                json_filename = run_python(find_file_with_extension, "json", cwd=scratch_dir)
-                if not json_filename:
-                    raise FileNotFoundError("No *.json symmetry file found in scratch.")
-                json_symmetry_file = (
-                    json_filename
-                    if os.path.isabs(json_filename)
-                    else os.path.join(scratch_dir, json_filename)
-                )
-
-                # Edit RESP1.IN applying equivalence constraints
-                run_python(
-                    edit_resp_input,
-                    input_file="ANTECHAMBER_RESP1.IN",
-                    equiv_groups_file=json_symmetry_file,
-                    output_file="ANTECHAMBER_RESP1_MOD.IN",
-                    ignore_sym=False,
-                    cwd=scratch_dir,
-                )
-
-                # Re-define the respin1-file
-                respin1_file = os.path.join(scratch_dir, "ANTECHAMBER_RESP1_MOD.IN")
-
-            if adjust_sym and ignore_sym:
-                # Find self defined symmetry file in scratch
-                json_filename = run_python(find_file_with_extension, "json", cwd=scratch_dir)
-                if not json_filename:
-                    raise FileNotFoundError("No *.json symmetry file found in scratch.")
-                json_symmetry_file = (
-                    json_filename
-                    if os.path.isabs(json_filename)
-                    else os.path.join(scratch_dir, json_filename)
-                )
-
-                # Produce pass-through MOD that ignores equivalence constraints
-                run_python(
-                    edit_resp_input,
-                    input_file="ANTECHAMBER_RESP1.IN",
-                    equiv_groups_file=json_symmetry_file,
-                    output_file="ANTECHAMBER_RESP1_MOD.IN",
-                    ignore_sym=True,
-                    cwd=scratch_dir,
-                )
-
-                # Re-define the respin1-file
-                respin1_file = os.path.join(scratch_dir, "ANTECHAMBER_RESP1_MOD.IN")
-
-        # Step 4: Prepare/Define RESP input files
-        if adjust_sym:
-            respin1_file = os.path.join(scratch_dir, "ANTECHAMBER_RESP1_MOD.IN")
-        else:
-            respin1_file = os.path.join(scratch_dir, "ANTECHAMBER_RESP1.IN")
-
-        respin2_file = os.path.join(scratch_dir, "ANTECHAMBER_RESP2.IN")
-
-        # Verify that RESP input files are present
-        resp_files = [respin1_file, respin2_file]
-        missing_resp_files = [file for file in resp_files if not os.path.isfile(file)]
-        if missing_resp_files:
-            logging.error(f"Missing RESP input files: {', '.join(missing_resp_files)}")
-            raise FileNotFoundError(
-                "RESP input files were not generated by antechamber."
-            )
-        else:
-            logging.info("RESP input files generated successfully.")
-
-        # Write symmetry output to check
-        if adjust_sym:
-            # Write symmetry output of altered RESP1_MOD.IN to check/compare
-            run_python(
-                write_symmetry,
-                respin1_file,
-                "symmetry_resp_MOD.txt",
-                cwd=scratch_dir,
-            )
-
-        else:
-            # Write symmetry output of RESP1.IN to check/compare
-            run_python(
-                write_symmetry,
-                respin1_file,
-                "symmetry_resp.txt",
-                cwd=scratch_dir,
-            )
-
-        # Step 5: Run RESP fitting stages
-        resp_output1 = f"{molecule_name}-resp1.out"
-        resp_pch1 = f"{molecule_name}-resp1.pch"
-        resp_chg1 = f"{molecule_name}-resp1.chg"
-        run_resp(
-            respin1_file, esp_file, resp_output1, resp_pch1, resp_chg1, scratch_dir
-        )
-        logging.info("RESP fitting stage 1 completed.")
-
-        resp_output2 = f"{molecule_name}-resp2.out"
-        resp_pch2 = f"{molecule_name}-resp2.pch"
-        resp_chg2 = f"{molecule_name}-resp2.chg"
-        run_resp(
-            respin2_file,
-            esp_file,
-            resp_output2,
-            resp_pch2,
-            resp_chg2,
-            scratch_dir,
-            resp_chg1,
-        )
-        logging.info("RESP fitting stage 2 completed.")
-
-        # Step 6: Generate mol2 file with RESP charges
-        mol2_resp = f"{molecule_name}_resp.mol2"
-
-        run_python(
-            update_mol2_charges,
-            mol2_file,
-            resp_chg2,
-            mol2_resp,
-            cwd=scratch_dir,
-        )
-
-        # Finalize scratch directory
-        finalize_scratch_directory(original_dir, scratch_dir, input_files)
-
-        # Exit screen session (close detached session)
+        # Screen session exit outside context (scratch already finalized)
+        print(f"[process-conform-after-finalize] {molecule_name} defer={defer_finalize}", flush=True)
         if exit_screen:
             try:
-                # Change back to the original directory
                 os.chdir(original_dir)
-                logging.info(f"Changed directory to '{original_dir}'.")
-            except Exception as e:
-                logging.error(f"Failed to change directory to '{original_dir}': {e}")
-                sys.exit(1)
-
-            # Retrieve the current Screen session name from the environment
+            except Exception:
+                pass
             sty = os.environ.get("STY")
-
             if sty:
                 try:
-                    # Send the 'quit' command to the current Screen session
                     subprocess.run(["screen", "-S", sty, "-X", "quit"], check=True)
-                    logging.info(f"Successfully exited Screen session: {sty}")
-                except subprocess.CalledProcessError as e:
-                    logging.error(
-                        f"Failed to send quit command to Screen session '{sty}': {e}"
-                    )
-                    sys.exit(1)
+                except subprocess.CalledProcessError:
+                    logging.warning("Failed to quit screen session %s", sty)
             else:
-                logging.warning(
-                    "The 'STY' environment variable was not found. This script may not be running inside a Screen session."
-                )
-                sys.exit(1)
+                logging.debug("No STY env var; not in screen.")
 
     except Exception as e:
         logging.error(f"Error processing conform: {e}")
-        finalize_scratch_directory(original_dir, scratch_dir, input_files)
-        exit(1)
+        raise
+    # End marker for debugging hard exit issues
+    print(f"[process-conform-end] {molecule_name}", flush=True)

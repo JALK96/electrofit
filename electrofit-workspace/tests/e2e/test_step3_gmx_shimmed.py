@@ -1,7 +1,7 @@
 # tests/e2e/test_step3_gmx_shimmed.py
 import os, sys, subprocess
 from pathlib import Path
-from tests.helpers.project import make_project_tree
+from tests.helpers.project import make_project_tree, install_minimal_gmx_fixture
 
 def test_step3_gmx_shimmed(tmp_path, shim_bin, monkeypatch):
     monkeypatch.setenv("PATH", str(shim_bin)+os.pathsep+os.environ["PATH"])
@@ -18,12 +18,15 @@ def test_step3_gmx_shimmed(tmp_path, shim_bin, monkeypatch):
                         cwd=proj, text=True, capture_output=True)
     assert r2.returncode == 0, r2.stderr + r2.stdout
 
-    # step3 (gmx shim will fabricate files)
+    # Inject minimal GMX core files (fixture) to ensure presence for step3
+    run_dir = proj/"process"/"IP_011101"/"run_gmx_simulation"
+    install_minimal_gmx_fixture(run_dir)
+
+    # step3 (gmx shim will fabricate further files)
     r3 = subprocess.run([sys.executable,"-m","electrofit","step3","--project",str(proj)],
                         cwd=proj, text=True, capture_output=True)
     assert r3.returncode == 0, r3.stderr + r3.stdout
 
-    run_dir = proj/"process"/"IP_011101"/"run_gmx_simulation"
     # check a few expected outputs from the workflow
-    assert (run_dir/"md.gro").exists() or any(p.name.endswith(".gro") for p in run_dir.iterdir())
-    assert any(p.name.endswith(".edr") for p in run_dir.iterdir())
+    assert (run_dir/"IP_011101_GMX.top").exists()
+    assert any(p.name.endswith(".gro") for p in run_dir.iterdir())

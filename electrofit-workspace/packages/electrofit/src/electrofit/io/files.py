@@ -2,6 +2,8 @@ import glob
 import json
 import logging
 import os
+import tempfile
+import uuid
 import re
 import shutil
 import sys
@@ -270,7 +272,6 @@ binary_to_ip = {
 def copy_and_rename_folders(
     source,
     destination,
-    bash_script_source=f"{project_path}/scripts/pis.sh",
     nested_folder="run_gau_create_gmx_in",
 ):
     """
@@ -318,14 +319,7 @@ def copy_and_rename_folders(
 
             print(f"Copied '{folder_path}' to '{nested_dest_path}'")
 
-            # Copy bash script (to process initial structure) to destination directory
-            bash_script_name = os.path.basename(bash_script_source)
-            bash_dest_path = os.path.join(nested_dest_path, bash_script_name)
-            try:
-                shutil.copy2(bash_script_source, bash_dest_path)
-                print(f"Copied {bash_script_source} to {bash_dest_path}")
-            except Exception as e:
-                print(f"Error copying file: {e}")
+            # Legacy pis.sh distribution removed; no script copying performed.
 
 
 def rename_mol2_binary(base_dir, binary):
@@ -454,7 +448,7 @@ def pdb_to_mol2(input_file, output_file, residue_name, cwd=None):
     obConversion.WriteFile(mol, output_file)
 
 
-def mol2_to_pdb_with_bonds(input_file, existing_pdb_file, cwd=None):
+def mol2_to_pdb_with_bonds(input_file, existing_pdb_file, cwd=None, verbose: bool = False):
     """
     Convert a MOL2 file to a PDB format, extract the bond information,
     and insert it into an existing PDB file. Inserts bond info before ENDMDL if present;
@@ -468,26 +462,35 @@ def mol2_to_pdb_with_bonds(input_file, existing_pdb_file, cwd=None):
     if cwd:
         os.chdir(cwd)
 
-    obConversion = openbabel.OBConversion()
+    if not os.path.isfile(input_file):
+        raise FileNotFoundError(f"mol2_to_pdb_with_bonds: source mol2 missing: {input_file}")
+    if not os.path.isfile(existing_pdb_file):
+        raise FileNotFoundError(f"mol2_to_pdb_with_bonds: target PDB missing: {existing_pdb_file}")
 
-    # Convert MOL2 to PDB
+    obConversion = openbabel.OBConversion()
     obConversion.SetInAndOutFormats("mol2", "pdb")
     mol = openbabel.OBMol()
-    obConversion.ReadFile(mol, input_file)
+    if not obConversion.ReadFile(mol, input_file):
+        raise RuntimeError(f"OpenBabel failed to read mol2 {input_file}")
 
-    # Write to a temporary PDB file to hold bond information
-    temp_pdb_path = "temp_with_bonds.pdb"
-    obConversion.WriteFile(mol, temp_pdb_path)
+    # Use a unique temp filename to avoid collisions in parallel execution
+    temp_pdb_path = f"temp_with_bonds_{uuid.uuid4().hex}.pdb"
+    if not obConversion.WriteFile(mol, temp_pdb_path):
+        raise RuntimeError(f"OpenBabel failed to write temporary PDB from {input_file}")
+    if not os.path.isfile(temp_pdb_path):
+        raise FileNotFoundError(f"Expected temporary PDB not created: {temp_pdb_path}")
 
-    # Extract bond information from temporary PDB file
     bond_info = []
-    with open(temp_pdb_path, "r") as pdb_temp:
-        for line in pdb_temp:
-            if line.startswith("CONECT"):
-                bond_info.append(line)
-
-    # Clean up temporary file
-    os.remove(temp_pdb_path)
+    try:
+        with open(temp_pdb_path, "r") as pdb_temp:
+            for line in pdb_temp:
+                if line.startswith("CONECT"):
+                    bond_info.append(line)
+    finally:
+        try:
+            os.remove(temp_pdb_path)
+        except OSError:
+            pass
 
     # Create the REMARK line to document the added bond information
     remark_line = f"REMARK   1 EDITED BY electrofit: Added bond information from {os.path.basename(input_file)}\n"
@@ -510,8 +513,12 @@ def mol2_to_pdb_with_bonds(input_file, existing_pdb_file, cwd=None):
     with open(existing_pdb_file, "w") as existing_pdb:
         existing_pdb.writelines(modified_pdb_content)
 
-    print(f"Bond information inserted before ENDMDL or END in {existing_pdb_file}")
-    print(f"REMARK added: {remark_line.strip()}")
+    import logging
+    msg1 = f"Bond information inserted before ENDMDL or END in {existing_pdb_file}"
+    msg2 = f"REMARK added: {remark_line.strip()}"
+    if verbose:
+        logging.info(msg1)
+        logging.info(msg2)
 
 
 def parse_mol2(mol2_file):

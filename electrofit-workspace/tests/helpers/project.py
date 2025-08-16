@@ -2,6 +2,7 @@
 import os, json
 from pathlib import Path           # <-- add this line
 from .mol2 import write_minimal_mol2
+from shutil import copy2
 
 def make_project_tree(root: Path, name: str = "IP_011101") -> dict[str, Path]:
     root.mkdir(parents=True, exist_ok=True)
@@ -62,3 +63,21 @@ base_scratch_dir = "{root}/_scratch"
         "mol2": mol2,
         "run_dir": run_dir,
     }
+
+FIXTURE_MIN_GMX = Path(__file__).resolve().parent.parent / "fixtures" / "minimal_gmx"
+
+def install_minimal_gmx_fixture(run_sim_dir: Path):
+    """Copy minimal GMX core files into an existing run_gmx_simulation directory.
+
+    Used in tests to avoid patching production code. Assumes directory exists.
+    """
+    needed = [
+        "IP_011101_GMX.gro",
+        "IP_011101_GMX.itp",
+        "IP_011101_GMX.top",
+        "posre_IP_011101.itp",
+    ]
+    for name in needed:
+        src = FIXTURE_MIN_GMX / name
+        if src.is_file():
+            copy2(src, run_sim_dir / name)

@@ -2,6 +2,7 @@ import filecmp
 import logging
 import os
 import shutil
+import hashlib
 
 from electrofit.logging import setup_logging
 
@@ -19,6 +20,8 @@ def setup_scratch_directory(input_files, base_scratch_dir="/scratch/johannal96/t
     - original_dir (str): Path to the original working directory.
     """
     base_scratch_dir = base_scratch_dir or "/tmp/electrofit_scratch"
+    # Expand env vars and user (~); allow ${USER} etc.
+    base_scratch_dir = os.path.expanduser(os.path.expandvars(base_scratch_dir))
     fullpath = os.getcwd()
     calcdir = os.path.basename(fullpath)
     parent_dir = os.path.dirname(fullpath)
@@ -27,7 +30,8 @@ def setup_scratch_directory(input_files, base_scratch_dir="/scratch/johannal96/t
 
     # Initialize logging with log file in original_dir
     log_file_path = os.path.join(fullpath, "process.log")
-    setup_logging(log_file_path)
+    suppress = any(h for h in logging.getLogger().handlers if isinstance(h, logging.FileHandler))
+    setup_logging(log_file_path, suppress_initial_message=suppress)
 
     # Create scratch directory
     os.makedirs(scratch_dir, exist_ok=True)
@@ -39,11 +43,34 @@ def setup_scratch_directory(input_files, base_scratch_dir="/scratch/johannal96/t
         dst = os.path.join(scratch_dir, file)
         if os.path.exists(src):
             if os.path.isfile(src):
-                shutil.copy2(src, dst)
-                logging.info(f"Copied file '{file}' to scratch directory.")
+                # Avoid SameFileError if source already in scratch (e.g., test uses scratch under original dir)
+                if os.path.abspath(src) == os.path.abspath(dst):
+                    logging.debug(f"Skip copying '{file}' – source and destination identical.")
+                else:
+                    shutil.copy2(src, dst)
+                    logging.info(f"Copied file '{file}' to scratch directory.")
             elif os.path.isdir(src):
-                shutil.copytree(src, dst)
-                logging.info(f"Copied directory '{file}' to scratch directory.")
+                # If destination dir already exists from a previous aborted run, refresh it
+                if os.path.isdir(dst):
+                    try:
+                        shutil.rmtree(dst)
+                        logging.info(
+                            f"Removed pre-existing scratch subdirectory '{file}' (stale)."
+                        )
+                    except Exception as e:
+                        logging.warning(
+                            f"Could not remove existing scratch subdirectory '{file}': {e}. Attempting to proceed."
+                        )
+                try:
+                    shutil.copytree(src, dst)
+                    logging.info(
+                        f"Copied directory '{file}' to scratch directory."
+                    )
+                except FileExistsError:
+                    # Fallback: Python <3.8 without dirs_exist_ok or race condition
+                    logging.warning(
+                        f"Directory '{file}' already existed after removal attempt; leaving as-is."
+                    )
             else:
                 logging.warning(
                     f"Input item '{file}' is neither a file nor a directory. Skipping copy."
@@ -101,9 +128,15 @@ def _rmdir_if_empty(path: str) -> bool:
 
 
 def finalize_scratch_directory(
-    original_dir, scratch_dir, input_files, output_files=None, overwrite=True, remove_parent_if_empty=True
+    original_dir,
+    scratch_dir,
+    input_files,
+    output_files=None,
+    overwrite=True,
+    remove_parent_if_empty=True,
+    reason: str | None = None,
 ):
-    """
+    """Finalize a scratch directory by copying back changed inputs & desired outputs then cleaning up.
     Recursively checks input files and directories for changes and copies updated content
     back to the original directory. Also processes output files/directories from scratch_dir.
     If an item appears in both input_files and output_files, it will only be processed as an input.
@@ -119,7 +152,17 @@ def finalize_scratch_directory(
     - overwrite (bool, optional):
           If True, updated input items will be copied back (after renaming the original).
           If False, even if differences are detected the original content will be preserved.
+    - reason (str | None, optional): Diagnostic tag for caller context (e.g. "defer-finalize").
     """
+    print(f"[scratch-debug] enter finalize original={original_dir} scratch={scratch_dir}", flush=True)
+    if reason:
+        logging.debug(f"Finalize scratch directory reason={reason}")
+    # Short-circuit if scratch dir vanished earlier (already finalized)
+    if not os.path.isdir(scratch_dir):
+        logging.debug(f"Scratch directory already removed: {scratch_dir}")
+        print(f"[scratch-debug] skip finalize (missing) {scratch_dir}", flush=True)
+        return
+
     # --- Process Input Files/Directories ---
     for item in input_files:
         src = os.path.join(scratch_dir, item)
@@ -195,6 +238,20 @@ def finalize_scratch_directory(
 
     logging.info(f"Output files to be copied back: {output_files}")
 
+    # Helper: streaming SHA256 (avoids loading large files fully into RAM)
+    def _sha256(path: str, _buf_size: int = 1024 * 1024) -> str:
+        h = hashlib.sha256()
+        try:
+            with open(path, "rb") as f:
+                while True:
+                    chunk = f.read(_buf_size)
+                    if not chunk:
+                        break
+                    h.update(chunk)
+        except FileNotFoundError:
+            return ""  # signal missing
+        return h.hexdigest()
+
     for item in output_files:
         src = os.path.join(scratch_dir, item)
         dst = os.path.join(original_dir, item)
@@ -207,16 +264,26 @@ def finalize_scratch_directory(
 
         if os.path.isfile(src):
             if os.path.exists(dst):
-                base, ext = os.path.splitext(dst)
-                counter = 1
-                new_dst = f"{base}_copy{counter}{ext}"
-                while os.path.exists(new_dst):
-                    counter += 1
+                # Hash-Vergleich: nur kopieren wenn Inhalt verschieden
+                try:
+                    src_hash = _sha256(src)
+                    dst_hash = _sha256(dst)
+                except Exception as e:
+                    logging.debug(f"Hash compare failed for '{item}': {e}; falling back to duplicate copy policy.")
+                    src_hash = dst_hash = None  # force copy branch below
+                if src_hash and dst_hash and src_hash == dst_hash:
+                    logging.info(f"File '{item}' unchanged (SHA256 match). No copy generated.")
+                else:
+                    base, ext = os.path.splitext(dst)
+                    counter = 1
                     new_dst = f"{base}_copy{counter}{ext}"
-                shutil.copy2(src, new_dst)
-                logging.info(
-                    f"File '{item}' already exists. Renamed to '{os.path.basename(new_dst)}'."
-                )
+                    while os.path.exists(new_dst):
+                        counter += 1
+                        new_dst = f"{base}_copy{counter}{ext}"
+                    shutil.copy2(src, new_dst)
+                    logging.info(
+                        f"File '{item}' already exists and differs (hash/content). Copied as '{os.path.basename(new_dst)}'."
+                    )
             else:
                 shutil.copy2(src, dst)
                 logging.info(f"Copied file '{item}' back to original directory.")
@@ -249,3 +316,5 @@ def finalize_scratch_directory(
             _rmdir_if_empty(parent_dir)
     except Exception as e:
         logging.error(f"Failed to remove scratch directory '{scratch_dir}': {e}")
+    finally:
+        print(f"[scratch-debug] leave finalize original={original_dir} scratch={scratch_dir}", flush=True)

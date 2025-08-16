@@ -167,6 +167,10 @@ def _finalize_one(reg: _Reg, reason: str) -> None:
             overwrite=reg.overwrite,
             remove_parent_if_empty=reg.remove_parent_if_empty,
         )
+        try:
+            sys.stderr.write(f"[electrofit][debug] finalize complete for {reg.scratch_dir}\n")
+        except Exception:
+            pass
     except Exception:
         # Avoid raising exceptions during interpreter shutdown; print a brief report.
         try:
@@ -215,6 +219,10 @@ def ensure_finalized(
     When the block exits, we pop and finalize this one explicitly, so the
     global cleanup (if it later runs) won't re-finalize it.
     """
+    try:
+        sys.stderr.write(f"[ensure-finalized-enter] scratch={scratch_dir} orig={original_dir}\n")
+    except Exception:
+        pass
     register_scratch(
         original_dir=original_dir,
         scratch_dir=scratch_dir,
@@ -224,11 +232,27 @@ def ensure_finalized(
         remove_parent_if_empty=remove_parent_if_empty,
     )
     try:
+        try:
+            sys.stderr.write(f"[ensure-finalized-before-yield] scratch={scratch_dir}\n")
+        except Exception:
+            pass
         yield
     finally:
+        try:
+            sys.stderr.write(f"[ensure-finalized-after-yield] scratch={scratch_dir}\n")
+        except Exception:
+            pass
         reg = _state.pop_last()
         if reg is not None:
+            try:
+                sys.stderr.write(f"[ensure-finalized-finalize-start] scratch={scratch_dir}\n")
+            except Exception:
+                pass
             _finalize_one(reg, reason="context-exit")
+            try:
+                sys.stderr.write(f"[ensure-finalized-finalize-done] scratch={scratch_dir}\n")
+            except Exception:
+                pass
 
 
 # Register atexit cleanup once on import

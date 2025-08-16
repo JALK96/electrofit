@@ -1,7 +1,7 @@
 # packages/electrofit/src/electrofit/config/loader.py
 from __future__ import annotations
 
-from dataclasses import dataclass, field, is_dataclass
+from dataclasses import dataclass, field, is_dataclass, fields
 from pathlib import Path
 import typing as t
 import os
@@ -9,9 +9,9 @@ import os
 try:
     import tomllib  # py>=3.11
 except ModuleNotFoundError:  # pragma: no cover
-    import tomli as tomllib
+    import tomli as tomllib  # type: ignore
 
-from .legacy import ConfigParser as LegacyConfigParser
+"""TOML configuration loader (legacy .ef fallback removed)."""
 
 # -----------------
 # Dataclass schema
@@ -27,8 +27,6 @@ class ProjectSection:
     adjust_symmetry: bool = False
     ignore_symmetry: bool = False
     atom_type: str | None = None
-    # NEW: select FF folder used for includes (tip3p.itp, ions.itp, forcefield.itp)
-    forcefield: str = "amber14sb.ff"
 
 @dataclass
 class PathsSection:
@@ -74,6 +72,8 @@ class SimulationIonsSection:
 class SimulationSection:
     box: SimulationBoxSection = field(default_factory=SimulationBoxSection)
     ions: SimulationIonsSection = field(default_factory=SimulationIonsSection)
+    # Canonical location for forcefield selection (folder name with .ff)
+    forcefield: str = "amber14sb.ff"
 
 @dataclass
 class Config:
@@ -112,6 +112,39 @@ def _merge_into_dataclass(section, payload: dict):
         else:
             if v is not None:
                 setattr(section, k, v)
+
+
+def _flatten_dataclass(obj, prefix: str = ""):
+    """Yield (key_path, value) for leaf attributes of nested dataclasses.
+
+    Lists and non-dataclass objects are treated as leaves. Dataclass field order
+    is preserved to keep dumps stable across runs (useful for diffing).
+    """
+    if is_dataclass(obj):
+        for f in fields(obj):  # preserve declaration order
+            val = getattr(obj, f.name)
+            key = f"{prefix}.{f.name}" if prefix else f.name
+            if is_dataclass(val):
+                yield from _flatten_dataclass(val, key)
+            else:
+                yield key, val
+    else:
+        # Fallback – not expected for root call
+        yield prefix or "value", obj
+
+
+def dump_config(cfg: "Config", log_fn=print, header: bool = True):
+    """Log all config settings (flattened) with a stable ordering.
+
+    Format: [config] section.sub.key = value
+    Nested dataclasses are traversed depth-first in field declaration order.
+    """
+    if header:
+        log_fn("[config] -- begin full config dump --")
+    for key, val in _flatten_dataclass(cfg):
+        log_fn(f"[config] {key} = {val}")
+    if header:
+        log_fn("[config] -- end full config dump --")
 
 def _infer_molecule_name_from_context(ctx: Path, project_root: Path) -> str | None:
     """
@@ -208,47 +241,7 @@ def load_config(
         payload = _load_toml(p)
         data = _deep_merge(data, payload)
 
-    if not data:
-        # Fallback to legacy .ef
-        ef_path: Path | None = None
-        for cand in [root, root / "data" / "input"]:
-            if cand.is_dir():
-                ef_files = list(cand.glob("*.ef"))
-                if ef_files:
-                    ef_path = ef_files[0]
-                    break
-        if ef_path is None:
-            ef_path = next(root.rglob("*.ef"), None)
-
-        if ef_path:
-            legacy = LegacyConfigParser(str(ef_path))
-            data = {
-                "project": {
-                    "name": getattr(legacy, "MoleculeName", None),
-                    "molecule_name": getattr(legacy, "MoleculeName", None),
-                    "residue_name": getattr(legacy, "ResidueName", None),
-                    "charge": getattr(legacy, "Charge", None),
-                    "protocol": getattr(legacy, "Protocol", None),
-                    "adjust_symmetry": getattr(legacy, "AdjustSymmetry", False),
-                    "ignore_symmetry": getattr(legacy, "IgnoreSymmetry", False),
-                    "atom_type": getattr(legacy, "AtomType", None),
-                },
-                "paths": {
-                    "base_scratch_dir": getattr(legacy, "BaseScratchDir", None),
-                },
-                # map a few common simulation keys if present in legacy files
-                "simulation": {
-                    "box": {
-                        "type": getattr(legacy, "BoxType", "dodecahedron"),
-                        "edge_nm": getattr(legacy, "BoxEdgeDistance", 1.2),
-                    },
-                    "ions": {
-                        "cation": getattr(legacy, "Cation", "NA"),
-                        "anion": getattr(legacy, "Anion", "CL"),
-                        "concentration": getattr(legacy, "IonConcentration", 0.15),
-                    },
-                },
-            }
+    # If no TOML data found we simply return defaults (no legacy .ef fallback).
 
     # Build the Config object and merge sections (recursively for nested dataclasses)
     cfg = Config(project_root=root)

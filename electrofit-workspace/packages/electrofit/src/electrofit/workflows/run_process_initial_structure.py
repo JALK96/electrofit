@@ -2,7 +2,7 @@
 import argparse
 import os
 
-from electrofit.config.loader import load_config
+from electrofit.config.loader import load_config, dump_config
 from electrofit.core.process_initial_structure import process_initial_structure
 from electrofit.io.files import find_file_with_extension
 
@@ -14,12 +14,12 @@ def main():
 
     run_dir = os.getcwd()
 
-    # If caller provided a specific TOML, use it; else prefer run-local, then project-level.
-    provided_cfg = os.environ.get("ELECTROFIT_CONFIG_PATH")
+    # Config resolution: prefer run-local snapshot; external overrides are injected earlier via builder in step1.
     run_local_cfg = os.path.join(run_dir, "electrofit.toml")
-    cfg_path = provided_cfg or (run_local_cfg if os.path.isfile(run_local_cfg) else None)
+    cfg_path = run_local_cfg if os.path.isfile(run_local_cfg) else None
 
     cfg = load_config(project_root, config_path=cfg_path)
+    dump_config(cfg)
 
     # ---- decide scratch dir with fallbacks ----
     base_scratch_dir = (
@@ -36,6 +36,9 @@ def main():
             mol2_from_name = cand
 
     mol2_file = mol2_from_name or find_file_with_extension("mol2")
+    if not mol2_file:
+        print("[step1][skip] no mol2 file detected in run directory; nothing to process")
+        return
     molecule_name = os.path.splitext(os.path.basename(mol2_file))[0]
 
     additional_input = []

@@ -16,7 +16,7 @@ log "SCRIPT_DIR=$SCRIPT_DIR"
 # --- project + config paths ---
 # NOTE: when called directly, three levels up is the project root (…/tests/integration)
 PROJECT_DIR="${ELECTROFIT_PROJECT_PATH:-"$(cd "$SCRIPT_DIR/../../.." && pwd)"}"
-CONFIG_FILE="${ELECTROFIT_CONFIG_PATH:-"$SCRIPT_DIR/electrofit.toml"}"
+CONFIG_FILE="$SCRIPT_DIR/electrofit.toml"
 [[ -f "$CONFIG_FILE" ]] || fail "config not found: $CONFIG_FILE"
 log "PROJECT_DIR=$PROJECT_DIR"
 log "CONFIG_FILE=$CONFIG_FILE"

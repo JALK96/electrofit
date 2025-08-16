@@ -14,9 +14,8 @@ from electrofit.io.files import (
     strip_extension,
 )
 from electrofit.logging import setup_logging
-from electrofit.cli.safe_run import register_scratch
+from electrofit.cli.safe_run import ensure_finalized
 from electrofit.scratch.manager import (
-    finalize_scratch_directory,
     setup_scratch_directory,
 )
 
@@ -171,7 +170,9 @@ def set_up_production(
     fullpath = os.getcwd()
     # Initialize logging with log file in cwd
     log_file_path = os.path.join(fullpath, "process.log")
-    setup_logging(log_file_path)
+    # Suppress duplicate 'initialized' line if a handler already exists
+    suppress = any(h for h in logging.getLogger().handlers if isinstance(h, logging.FileHandler))
+    setup_logging(log_file_path, suppress_initial_message=suppress)
     logging.info(f"Logging initialized. Log file: {log_file_path}")
 
     # Exptract name of your input
@@ -209,141 +210,132 @@ def set_up_production(
     # Only include existing input files/directories
     scratch_dir, original_dir = setup_scratch_directory(input_files, base_scratch_dir)
 
-    register_scratch(
-    original_dir=original_dir,
-    scratch_dir=scratch_dir,
-    input_files=input_files,
-    # output_files=None,               # optional (default: copy everything else)
-    # overwrite=True,                  # optional
-    # remove_parent_if_empty=True,     # optional (default: True)
-    )
+    # Work inside a managed finalize context to avoid duplicate cleanup
+    with ensure_finalized(
+        original_dir=original_dir,
+        scratch_dir=scratch_dir,
+        input_files=input_files,
+    ):
+        os.chdir(scratch_dir)
 
-    # Go to scratch to call the xvg-files with pandas for plotting
-    os.chdir(scratch_dir)
+        # Define dodecahedron box with ligand at center, > d nm to edge and rotate the system to the principal axes (-princ)
+        run_command(
+            f"echo 0 | gmx editconf -f {m_gro} -o {m_gro_name}_box.gro -bt {box_type} -d {d} -c -princ -nobackup",
+            cwd=scratch_dir,
+        )
 
-    # Define dodecahedron box with ligand at center, > d nm to edge and rotate the system to the principal axes (-princ)
-    run_command(
-        f"echo 0 | gmx editconf -f {m_gro} -o {m_gro_name}_box.gro -bt {box_type} -d {d} -c -princ -nobackup",
-        cwd=scratch_dir,
-    )
+        # Solvate the system
+        run_command(
+            f"gmx solvate -cp {m_gro_name}_box.gro -cs spc216 -o {m_gro_name}_tip3p.gro -p {m_gro_name}.top -nobackup",
+            cwd=scratch_dir,
+        )
 
-    # Solvate the system
-    run_command(
-        f"gmx solvate -cp {m_gro_name}_box.gro -cs spc216 -o {m_gro_name}_tip3p.gro -p {m_gro_name}.top -nobackup",
-        cwd=scratch_dir,
-    )
+        # Visualize changes made to topology
+        run_command(f"tail {m_gro_name}.top", cwd=scratch_dir)
 
-    # Visualize changes made to topology
-    run_command(f"tail {m_gro_name}.top", cwd=scratch_dir)
+        # Create empty ions.mdp file (neccessary in order to generate ions.tpr file)
+        run_command("touch ions.mdp", cwd=scratch_dir)
 
-    # Create empty ions.mdp file (neccessary in order to generate ions.tpr file)
-    run_command("touch ions.mdp", cwd=scratch_dir)
+        # Add Ions
+        run_command(
+            f"gmx grompp -f ions.mdp -c {m_gro_name}_tip3p.gro -p {m_gro_name}.top -o ions.tpr",
+            cwd=scratch_dir,
+        )
 
-    # Add Ions
-    run_command(
-        f"gmx grompp -f ions.mdp -c {m_gro_name}_tip3p.gro -p {m_gro_name}.top -o ions.tpr",
-        cwd=scratch_dir,
-    )
+        # Replace Solvent with Ions (i.e. NA, CL)
+        run_command(
+            f'echo "SOL" | gmx genion -s ions.tpr -o {m_gro_name}_tip3p_ions.gro -conc {conc} -p {m_gro_name}.top -pname {cation} -nname {anion} -neutral',
+            cwd=scratch_dir,
+        )
 
-    # Replace Solvent with Ions (i.e. NA, CL)
-    run_command(
-        f'echo "SOL" | gmx genion -s ions.tpr -o {m_gro_name}_tip3p_ions.gro -conc {conc} -p {m_gro_name}.top -pname {cation} -nname {anion} -neutral',
-        cwd=scratch_dir,
-    )
+        # Visualize changes made to topology
+        run_command(f"tail {m_gro_name}.top", cwd=scratch_dir)
 
-    # Visualize changes made to topology
-    run_command(f"tail {m_gro_name}.top", cwd=scratch_dir)
+        # Energy minimization
+        run_command(
+            f"gmx grompp -f {mdp_dirname}/em_steep.mdp -c {m_gro_name}_tip3p_ions.gro -p {m_gro_name}.top -o em_steep.tpr",
+            cwd=scratch_dir,
+        )
+        run_command("gmx mdrun -deffnm em_steep -nobackup", cwd=scratch_dir)
 
-    # Energy minimization
-    run_command(
-        f"gmx grompp -f {mdp_dirname}/em_steep.mdp -c {m_gro_name}_tip3p_ions.gro -p {m_gro_name}.top -o em_steep.tpr",
-        cwd=scratch_dir,
-    )
-    run_command("gmx mdrun -deffnm em_steep -nobackup", cwd=scratch_dir)
+        # Visualize energy convergence
+        run_command(
+            'echo "Potential\n0\n" | gmx energy -f em_steep.edr -o potential.xvg -xvg none',
+            cwd=scratch_dir,
+        )
+        plot_svg("potential.xvg")
 
-    # Visualize energy convergence
-    run_command(
-        'echo "Potential\n0\n" | gmx energy -f em_steep.edr -o potential.xvg -xvg none',
-        cwd=scratch_dir,
-    )
-    plot_svg("potential.xvg")
+        # Helper to assemble runtime flags
+        def _mdrun_flags():
+            flags = []
+            if threads is not None:
+                flags += ["-nt", str(threads)]
+            if pin is not None:
+                flags += ["-pin", "on" if pin else "off"]
+            flags.append("-nobackup")
+            return " ".join(flags)
 
-    # Helper to assemble runtime flags
-    def _mdrun_flags():
-        flags = []
-        if threads is not None:
-            flags += ["-nt", str(threads)]
-        if pin is not None:
-            flags += ["-pin", "on" if pin else "off"]
-        flags.append("-nobackup")
-        return " ".join(flags)
+        # Equilibrate the system
+        # NVT Equilibration
+        run_command(
+            f"gmx grompp -f {mdp_dirname}/NVT.mdp -c em_steep.gro -r em_steep.gro -p {m_gro_name}.top -o nvt.tpr -nobackup",
+            cwd=scratch_dir,
+        )
+        run_command(f"gmx mdrun -deffnm nvt {_mdrun_flags()}", cwd=scratch_dir)
+        run_command(
+            'echo "Temperature" | gmx energy -f nvt.edr -o temperature.xvg -xvg none -b 20',
+            cwd=scratch_dir,
+        )
+        plot_svg("temperature.xvg")
 
-    # Equilibrate the system
-    # NVT Equilibration
-    run_command(
-        f"gmx grompp -f {mdp_dirname}/NVT.mdp -c em_steep.gro -r em_steep.gro -p {m_gro_name}.top -o nvt.tpr -nobackup",
-        cwd=scratch_dir,
-    )
-    run_command(f"gmx mdrun -deffnm nvt {_mdrun_flags()}", cwd=scratch_dir)
-    run_command(
-        'echo "Temperature" | gmx energy -f nvt.edr -o temperature.xvg -xvg none -b 20',
-        cwd=scratch_dir,
-    )
-    plot_svg("temperature.xvg")
+        # NPT Equilibration
+        run_command(
+            f"gmx grompp -f {mdp_dirname}/NPT.mdp -c nvt.gro -r nvt.gro -p {m_gro_name}.top -o npt.tpr -nobackup",
+            cwd=scratch_dir,
+        )
+        run_command(f"gmx mdrun -deffnm npt {_mdrun_flags()}", cwd=scratch_dir)
+        run_command(
+            'echo "Pressure" | gmx energy -f npt.edr -o pressure.xvg -xvg none',
+            cwd=scratch_dir,
+        )
+        plot_svg("pressure.xvg")
 
-    # NPT Equilibration
-    run_command(
-        f"gmx grompp -f {mdp_dirname}/NPT.mdp -c nvt.gro -r nvt.gro -p {m_gro_name}.top -o npt.tpr -nobackup",
-        cwd=scratch_dir,
-    )
-    run_command(f"gmx mdrun -deffnm npt {_mdrun_flags()}", cwd=scratch_dir)
-    run_command(
-        'echo "Pressure" | gmx energy -f npt.edr -o pressure.xvg -xvg none',
-        cwd=scratch_dir,
-    )
-    plot_svg("pressure.xvg")
+        # Production: create input for production run
+        run_command(
+            f"gmx grompp -f {mdp_dirname}/Production.mdp -c npt.gro -t npt.cpt -p {m_gro_name}.top -o md.tpr",
+            cwd=scratch_dir,
+        )
 
-    # Production: create input for production run
-    run_command(
-        f"gmx grompp -f {mdp_dirname}/Production.mdp -c npt.gro -t npt.cpt -p {m_gro_name}.top -o md.tpr",
-        cwd=scratch_dir,
-    )
+        # Production run
+        run_command(
+            f"gmx mdrun -deffnm md {_mdrun_flags()}", cwd=scratch_dir
+        )  # -v optional
 
-    # Production run
-    run_command(
-        f"gmx mdrun -deffnm md {_mdrun_flags()}", cwd=scratch_dir
-    )  # -v optional
+        # Remove periodic jumps
+        run_command(
+            'echo 0 | gmx trjconv -s md.tpr -f md.xtc -o md_nojump.xtc -pbc nojump',
+            cwd=scratch_dir,
+        )
 
-    run_command(
-        "gmx trjconv -s md.tpr -f md.xtc -o md_nojump.xtc -pbc nojump", cwd=scratch_dir
-    )
+        # Center molecule
+        run_command(
+            'echo "1\n0\n" | gmx trjconv -s md.tpr -f md_nojump.xtc -o md_center.xtc -center -pbc mol',
+            cwd=scratch_dir,
+        )
 
-    # Center molecule
-    run_command(
-        'echo "1\n0\n" | gmx trjconv -s md.tpr -f md_nojump.xtc -o md_center.xtc -center -pbc mol',
-        cwd=scratch_dir,
-    )
+        # Calculate distance between molecule and its periodic image
+        run_command(
+            'echo "1\n" | gmx mindist -s md.tpr -f md_center.xtc -pi -od mindist.xvg',
+            cwd=scratch_dir,
+        )
 
-    # Alternativly center molecule and strip solvent
-    # run_command('echo "1\n1\n" | gmx trjconv -s md.tpr -f md.xtc -o md_center.xtc -center -pbc mol', cwd=scratch_dir)
-
-    # Calculate distance between molecule and its periodic image
-    run_command(
-        'echo "1\n" | gmx mindist -s md.tpr -f md_center.xtc -pi -od mindist.xvg',
-        cwd=scratch_dir,
-    )
-
-    # Radius of gyration (compactness)
-    run_command(
-        'echo "1" | gmx gyrate -f md_center.xtc -s md.tpr -o gyrate.xvg -xvg none',
-        cwd=scratch_dir,
-    )
-    plot_svg("gyrate.xvg")
-
-    # Finalize scratch directory
-    finalize_scratch_directory(original_dir, scratch_dir, input_files)
+        # Radius of gyration (compactness)
+        run_command(
+            'echo "1" | gmx gyrate -f md_center.xtc -s md.tpr -o gyrate.xvg -xvg none',
+            cwd=scratch_dir,
+        )
+        plot_svg("gyrate.xvg")
 
     if exit_screen:
         os.chdir(original_dir)
-        # Send the 'quit' command to the specified screen session
         subprocess.run(["screen", "-S", molecule_name, "-X", "quit"])

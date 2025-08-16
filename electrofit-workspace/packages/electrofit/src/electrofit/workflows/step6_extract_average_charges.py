@@ -1,15 +1,19 @@
+import argparse
 import fnmatch
 import glob
 import json
 import os
 import shutil
+import logging
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import pandas as pd
-from electrofit.io.mol2 import update_mol2_charges
 
+from electrofit.io.mol2 import update_mol2_charges
 from electrofit.cli.run_commands import run_acpype
-from electrofit.config_parser import ConfigParser
+from electrofit.config.loader import load_config, dump_config
+from electrofit.workflows.snapshot import build_snapshot_with_layers, CONFIG_ARG_HELP
 from electrofit.io.files import (
     adjust_atom_names,
     extract_charges_from_subdirectories,
@@ -18,7 +22,7 @@ from electrofit.io.files import (
     parse_charges_from_mol2,
 )
 from electrofit.logging import reset_logging, setup_logging
-from electrofit.plotting.helpers import plot_charges_by_atom, plot_charges_by_symmetry
+from electrofit.plotting.helpers import plot_charges_by_symmetry, plot_charges_by_atom
 
 PROJECT_PATH = os.environ.get("ELECTROFIT_PROJECT_PATH", os.getcwd())
 project_path = PROJECT_PATH
@@ -137,351 +141,164 @@ def plot_histograms(
     plt.close()
 
 
-process_dir = os.path.join(project_path, "process")
-
-# ---------------------- Remove outlier --------------------
-remove_outlier = False
-# ---------------------- Remove outlier --------------------
-
-
-
-# Iterate over each subdirectory in the process directory
-for sub_dir in os.listdir(process_dir):
-    sub_dir_path = os.path.join(process_dir, sub_dir)
-
-    # **Check if sub_dir is a directory**
-    if not os.path.isdir(sub_dir_path):
-        print(f"Skipping '{sub_dir_path}' as it is not a directory.")
-        continue  # Skip to the next item in the loop
-
-    # Base directory containing the subdirectories with mol2 files
-    base_dir = os.path.join(process_dir, sub_dir, "extracted_conforms")
-
-    # Initial processing directory
-    pis_dir = os.path.join(process_dir, sub_dir, "run_gau_create_gmx_in")
-
-    # Acpype directory
-    abstract_ac_dir = os.path.join(pis_dir, "*.acpype")
-
-    # Use glob to find all matching files or directories
-    ac_files = glob.glob(abstract_ac_dir)
-
-    # **Check if any .acpype directories/files are found**
-    if not ac_files:
-        print(
-            f"No '.acpype' directories/files found in '{pis_dir}'. Skipping '{sub_dir_path}'."
-        )
-        continue  # Skip to the next subdirectory
-
-    print(f"Acpype files found in {pis_dir}: {ac_files}")
-
-    ac_dir = ac_files[0]
-
-    results_dir = os.path.join(process_dir, sub_dir, "results")
-    os.makedirs(results_dir, exist_ok=True)
-
-    log_file_path = os.path.join(results_dir, "results.log")
-
-    # Change to base directory containig configuration file (.ef) and copy it into the results directory
-    os.chdir(base_dir)
-    config_file_path = os.path.join(base_dir, find_file_with_extension("ef"))
-    shutil.copy2(config_file_path, results_dir)
-
-    # Define molecule parameters
-    config = ConfigParser(config_file_path)
-    molecule_name = config.MoleculeName
-    print(f"Processing: {molecule_name}")
-    charge = config.Charge
-    print(f"Charge set to: {charge}")
-    atom_type = config.AtomType
-    print(f"AtomType set to: {atom_type}")
-    adjust_sym = config.AdjustSymmetry
-    print("AdjustSymmetry set to:", adjust_sym)
-    ignore_sym = config.IgnoreSymmetry
-    print("IgnoreSymmetry set to:", ignore_sym)
-    calc_group_average = config.CalculateGroupAverage  # ether true or false (bool)
-    print("CalculateGroupAverage set to:", calc_group_average)
-
-    updated_mol2_file = os.path.join(results_dir, f"averaged_{molecule_name}.mol2")
-
-    mol2_file_pattern = f"*{atom_type}.mol2"
-
-    for file_name in os.listdir(ac_dir):
-        if fnmatch.fnmatch(file_name, mol2_file_pattern):
-            mol2_source_file_path = os.path.join(ac_dir, file_name)
-            mol2_file_name = file_name
-            # Copy the file to the destination directory
-            # shutil.copy(source_file_path, results_dir)
-            # print(f"Copied {file_name} to {results_dir}")
-
-    # Extract the initial charges
-    initial_charges_dict = adjust_atom_names(
-        parse_charges_from_mol2(mol2_source_file_path)
+def _process_one(mol_dir: Path, project_root: Path, override_cfg: Path | None, multi_mol: bool, remove_outlier: bool):
+    """Process one molecule: aggregate charges across conformers and optionally symmetry-average."""
+    extracted = mol_dir / "extracted_conforms"
+    pis_dir = mol_dir / "run_gau_create_gmx_in"
+    results_dir = mol_dir / "results"
+    if not extracted.is_dir():
+        return False, "no extracted_conforms"
+    acpype_glob = list(pis_dir.glob("*.acpype"))
+    if not acpype_glob:
+        return False, "no acpype dir"
+    ac_dir = acpype_glob[0]
+    results_dir.mkdir(exist_ok=True)
+    # Set up per-molecule logging (align with step4/5 style, no console spam)
+    log_path = results_dir / "process.log"
+    try:
+        setup_logging(str(log_path), also_console=False)
+    except Exception:
+        pass  # fall back silently
+    # Ensure snapshot in results dir.
+    # Precedence mirrors step4 logic (context layering):
+    #   1. extracted_conforms/electrofit.toml
+    #   2. process/<mol>/electrofit.toml
+    #   3. data/input/<mol>/electrofit.toml
+    #   4. project_root/electrofit.toml
+    snapshot = build_snapshot_with_layers(
+        results_dir,
+        project_root,
+        mol_dir.name,
+        multi_molecule=multi_mol,
+        log_fn=logging.info,
+        upstream=extracted / "electrofit.toml",
+        process_cfg=mol_dir / "electrofit.toml",
+        molecule_input=project_root / "data" / "input" / mol_dir.name / "electrofit.toml",
+        project_defaults=project_root / "electrofit.toml",
+        extra_override=override_cfg,
     )
-
-    # Extract charges from all subdirectories
-    atoms_dict = extract_charges_from_subdirectories(base_dir, results_dir)
-
-    # Save dictionary to a JSON file
-    with open(os.path.join(results_dir, "charges_dict.json"), "w") as file:
-        json.dump(
-            atoms_dict, file, indent=4
-        )  # 'indent=4' makes the file human-readable
-    with open(os.path.join(results_dir, "initial_charges_dict.json"), "w") as file:
-        json.dump(initial_charges_dict, file, indent=4)
-
-    if adjust_sym:
-        os.chdir(pis_dir)
-        equiv_group_path = os.path.join(pis_dir, find_file_with_extension("json"))
-        equiv_group = load_symmetry_groups(equiv_group_path)
-
-        # Plot the charges and average charges
-        plot_charges_by_symmetry(
-            atoms_dict, initial_charges_dict, results_dir, equiv_group
-        )
-
-        if calc_group_average and not remove_outlier:
-            charges_dict_file = os.path.join(results_dir, "charges_dict.json")
-            # Calculate updated charges with symmetric group averages
-            updated_charges_dict = calculate_symmetric_group_averages(
-                charges_dict_file, equiv_group_path
-            )
-
-            # Go to the results directory and save the updated dictionary to a JSON file
-            os.chdir(results_dir)
-            with open(
-                os.path.join(results_dir, "group_average_charges_dict.json"), "w"
-            ) as file:
-                json.dump(
-                    updated_charges_dict, file, indent=4
-                )  # 'indent=4' makes the file human-readable
-
-            # Write the average charges to the output file
-            output_file = os.path.join(results_dir, "group_average_charges.txt")
+    # Load config with context=results so last-level wins
+    cfg = load_config(project_root, context_dir=results_dir, molecule_name=mol_dir.name)
+    # Dump layered config into log (avoid direct stdout noise)
+    try:
+        dump_config(cfg, log_fn=logging.info)
+        # Force flush of all file handlers so user immediately sees config in process.log
+        for _h in logging.getLogger().handlers:
             try:
-                with open(output_file, "w") as f:
+                _h.flush()
+            except Exception:
+                pass
+    except Exception as e:  # pragma: no cover
+        logging.debug(f"[step6] config dump failed: {e}")
+    proj = cfg.project
+    molecule_name = proj.molecule_name or mol_dir.name
+    charge = proj.charge or 0
+    atom_type = proj.atom_type or "gaff2"
+    adjust_sym = getattr(proj, "adjust_symmetry", False)
+    ignore_sym = getattr(proj, "ignore_symmetry", False)
+    calc_group_average = getattr(proj, "calculate_group_average", False)
+
+    # Find GAFF mol2 inside acpype
+    mol2_source_file_path = None
+    pattern = f"*{atom_type}.mol2"
+    for fn in os.listdir(ac_dir):
+        if fnmatch.fnmatch(fn, pattern):
+            mol2_source_file_path = os.path.join(ac_dir, fn)
+            break
+    if not mol2_source_file_path:
+        return False, "no matching mol2"
+
+    initial_charges_dict = adjust_atom_names(parse_charges_from_mol2(mol2_source_file_path))
+    atoms_dict = extract_charges_from_subdirectories(str(extracted), str(results_dir))
+    with (results_dir / "charges_dict.json").open("w") as f:
+        json.dump(atoms_dict, f, indent=2)
+    with (results_dir / "initial_charges_dict.json").open("w") as f:
+        json.dump(initial_charges_dict, f, indent=2)
+
+    # Always produce per-atom distribution plot & average_charges.chg (legacy behaviour)
+    try:
+        plot_charges_by_atom(atoms_dict, initial_charges_dict, str(results_dir))
+    except Exception as e:  # pragma: no cover - plotting robustness
+        print(f"[step6][warn] plotting per-atom charges failed: {e}")
+
+    if adjust_sym and not ignore_sym:
+        # symmetry JSON expected already copied earlier; fallback search in pis_dir
+        sym_json = extracted / "equiv_groups.json"
+        if not sym_json.is_file():
+            cand = list(pis_dir.glob("*.json"))
+            if cand:
+                sym_json = cand[0]
+        if sym_json.is_file():
+            equiv_group = load_symmetry_groups(str(sym_json))
+            plot_charges_by_symmetry(atoms_dict, initial_charges_dict, str(results_dir), equiv_group)
+            if calc_group_average and not remove_outlier:
+                updated_charges_dict = calculate_symmetric_group_averages(results_dir / "charges_dict.json", sym_json)
+                with (results_dir / "group_average_charges_dict.json").open("w") as f:
+                    json.dump(updated_charges_dict, f, indent=2)
+                # Write plain text & .chg
+                group_txt = results_dir / "group_average_charges.txt"
+                with group_txt.open("w") as f:
                     f.write("#Atom_Name\tAverage_Charge\n")
-                    for atom_name, atom_data in updated_charges_dict.items():
-                        f.write(f"{atom_name}\t{atom_data['average_charge']:.4f}\n")
-                print(f"Average charges successfully written to {output_file}")
-            except Exception as e:
-                print(f"An error occurred while writing to {output_file}: {e}")
-
-            atom_names = list(updated_charges_dict.keys())
-            updated_avg_charges = [
-                updated_charges_dict[atom]["average_charge"] for atom in atom_names
-            ]
-            updated_avg_charges_path = os.path.join(
-                results_dir, "group_average_charges.chg"
-            )
-            with open(updated_avg_charges_path, "w") as output:
-                for i in updated_avg_charges:
-                    output.write(str(round(i, 4)) + "\n")
-
-            setup_logging(log_file_path)
-            updated_mol2_file(mol2_source_file_path, updated_avg_charges_path, updated_mol2_file)
-            run_acpype(
-                updated_mol2_file, charge, results_dir, atom_type, charges="user"
-            )
-            reset_logging()
-
-        # ---------------------- Remove outlier -------------------- experimental!
-
-        if remove_outlier and calc_group_average:
-            data = atoms_dict
-            # Convert the data into a DataFrame
-            charges_data = {}
-
-            for key, value in data.items():
-                charges_data[key] = value["charges"]
-
-            df = pd.DataFrame(charges_data)
-
-            # Function to get outlier mask based on IQR
-            def get_outlier_mask(series):
-                Q1 = series.quantile(0.25)
-                Q3 = series.quantile(0.75)
-                IQR = Q3 - Q1
-                is_outlier = (series < (Q1 - 1.5 * IQR)) | (series > (Q3 + 1.5 * IQR))
-                return is_outlier
-
-            # Initialize a boolean mask for all rows, default False
-            outlier_mask = pd.Series(False, index=df.index)
-
-            # Identify outliers for each atom and update the mask
-            for column in df.columns:
-                series = df[column]
-                is_outlier = get_outlier_mask(series)
-                outlier_mask = (
-                    outlier_mask | is_outlier
-                )  # Combine masks using logical OR
-
-            # Remove rows (conformers) where any charge is an outlier
-            df_no_outliers = df[~outlier_mask].reset_index(drop=True)
-
-            os.chdir(results_dir)
-
-            # Plot histograms before removing outliers
-            plot_histograms(
-                df,
-                title="Charge Distribution Before Removing Outliers",
-                filename="hist.pdf",
-                color="darkred",
-            )
-
-            # Plot histograms after removing outliers
-            plot_histograms(
-                df_no_outliers,
-                title="Charge Distribution After Removing Outliers",
-                filename="hist_no_outlier.pdf",
-                color="darkblue",
-            )
-
-            # Prepare the cleaned data dictionary with the original structure
-            cleaned_data = {}
-
-            for atom in df_no_outliers.columns:
-                # Get the cleaned charges list
-                cleaned_charges = df_no_outliers[atom].tolist()
-                # Compute the new average charge
-                if cleaned_charges:
-                    new_average_charge = sum(cleaned_charges) / len(cleaned_charges)
-                else:
-                    new_average_charge = 0.0  # Set to 0.0 if no charges remain
-                # Store in cleaned_data with the same structure
-                cleaned_data[atom] = {
-                    "charges": cleaned_charges,
-                    "average_charge": new_average_charge,
-                }
-
-            # Calculate the new total net charge
-            new_total_net_charge = sum(
-                atom_data["average_charge"] for atom_data in cleaned_data.values()
-            )
-            print("New Total Net Charge: ", new_total_net_charge)
-
-            # Calculate the deviation from the required net charge
-            required_net_charge = int(charge)
-            print("Required Net Charge: ", required_net_charge)
-
-            charge_deviation = required_net_charge - new_total_net_charge
-
-            # Adjust the average charges proportionally
-            total_charge = new_total_net_charge
-
-            if total_charge == 0:
-                # Distribute the charge deviation equally
-                num_atoms = len(cleaned_data)
-                charge_adjustment = charge_deviation / num_atoms
-                for atom_data in cleaned_data.values():
-                    atom_data["average_charge"] += charge_adjustment
+                    for atom, rec in updated_charges_dict.items():
+                        f.write(f"{atom}\t{rec['average_charge']:.4f}\n")
+                lines = [f"{rec['average_charge']:.4f}" for rec in updated_charges_dict.values()]
+                (results_dir / "group_average_charges.chg").write_text("\n".join(lines) + "\n")
+                # Prepare updated mol2 & run acpype with user charges
+                updated_mol2_out = results_dir / f"averaged_{molecule_name}.mol2"
+                chg_file = results_dir / "group_average_charges.chg"
+                logging.info("[step6] Updating MOL2 with group average charges and running acpype (user charges mode)...")
+                update_mol2_charges(mol2_source_file_path, str(chg_file), str(updated_mol2_out))
+                run_acpype(str(updated_mol2_out), charge, str(results_dir), atom_type, charges="user")
             else:
-                # Adjust charges proportionally
-                for atom_data in cleaned_data.values():
-                    proportion = (
-                        atom_data["average_charge"] / total_charge
-                        if total_charge != 0
-                        else 0
-                    )
-                    adjustment = proportion * charge_deviation
-                    atom_data["average_charge"] += adjustment
+                # No group averaging requested -> still proceed with user charges update using average_charges.chg
+                avg_chg = results_dir / "average_charges.chg"
+                if avg_chg.is_file():
+                    updated_mol2_out = results_dir / f"averaged_{molecule_name}.mol2"
+                    logging.info("[step6] Updating MOL2 with average charges (symmetry, no group average) and running acpype...")
+                    update_mol2_charges(mol2_source_file_path, str(avg_chg), str(updated_mol2_out))
+                    run_acpype(str(updated_mol2_out), charge, str(results_dir), atom_type, charges="user")
+                else:
+                    print(f"[step6][warn] (symmetry,no-group-average) missing average_charges.chg in {results_dir}")
+        else:
+            print(f"[step6][warn] no symmetry JSON for {molecule_name}; skipping symmetry averaging")
+    else:
+        # If we are NOT symmetry averaging or user opted out, still allow user-charges path using average_charges.chg
+        # average_charges.chg already written by plot_charges_by_atom
+        if not calc_group_average:  # mimic old condition (calc_group_average == False)
+            avg_chg = results_dir / "average_charges.chg"
+            if avg_chg.is_file():
+                updated_mol2_out = results_dir / f"averaged_{molecule_name}.mol2"
+                logging.info("[step6] Updating MOL2 with average charges (no symmetry averaging) and running acpype...")
+                update_mol2_charges(mol2_source_file_path, str(avg_chg), str(updated_mol2_out))
+                run_acpype(str(updated_mol2_out), charge, str(results_dir), atom_type, charges="user")
+            else:
+                print(f"[step6][warn] expected average_charges.chg missing in {results_dir}")
+    return True, "ok"
 
-            # Verify the adjusted total net charge
-            adjusted_total_net_charge = sum(
-                atom_data["average_charge"] for atom_data in cleaned_data.values()
-            )
-            print(f"Adjusted Total Net Charge: {adjusted_total_net_charge}")
 
-            # Save the cleaned and adjusted data to JSON in results_dir
-            cleaned_adjusted_charges_file = os.path.join(
-                results_dir, "cleaned_adjusted_charges.json"
-            )
-            with open(cleaned_adjusted_charges_file, "w") as f:
-                json.dump(cleaned_data, f, indent=4)
+def main():  # pragma: no cover (CLI wrapper)
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--project", required=False, default=os.environ.get("ELECTROFIT_PROJECT_PATH", os.getcwd()))
+    ap.add_argument("--config", help=CONFIG_ARG_HELP)
+    ap.add_argument("--remove-outlier", action="store_true", help="Enable experimental outlier removal pipeline (legacy)")
+    args = ap.parse_args()
+    project_root = Path(args.project).resolve()
+    override_cfg = Path(args.config).resolve() if getattr(args, "config", None) else None
+    process_dir = project_root / "process"
+    if not process_dir.is_dir():
+        print("[step6] No process directory.")
+        return
+    mol_dirs = [p for p in sorted(process_dir.iterdir()) if p.is_dir()]
+    multi_mol = len(mol_dirs) > 1
+    done = 0
+    for m in mol_dirs:
+        ok, msg = _process_one(m, project_root, override_cfg, multi_mol, args.remove_outlier)
+        status = "[step6]" if ok else "[step6][skip]"
+        print(f"{status} {m.name}: {msg}")
+        if ok:
+            done += 1
+    print(f"[step6] Completed {done}/{len(mol_dirs)} molecules.")
 
-            # ---- Plot adjusted average charges in the clipped data ----
-            adjusted_average_charges = {}
 
-            for key, value in cleaned_data.items():
-                charges_data[key] = value["charges"]
-                adjusted_average_charges[key] = value["average_charge"]
-
-            # Convert the charges data into a DataFrame
-            df_adjusted = pd.DataFrame(
-                {k: pd.Series(v) for k, v in charges_data.items()}
-            )
-
-            # Plot histograms of the clipped data with adjusted average charges
-            plot_histograms(
-                df_adjusted,
-                title="Charge Distribution of Clipped Data with Reweighted Average Charges",
-                filename="hist_adjusted.pdf",
-                adjusted_average_charges=adjusted_average_charges,
-                color="darkgreen",
-            )
-            plot_charges_by_atom(cleaned_data, initial_charges_dict, results_dir)
-            # -------------------------------------------------------------
-
-            # Update the path to the charges_dict_file
-            charges_dict_file = cleaned_adjusted_charges_file
-
-            # Calculate updated charges with symmetric group averages
-            updated_charges_dict = calculate_symmetric_group_averages(
-                charges_dict_file, equiv_group_path
-            )
-
-            # Save the updated dictionary to a JSON file in results_dir
-            cleaned_adjusted_group_average_charges_file = os.path.join(
-                results_dir, "cleaned_adjusted_group_average_charges_dict.json"
-            )
-            with open(cleaned_adjusted_group_average_charges_file, "w") as file:
-                json.dump(updated_charges_dict, file, indent=4)
-
-            # Write the average charges to the output file
-            output_file = os.path.join(
-                results_dir, "cleaned_adjusted_group_average_charges.txt"
-            )
-            try:
-                with open(output_file, "w") as f:
-                    f.write("#Atom_Name\tAverage_Charge\n")
-                    for atom_name, atom_data in updated_charges_dict.items():
-                        f.write(f"{atom_name}\t{atom_data['average_charge']:.4f}\n")
-                print(f"Average charges successfully written to {output_file}")
-            except Exception as e:
-                print(f"An error occurred while writing to {output_file}: {e}")
-
-            atom_names = list(updated_charges_dict.keys())
-            updated_avg_charges = [
-                updated_charges_dict[atom]["average_charge"] for atom in atom_names
-            ]
-            updated_avg_charges_path = os.path.join(
-                results_dir, "cleaned_adjusted_group_average_charges.chg"
-            )
-            with open(updated_avg_charges_path, "w") as output:
-                for i in updated_avg_charges:
-                    output.write(f"{i:.4f}\n")
-
-            # Define the updated mol2 file path
-            update_mol2_file = os.path.join(
-                results_dir, f"averaged_{molecule_name}_cleaned.mol2"
-            )
-
-            setup_logging(log_file_path)
-            update_mol2_charges(
-                mol2_source_file_path, updated_avg_charges_path, update_mol2_file
-            )
-            run_acpype(update_mol2_file, charge, results_dir, atom_type, charges="user")
-            reset_logging()
-
-    # ---------------------- Remove outlier --------------------
-
-    plot_charges_by_atom(atoms_dict, initial_charges_dict, results_dir)
-
-    if not calc_group_average:
-        setup_logging(log_file_path)
-        average_charges = os.path.join(results_dir, "average_charges.chg")
-        update_mol2_charges(
-            mol2_source_file_path, average_charges, updated_mol2_file
-        )
-        run_acpype(updated_mol2_file, charge, results_dir, atom_type, charges="user")
-        reset_logging()
+if __name__ == "__main__":  # pragma: no cover
+    main()
