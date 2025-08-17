@@ -8,7 +8,7 @@ import argparse
 import logging
 
 from electrofit.io.files import copy_and_rename_folders
-from electrofit.logging import setup_logging, log_run_header
+from electrofit.infra.logging import setup_logging, log_run_header
 
 
 def main():  # pragma: no cover (CLI wrapper)

@@ -3,8 +3,8 @@ import os
 import logging
 import traceback
 from electrofit.config.loader import load_config, dump_config
-from electrofit.workflows.snapshot import build_snapshot_with_layers
-from electrofit.logging import log_run_header, reset_logging, setup_logging
+from electrofit.infra.config_snapshot import compose_snapshot
+from electrofit.infra.logging import log_run_header, reset_logging, setup_logging
 from electrofit.core.process_conform import process_conform
 from electrofit.io.files import find_file_with_extension, strip_extension
 
@@ -84,7 +84,7 @@ def process_one(conf_dir_str: str,
         if not pdb_file:
             raise FileNotFoundError("No PDB file found in conformer directory")
         mol_name = conf_dir.parent.parent.name if len(conf_dir.parts) >= 2 else conf_dir.parent.name
-        build_snapshot_with_layers(
+        compose_snapshot(
             conf_dir,
             project_root,
             mol_name,

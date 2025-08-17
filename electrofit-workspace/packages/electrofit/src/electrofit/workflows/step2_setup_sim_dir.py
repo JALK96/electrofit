@@ -16,8 +16,8 @@ import logging
 from pathlib import Path
 
 from electrofit.config.loader import load_config, dump_config
-from electrofit.workflows.snapshot import build_snapshot_with_layers, CONFIG_ARG_HELP
-from electrofit.logging import setup_logging, log_run_header, reset_logging
+from electrofit.infra.config_snapshot import compose_snapshot, CONFIG_ARG_HELP
+from electrofit.infra.logging import setup_logging, log_run_header, reset_logging
 
 
 def _write_manifest(dest_dir: str, files: dict[str, str], mdp_subdir: str = "MDP") -> None:
@@ -84,7 +84,7 @@ def main():  # pragma: no cover (CLI wrapper)
         process_cfg = folder_path / "electrofit.toml"
         project_defaults = project_path / "electrofit.toml"
         extra_override = Path(args.config) if args.config else None
-        snap_dest = build_snapshot_with_layers(
+        snap_dest = compose_snapshot(
             dest_dir,
             project_path,
             folder_path.name,

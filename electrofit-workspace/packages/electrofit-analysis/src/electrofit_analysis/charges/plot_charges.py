@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 
 # Import necessary modules from the project
-from electrofit.config_parser import ConfigParser
+from electrofit.config.legacy import ConfigParser
 from electrofit.io.files import (
     adjust_atom_names,
     extract_charges_from_subdirectories,
@@ -391,6 +391,7 @@ def plot_histograms(
 
 
 process_dir = os.path.join(project_path, "process")
+process_dir = "/home/johannal96/PhD.nobackup/electrofit/electrofit-workspace/tests/integration/process"
 
 
 # ------ Interact --------------

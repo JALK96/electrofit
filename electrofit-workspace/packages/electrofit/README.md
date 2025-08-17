@@ -156,7 +156,7 @@ CLI `--config`:
 * Überschreibt vorhandene Werte, führt keine Fill-Ins durch.
 
 Implementierung:
-* Zentral in `build_snapshot_with_layers` (`workflows/snapshot.py`).
+* Zentral in `compose_snapshot` (`infra/config_snapshot.py`, legacy Alias `workflows/snapshot.py`).
 * Alle relevanten Schritte (1,2,3,4,6,7) benutzen diese Funktion, um doppelte Logik zu vermeiden.
 
 Vorteile:

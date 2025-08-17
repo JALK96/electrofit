@@ -6,8 +6,8 @@ from pathlib import Path
 from contextlib import contextmanager
 
 from electrofit.workflows.run_process_initial_structure import main as run_pis_main
-from electrofit.workflows.snapshot import build_snapshot_with_layers, CONFIG_ARG_HELP
-from electrofit.logging import setup_logging, log_run_header, reset_logging
+from electrofit.infra.config_snapshot import compose_snapshot, CONFIG_ARG_HELP
+from electrofit.infra.logging import setup_logging, log_run_header, reset_logging
 
 
 TARGET_RUN_DIRS = {
@@ -52,7 +52,7 @@ def _run_one_dir(run_dir: str, project_root: str, override_cfg: str | None, mult
     log_run_header("step1")
     molecule_input = Path(project_root) / "data" / "input" / mol / "electrofit.toml"
     project_defaults = Path(project_root) / "electrofit.toml"
-    snap = build_snapshot_with_layers(
+    snap = compose_snapshot(
         Path(run_dir),
         Path(project_root),
         mol,

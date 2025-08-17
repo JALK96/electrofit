@@ -6,8 +6,8 @@ import logging
 from pathlib import Path
 
 from electrofit.config.loader import load_config, dump_config
-from electrofit.workflows.snapshot import build_snapshot_with_layers, CONFIG_ARG_HELP
-from electrofit.logging import setup_logging, reset_logging
+from electrofit.infra.config_snapshot import compose_snapshot, CONFIG_ARG_HELP
+from electrofit.infra.logging import setup_logging, reset_logging
 
 
 def main():
@@ -40,12 +40,12 @@ def main():
             setup_logging(str(log_path), also_console=False)
         except Exception:
             pass
-        # Snapshot propagation with unified precedence (mirrors step6):
-        #   1. results/electrofit.toml
-        #   2. process/<mol>/electrofit.toml
-        #   3. data/input/<mol>/electrofit.toml
-        #   4. project_root/electrofit.toml
-        snap_dest = build_snapshot_with_layers(
+    # Snapshot propagation with unified precedence (mirrors step6):
+    #   1. results/electrofit.toml
+    #   2. process/<mol>/electrofit.toml
+    #   3. data/input/<mol>/electrofit.toml
+    #   4. project_root/electrofit.toml
+        snap_dest = compose_snapshot(
             dest_dir,
             project_root,
             mol_dir.name,
@@ -60,7 +60,6 @@ def main():
         cfg = load_config(project_root, context_dir=dest_dir, molecule_name=mol_dir.name)
         try:
             dump_config(cfg, log_fn=logging.info)
-            # flush handlers so config appears immediately
             for h in logging.getLogger().handlers:
                 try:
                     h.flush()
@@ -76,14 +75,12 @@ def main():
         if not acpype_dir:
             print(f"[step7][skip] {mol_dir.name}: no .acpype dir in results")
             continue
-        # Copy matched topology/input files
         for fn in os.listdir(acpype_dir):
             for pat in file_patterns:
                 if fnmatch.fnmatch(fn, pat):
                     shutil.copy(acpype_dir / fn, dest_dir)
                     logging.info(f"[step7] Copied {fn} -> {dest_dir}")
                     break
-        # Copy MDP dir
         md_dest = dest_dir / "MDP"
         if mdp_source_dir.is_dir():
             if md_dest.exists():
@@ -92,10 +89,8 @@ def main():
             logging.info(f"[step7] Copied MDP -> {md_dest}")
         else:
             print(f"[step7][warn] no MDP source {mdp_source_dir}")
-        # Copy gmx.sh if present
         if bash_script_source.is_file():
             shutil.copy(bash_script_source, dest_dir / "gmx.sh")
-        # Reset logging handlers for this molecule (avoid handler leakage when multiple molecules)
         reset_logging()
         done += 1
     print(f"[step7] Prepared final sim dirs for {done}/{len(mol_dirs)} molecules.")

@@ -46,7 +46,7 @@ import traceback
 from contextlib import contextmanager
 from typing import Iterable, Optional, List
 
-from electrofit.scratch.manager import finalize_scratch_directory
+from electrofit.infra.scratch_manager import finalize_scratch_directory
 
 
 class _Reg:

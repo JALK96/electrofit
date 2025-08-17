@@ -4,9 +4,9 @@ import logging
 from pathlib import Path
 
 from electrofit.config.loader import load_config, dump_config
-from electrofit.external.gromacs import set_up_production
-from electrofit.workflows.snapshot import build_snapshot_with_layers, CONFIG_ARG_HELP
-from electrofit.logging import setup_logging, reset_logging, log_run_header
+from electrofit.adapters.gromacs import set_up_production
+from electrofit.infra.config_snapshot import compose_snapshot, CONFIG_ARG_HELP
+from electrofit.infra.logging import setup_logging, reset_logging, log_run_header
 
 
 def _iter_final_dirs(project_root: Path):
@@ -41,7 +41,7 @@ def main():
         setup_logging(str(run_dir / "process.log"), also_console=False)
         log_run_header("step8")
         mol = run_dir.parent.name
-        build_snapshot_with_layers(
+        compose_snapshot(
             run_dir,
             project_root,
             mol,
@@ -63,12 +63,10 @@ def main():
         conc = sim.ions.concentration
         molecule = cfg.project.molecule_name or run_dir.parent.name
         base_scratch = cfg.paths.base_scratch_dir or "/tmp/electrofit_scratch"
-        # Forcefield now canonical under simulation section
         ff = getattr(getattr(cfg, 'simulation', None), 'forcefield', None) or "amber14sb.ff"
         runtime = cfg.gmx.runtime
         threads = runtime.threads
         pin = runtime.pin
-        # Expect gro/top/itp present
         gro = next((f.name for f in run_dir.iterdir() if f.suffix == ".gro"), None)
         if not gro:
             logging.info(f"[step8][skip] {run_dir}: no .gro file")

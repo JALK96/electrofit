@@ -19,8 +19,8 @@ except ModuleNotFoundError:  # pragma: no cover
     import tomli as _toml  # type: ignore
 from electrofit.config.loader import load_config, dump_config
 from electrofit.io.files import mol2_to_pdb_with_bonds
-from electrofit.workflows.snapshot import build_snapshot_with_layers, CONFIG_ARG_HELP
-from electrofit.logging import setup_logging
+from electrofit.infra.config_snapshot import compose_snapshot, CONFIG_ARG_HELP
+from electrofit.infra.logging import setup_logging
 
 
 def _select_indices(traj: md.Trajectory, n: int, method: str, seed: int | None) -> List[int]:
@@ -134,7 +134,7 @@ def _extract_for_molecule(mol_proc_dir: Path, project_root: Path, sample: int, m
         return False, "missing md_center.xtc or md.gro"
 
     # Ensure snapshot at extracted_conforms root
-    parent_cfg_target = build_snapshot_with_layers(
+    parent_cfg_target = compose_snapshot(
         extracted_conforms_dir,
         project_root,
         mol_proc_dir.name,

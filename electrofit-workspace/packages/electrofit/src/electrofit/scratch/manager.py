@@ -4,7 +4,7 @@ import os
 import shutil
 import hashlib
 
-from electrofit.logging import setup_logging
+from electrofit.infra.logging import setup_logging
 
 
 def setup_scratch_directory(input_files, base_scratch_dir="/scratch/johannal96/tmp"):

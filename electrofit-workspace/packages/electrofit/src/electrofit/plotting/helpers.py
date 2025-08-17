@@ -3,7 +3,7 @@ import re
 
 import matplotlib.pyplot as plt
 import numpy as np
-from electrofit.utils_curly_brace import curlyBrace
+from electrofit.viz.curly_brace import draw_curly_brace
 
 
 def plot_charges_by_atom(atoms_dict1, initial_charges_dict, base_dir, atoms_dict2=None):
@@ -1157,18 +1157,18 @@ def plot_charges_by_atom_new_3(
         brace_color = color_map.get(group_label, "black")
 
         # Draw the curly brace
-        curlyBrace(
+        draw_curly_brace(
             fig,
             ax,
             p2,
             p1,
-            k_r,
-            bool_auto=False,  # Automatically adjust the brace
-            str_text=str_text,  # No text on the brace; label is added separately
-            color=brace_color,  # Color of the brace
-            lw=1.5,  # Line width of the brace
-            int_line_num=2,  # Number of lines for the brace
-            fontdict=label_font,  # Font dictionary for the label
+            k_r=k_r,
+            auto=False,
+            text=str_text,
+            color=brace_color,
+            lw=1.5,
+            text_offset_lines=2,
+            fontdict=label_font,
         )
 
         # Add the group label below the brace
@@ -1542,18 +1542,18 @@ def plot_charges_by_atom_new_4(
         brace_color = color_map.get(group_label, "black")
 
         # Draw the curly brace
-        curlyBrace(
+        draw_curly_brace(
             fig,
             ax,
             p2,
             p1,
-            k_r,
-            bool_auto=False,  # Adjust the brace direction as needed
-            str_text=group_label,  # Add group label on the brace
-            color=brace_color,  # Color of the brace
-            lw=1.5,  # Line width of the brace
-            int_line_num=2,  # Number of lines for the brace
-            fontdict=label_font,  # Font dictionary for the label
+            k_r=k_r,
+            auto=False,
+            text=group_label,
+            color=brace_color,
+            lw=1.5,
+            text_offset_lines=2,
+            fontdict=label_font,
         )
 
     # Labeling

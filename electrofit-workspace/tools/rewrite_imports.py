@@ -33,7 +33,7 @@ RENAMES = {
     "execution.run_FEP_old": "electrofit_fep.workflows.run_fep_old",
     # treat analysis as a prefix
     "execution.analysis.": "electrofit_analysis.fep.",
-    "main.gmx_simulation": "electrofit.external.gromacs",
+    "main.gmx_simulation": "electrofit.adapters.gromacs",
     "main.process_initial_structure": "electrofit.core.process_initial_structure",
     "main.process_conform": "electrofit.core.process_conform",
     "commands.run_commands": "electrofit.cli.run_commands",
@@ -62,7 +62,7 @@ RENAMES = {
     "electrofit.execution.run_FEP_old": "electrofit_fep.workflows.run_fep_old",
     # prefix tree
     "electrofit.execution.analysis.": "electrofit_analysis.fep.",
-    "electrofit.main.gmx_simulation": "electrofit.external.gromacs",
+    "electrofit.main.gmx_simulation": "electrofit.adapters.gromacs",
     "electrofit.main.process_initial_structure": "electrofit.core.process_initial_structure",
     "electrofit.main.process_conform": "electrofit.core.process_conform",
     "electrofit.commands.run_commands": "electrofit.cli.run_commands",

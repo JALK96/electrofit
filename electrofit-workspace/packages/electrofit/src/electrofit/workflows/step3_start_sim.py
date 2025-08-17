@@ -5,9 +5,9 @@ import logging
 from pathlib import Path
 
 from electrofit.config.loader import load_config, dump_config
-from electrofit.external.gromacs import set_up_production
-from electrofit.workflows.snapshot import build_snapshot_with_layers, CONFIG_ARG_HELP
-from electrofit.logging import setup_logging, reset_logging, log_run_header
+from electrofit.adapters.gromacs import set_up_production
+from electrofit.infra.config_snapshot import compose_snapshot, CONFIG_ARG_HELP
+from electrofit.infra.logging import setup_logging, reset_logging, log_run_header
 
 
 def _iter_run_dirs(project_root: Path):
@@ -81,7 +81,7 @@ def main():
         molecule_input = project_root / "data" / "input" / mol / "electrofit.toml"
         process_cfg = run_dir.parent / "electrofit.toml"
         project_defaults = project_root / "electrofit.toml"
-        snap = build_snapshot_with_layers(
+        snap = compose_snapshot(
             run_dir,
             project_root,
             mol,

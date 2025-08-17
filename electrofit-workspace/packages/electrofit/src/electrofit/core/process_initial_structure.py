@@ -12,7 +12,7 @@ from electrofit.cli.run_commands import (
     run_python
 )
 from electrofit.io.files import find_file_with_extension, mol2_to_pdb_and_back
-from electrofit.scratch.manager import (
+from electrofit.infra.scratch_manager import (
     setup_scratch_directory,
 )
 from electrofit.cli.safe_run import register_scratch, ensure_finalized

@@ -5,7 +5,7 @@ from pathlib import Path
 from electrofit.config.loader import load_config, dump_config
 from electrofit.core.process_conform import process_conform
 from electrofit.io.files import find_file_with_extension, strip_extension
-from electrofit.logging import setup_logging
+from electrofit.infra.logging import setup_logging
 
 
 def main_conform_processing():

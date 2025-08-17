@@ -21,7 +21,7 @@ from electrofit.io.files import (
 )
 from electrofit.cli.safe_run import ensure_finalized
 from electrofit.io.resp import edit_resp_input
-from electrofit.scratch.manager import (
+from electrofit.infra.scratch_manager import (
     setup_scratch_directory,
     finalize_scratch_directory,
 )

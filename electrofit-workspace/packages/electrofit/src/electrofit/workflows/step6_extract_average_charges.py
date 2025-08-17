@@ -13,7 +13,7 @@ import pandas as pd
 from electrofit.io.mol2 import update_mol2_charges
 from electrofit.cli.run_commands import run_acpype
 from electrofit.config.loader import load_config, dump_config
-from electrofit.workflows.snapshot import build_snapshot_with_layers, CONFIG_ARG_HELP
+from electrofit.infra.config_snapshot import compose_snapshot, CONFIG_ARG_HELP
 from electrofit.io.files import (
     adjust_atom_names,
     extract_charges_from_subdirectories,
@@ -21,7 +21,7 @@ from electrofit.io.files import (
     load_symmetry_groups,
     parse_charges_from_mol2,
 )
-from electrofit.logging import reset_logging, setup_logging
+from electrofit.infra.logging import reset_logging, setup_logging
 from electrofit.plotting.helpers import plot_charges_by_symmetry, plot_charges_by_atom
 
 PROJECT_PATH = os.environ.get("ELECTROFIT_PROJECT_PATH", os.getcwd())
@@ -165,7 +165,7 @@ def _process_one(mol_dir: Path, project_root: Path, override_cfg: Path | None, m
     #   2. process/<mol>/electrofit.toml
     #   3. data/input/<mol>/electrofit.toml
     #   4. project_root/electrofit.toml
-    snapshot = build_snapshot_with_layers(
+    snapshot = compose_snapshot(
         results_dir,
         project_root,
         mol_dir.name,
