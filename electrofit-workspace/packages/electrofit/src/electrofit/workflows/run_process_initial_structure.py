@@ -1,8 +1,10 @@
 # packages/electrofit/src/electrofit/workflows/run_process_initial_structure.py
 import argparse
 import os
+import logging
 
 from electrofit.config.loader import load_config, dump_config
+# Legacy import path; logic now in electrofit.domain.prep.process_initial
 from electrofit.core.process_initial_structure import process_initial_structure
 from electrofit.io.files import find_file_with_extension
 
@@ -19,7 +21,7 @@ def main():
     cfg_path = run_local_cfg if os.path.isfile(run_local_cfg) else None
 
     cfg = load_config(project_root, config_path=cfg_path)
-    dump_config(cfg)
+    dump_config(cfg, log_fn=logging.info)
 
     # ---- decide scratch dir with fallbacks ----
     base_scratch_dir = (

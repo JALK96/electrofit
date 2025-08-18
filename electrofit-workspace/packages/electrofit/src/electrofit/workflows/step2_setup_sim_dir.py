@@ -15,7 +15,6 @@ import json
 import logging
 from pathlib import Path
 
-from electrofit.config.loader import load_config, dump_config
 from electrofit.infra.config_snapshot import compose_snapshot, CONFIG_ARG_HELP
 from electrofit.infra.logging import setup_logging, log_run_header, reset_logging
 
@@ -59,11 +58,9 @@ def main():  # pragma: no cover (CLI wrapper)
     multi_mol = len(mol_dirs) > 1
 
     # Global config (for defaults & echo at top-level)
-    top_log = project_path / "step2.log"
+    top_log = project_path / "step.log"
     setup_logging(str(top_log), also_console=args.log_console)
     log_run_header("step2")
-    base_cfg = load_config(project_path)
-    dump_config(base_cfg, log_fn=logging.info)
 
     file_patterns = ["*GMX.gro", "*GMX.itp", "*GMX.top", "posre_*.itp"]
 
@@ -75,6 +72,7 @@ def main():  # pragma: no cover (CLI wrapper)
             continue
         dest_dir = folder_path / "run_gmx_simulation"
         dest_dir.mkdir(exist_ok=True)
+        logging.info(f"[step2] Preparing {folder_path.name} -> {dest_dir}")
         # Per-molecule logging
         reset_logging()
         setup_logging(str(dest_dir / "process.log"), also_console=False)

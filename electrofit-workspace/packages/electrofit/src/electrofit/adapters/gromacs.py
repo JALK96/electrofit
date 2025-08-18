@@ -19,7 +19,8 @@ from electrofit.io.files import (
 	replace_posres_in_file,
 	strip_extension,
 )
-from electrofit.logging import setup_logging
+# Unified logging import (legacy electrofit.logging deprecated)
+from electrofit.infra.logging import setup_logging
 from electrofit.cli.safe_run import ensure_finalized
 from electrofit.infra.scratch_manager import setup_scratch_directory
 
@@ -62,7 +63,6 @@ def set_up_production(
 	log_file_path = os.path.join(fullpath, "process.log")
 	suppress = any(isinstance(h, logging.FileHandler) for h in logging.getLogger().handlers)
 	setup_logging(log_file_path, suppress_initial_message=suppress)
-	logging.info(f"Logging initialized. Log file: {log_file_path}")
 
 	m_gro_name = strip_extension(m_gro)
 	m_itp = f"{m_gro_name}.itp"

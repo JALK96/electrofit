@@ -1,285 +1,65 @@
-import logging
-import os
-import subprocess
+"""Deprecated shim for initial structure processing.
 
-from electrofit.cli.run_commands import (
-    create_gaussian_input,
-    gaussian_out_to_prepi,
-    run_acpype,
-    run_espgen,
-    run_gaussian_calculation,
-    run_resp,
-    run_python
+Real implementation moved to `electrofit.domain.prep.process_initial`.
+This module keeps the original function signature for backwards compatibility.
+"""
+from __future__ import annotations
+
+import logging
+import warnings
+import os
+from electrofit.infra.scratch_manager import setup_scratch_directory
+from electrofit.cli.safe_run import ensure_finalized
+from electrofit.domain.prep.process_initial import (
+    InitialPrepConfig,
+    process_initial,
 )
-from electrofit.io.files import find_file_with_extension, mol2_to_pdb_and_back
-from electrofit.infra.scratch_manager import (
-    setup_scratch_directory,
-)
-from electrofit.cli.safe_run import register_scratch, ensure_finalized
-from electrofit.io.mol2 import update_mol2_charges
-from electrofit.core.symmetry import write_symmetry
-from electrofit.io.resp import edit_resp_input
+from electrofit.cli.run_commands import run_acpype  # re-export for legacy test monkeypatching
+
+__all__ = ["process_initial_structure", "run_acpype"]
+from electrofit.io.files import find_file_with_extension
 
 PROJECT_PATH = os.environ.get("ELECTROFIT_PROJECT_PATH", os.getcwd())
 project_path = PROJECT_PATH
 
 
-def process_initial_structure(
-    molecule_name,
-    mol2_file,
-    base_scratch_dir,
-    additional_input,
-    net_charge,
-    residue_name,
-    adjust_sym=False,
-    ignore_sym=False,
-    atom_type="gaff2",
-    exit_screen=False,
-    protocol="bcc",
-):  # delet later additional_input
-    """
-    Processes the initial optimized structure: Antechamber, Gaussian optimization, espgen, RESP fitting.
+_DEPRECATION_WARNED = False
 
-    Parameters:
-    - molecule_name (str): Name of the molecule.
-    - mol2_file (str): Path to the input mol2 file.
-    - base_scratch_dir (str): Base directory for scratch space.
-    - net_charge (int): Net charge of the molecule.
-    """
-    # Setup scratch directory without RESP input files
-    input_files = [mol2_file]  # Only include existing input files
 
-    input_files.extend(additional_input)  # delet later additional_input
-
-    # Step 0: Resolve Structure (skip fragile OpenBabel roundtrip for trivial 0/1-atom MOL2 to avoid segfaults)
+def process_initial_structure(molecule_name, mol2_file, base_scratch_dir, additional_input, net_charge, residue_name,
+                              adjust_sym=False, ignore_sym=False, atom_type="gaff2", exit_screen=False, protocol="bcc"):
+    global _DEPRECATION_WARNED
+    if not _DEPRECATION_WARNED:  # only warn once per process
+        warnings.warn(
+            "electrofit.core.process_initial_structure.process_initial_structure is deprecated; use electrofit.domain.prep.process_initial.process_initial instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        _DEPRECATION_WARNED = True
+    # Prepare scratch inputs (legacy behaviour retains additional_input inclusion).
+    # IMPORTANT: Normalize residue BEFORE copying into scratch so the copied file already has the correct residue tag.
+    from electrofit.domain.prep.process_initial import normalize_residue_roundtrip  # local import to avoid cycle
     try:
-        atom_count = 0
-        with open(mol2_file, "r") as _f:
-            in_atoms = False
-            for line in _f:
-                if line.startswith("@<TRIPOS>ATOM"):
-                    in_atoms = True
-                    continue
-                if in_atoms:
-                    if line.startswith("@<TRIPOS>") or not line.strip():
-                        break
-                    atom_count += 1
-                    if atom_count > 1:
-                        break
-        if atom_count > 1 and not os.environ.get("ELECTROFIT_DISABLE_OBABEL"):
-            mol2_to_pdb_and_back(mol2_file, mol2_file, residue_name)
-        else:
-            logging.info("[step1] Skip OpenBabel mol2->pdb->mol2 roundtrip (atom_count=%s)", atom_count)
-    except Exception as e:  # pragma: no cover - defensive
-        logging.warning("[step1] OpenBabel conversion suppressed after error: %s", e)
-
+        normalize_residue_roundtrip(mol2_file, residue_name)
+    except Exception as e:  # pragma: no cover
+        logging.warning("[prep-shim] residue normalization failed pre-scratch: %s", e)
+    input_files = [mol2_file] + list(additional_input)
     scratch_dir, original_dir = setup_scratch_directory(input_files, base_scratch_dir)
-
-    if protocol == "opt":
-        try:
-            with ensure_finalized(
-                original_dir=original_dir,
-                scratch_dir=scratch_dir,
-                input_files=input_files,
-            ):
-                # Step 1: Generate Gaussian input file
-                create_gaussian_input(
-                    mol2_file, molecule_name, net_charge, scratch_dir, atom_type
-                )
-
-                # Step 2: Run Gaussian optimization
-                gaussian_input = f"{molecule_name}.gcrt"
-                run_gaussian_calculation(gaussian_input, molecule_name, scratch_dir)
-
-                # Step 3: Run espgen to generate .esp file
-                gesp_file = f"{molecule_name}.gesp"
-                esp_file = f"{molecule_name}.esp"
-                run_espgen(gesp_file, esp_file, scratch_dir)
-
-                # Step 4: Prepare RESP input files
-                g_out = f"{gaussian_input}.log"
-                gaussian_out_to_prepi(g_out, scratch_dir)
-
-                # At this point, antechamber should have generated RESP input files in scratch_dir
-                respin1_file = os.path.join(scratch_dir, "ANTECHAMBER_RESP1.IN")
-                respin2_file = os.path.join(scratch_dir, "ANTECHAMBER_RESP2.IN")
-
-                # Verify that RESP input files are created
-                resp_files = [respin1_file, respin2_file]
-                missing_resp_files = [
-                    file for file in resp_files if not os.path.isfile(file)
-                ]
-                if missing_resp_files:
-                    logging.error(
-                        f"Missing RESP input files: {', '.join(missing_resp_files)}"
-                    )
-                    raise FileNotFoundError(
-                        "RESP input files were not generated by antechamber."
-                    )
-                else:
-                    logging.info("RESP input files generated successfully.")
-
-                # Write symmetry output to check
-                run_python(
-                    write_symmetry,
-                    respin1_file,
-                    "symmetry_resp.txt",
-                    cwd=scratch_dir,
-                )
-
-                if adjust_sym and not ignore_sym:
-                    # Find self defined symmetry file in scratch
-                    json_filename = run_python(find_file_with_extension, "json", cwd=scratch_dir)
-                    if not json_filename:
-                        raise FileNotFoundError("No *.json symmetry file found in scratch.")
-                    json_symmetry_file = (
-                        json_filename
-                        if os.path.isabs(json_filename)
-                        else os.path.join(scratch_dir, json_filename)
-                    )
-
-                # Edit RESP1.IN applying equivalence constraints
-                run_python(
-                    edit_resp_input,
-                    input_file="ANTECHAMBER_RESP1.IN",
-                    equiv_groups_file=json_symmetry_file,
-                    output_file="ANTECHAMBER_RESP1_MOD.IN",
-                    ignore_sym=False,
-                    cwd=scratch_dir,
-                )
-
-                # Re-define the respin1-file
-                respin1_file = os.path.join(scratch_dir, "ANTECHAMBER_RESP1_MOD.IN")
-
-                # Write symmetry output of altered RESP1_MOD.IN to check/compare
-                run_python(
-                    write_symmetry,
-                    respin1_file,
-                    "symmetry_resp_MOD.txt",
-                    cwd=scratch_dir,
-                )
-
-                if adjust_sym and ignore_sym:
-                    # Find self defined symmetry file in scratch
-                    json_filename = run_python(find_file_with_extension, "json", cwd=scratch_dir)
-                    if not json_filename:
-                        raise FileNotFoundError("No *.json symmetry file found in scratch.")
-                    json_symmetry_file = (
-                        json_filename
-                        if os.path.isabs(json_filename)
-                        else os.path.join(scratch_dir, json_filename)
-                    )
-
-                # Produce pass-through MOD that ignores equivalence constraints
-                run_python(
-                    edit_resp_input,
-                    input_file="ANTECHAMBER_RESP1.IN",
-                    equiv_groups_file=json_symmetry_file,
-                    output_file="ANTECHAMBER_RESP1_MOD.IN",
-                    ignore_sym=True,
-                    cwd=scratch_dir,
-                )
-
-                # Re-define the respin1-file
-                respin1_file = os.path.join(scratch_dir, "ANTECHAMBER_RESP1_MOD.IN")
-
-                # Write symmetry output of altered RESP1_MOD.IN to check/compare
-                run_python(
-                    write_symmetry,
-                    respin1_file,
-                    "symmetry_resp_MOD.txt",
-                    cwd=scratch_dir,
-                )
-
-                # Step 5: Run RESP fitting stages
-                resp_output1 = f"{molecule_name}-resp1.out"
-                resp_pch1 = f"{molecule_name}-resp1.pch"
-                resp_chg1 = f"{molecule_name}-resp1.chg"
-                run_resp(
-                    respin1_file, esp_file, resp_output1, resp_pch1, resp_chg1, scratch_dir
-                )
-                logging.info("RESP fitting stage 1 completed.")
-
-                resp_output2 = f"{molecule_name}-resp2.out"
-                resp_pch2 = f"{molecule_name}-resp2.pch"
-                resp_chg2 = f"{molecule_name}-resp2.chg"
-                run_resp(
-                    respin2_file,
-                    esp_file,
-                    resp_output2,
-                    resp_pch2,
-                    resp_chg2,
-                    scratch_dir,
-                    resp_chg1,
-                )
-                logging.info("RESP fitting stage 2 completed.")
-
-                # Step 6: Generate mol2 file with RESP charges
-                mol2_resp = f"{molecule_name}_resp.mol2"
-
-                run_python(
-                    update_mol2_charges,
-                    mol2_file,
-                    resp_chg2,
-                    mol2_resp,
-                    cwd=scratch_dir,
-                )
-
-                # generate_mol2_with_resp_charges(g_out, mol2_resp, scratch_dir, atom_type)
-
-                # Step 7: Run acpype to generate GROMACS input (.itp/.gro/.top)
-                run_acpype(mol2_resp, net_charge, scratch_dir, atom_type, charges="user")
-
-                # Expose key GMX files at scratch root so finalize copies them flat
-                base_name = os.path.splitext(os.path.basename(mol2_resp))[0]
-                acpype_dir = os.path.join(scratch_dir, f"{base_name}.acpype")
-                if os.path.isdir(acpype_dir):
-                    for fname in os.listdir(acpype_dir):
-                        if fname.endswith(('_GMX.gro','_GMX.itp','_GMX.top')) or (fname.startswith('posre_') and fname.endswith('.itp')):
-                            src = os.path.join(acpype_dir, fname)
-                            dst = os.path.join(scratch_dir, fname)
-                            if not os.path.exists(dst):
-                                try:
-                                    subprocess.run(['cp', src, dst], check=True)
-                                except Exception:
-                                    pass
-
-                # Exit screen session (close detached session)
-                if exit_screen:
-                    os.chdir(original_dir)
-                    subprocess.run(["screen", "-S", molecule_name, "-X", "quit"])
-
-        except Exception as e:
-            logging.error(f"Error processing initial structure: {e}")
-            raise
-
-    elif protocol == "bcc":
-        try:
-            with ensure_finalized(
-                original_dir=original_dir,
-                scratch_dir=scratch_dir,
-                input_files=input_files,
-            ):
-                # Step 1: Run acpype to generate GROMACS input using bcc charges (.itp/.gro/.top)
-                run_acpype(mol2_file, net_charge, scratch_dir, atom_type, charges="bcc")
-                # Expose key GMX files at scratch root so finalize copies them flat (optional, subsequent steps dont reley on the flat structure - will copy them from .acpype)
-                base_name = os.path.splitext(os.path.basename(mol2_file))[0]
-                acpype_dir = os.path.join(scratch_dir, f"{base_name}.acpype")
-                if os.path.isdir(acpype_dir):
-                    for fname in os.listdir(acpype_dir):
-                        if fname.endswith(('_GMX.gro','_GMX.itp','_GMX.top')) or (fname.startswith('posre_') and fname.endswith('.itp')):
-                            src = os.path.join(acpype_dir, fname)
-                            dst = os.path.join(scratch_dir, fname)
-                            if not os.path.exists(dst):
-                                try:
-                                    subprocess.run(['cp', src, dst], check=True)
-                                except Exception:
-                                    pass
-                # Exit screen session (close detached session)
-                if exit_screen:
-                    os.chdir(original_dir)
-                    subprocess.run(["screen", "-S", molecule_name, "-X", "quit"])
-
-        except Exception as e:
-            logging.error(f"Error processing initial structure: {e}")
-            raise
+    cfg = InitialPrepConfig(
+        molecule_name=molecule_name,
+        mol2_file=mol2_file,
+        net_charge=net_charge,
+        residue_name=residue_name,
+        atom_type=atom_type,
+        adjust_sym=adjust_sym,
+        ignore_sym=ignore_sym,
+        protocol=protocol,
+    )
+    try:
+        from electrofit.cli.safe_run import ensure_finalized
+        with ensure_finalized(original_dir=original_dir, scratch_dir=scratch_dir, input_files=input_files):
+            # Forward the (possibly monkeypatched) run_acpype symbol for tests
+            process_initial(cfg, scratch_dir, original_dir, input_files, run_acpype=run_acpype)
+    except Exception as e:  # pragma: no cover
+        logging.error("Error processing initial structure: %s", e)
+        raise

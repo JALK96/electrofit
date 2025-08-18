@@ -5,6 +5,8 @@ import traceback
 from electrofit.config.loader import load_config, dump_config
 from electrofit.infra.config_snapshot import compose_snapshot
 from electrofit.infra.logging import log_run_header, reset_logging, setup_logging
+# Legacy import path retained; underlying implementation now delegates into
+# electrofit.domain.charges.process_conformer.
 from electrofit.core.process_conform import process_conform
 from electrofit.io.files import find_file_with_extension, strip_extension
 
@@ -84,7 +86,7 @@ def process_one(conf_dir_str: str,
         if not pdb_file:
             raise FileNotFoundError("No PDB file found in conformer directory")
         mol_name = conf_dir.parent.parent.name if len(conf_dir.parts) >= 2 else conf_dir.parent.name
-        compose_snapshot(
+        snap_path = compose_snapshot(
             conf_dir,
             project_root,
             mol_name,
@@ -96,8 +98,10 @@ def process_one(conf_dir_str: str,
             project_defaults=project_root / "electrofit.toml",
             extra_override=Path(override_cfg_path) if override_cfg_path else None,
         )
+        if not snap_path:
+            logging.warning(f"[step5][warn] snapshot could not be created in {conf_dir}")
         cfg = load_config(project_root, context_dir=conf_dir)
-        dump_config(cfg, header=False, log_fn=logging.info)
+        dump_config(cfg, header=True, log_fn=logging.info)
         proj = cfg.project
         molecule_name = proj.molecule_name or strip_extension(pdb_file)
         if mock:

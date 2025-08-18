@@ -22,7 +22,9 @@ from electrofit.io.files import (
     parse_charges_from_mol2,
 )
 from electrofit.infra.logging import reset_logging, setup_logging
-from electrofit.plotting.helpers import plot_charges_by_symmetry, plot_charges_by_atom
+from electrofit.viz.helpers import plot_charges_by_symmetry, plot_charges_by_atom
+from electrofit.infra.step_logging import log_relevant_config
+from electrofit.infra.decisions import build_aggregation_decision
 
 PROJECT_PATH = os.environ.get("ELECTROFIT_PROJECT_PATH", os.getcwd())
 project_path = PROJECT_PATH
@@ -181,7 +183,7 @@ def _process_one(mol_dir: Path, project_root: Path, override_cfg: Path | None, m
     cfg = load_config(project_root, context_dir=results_dir, molecule_name=mol_dir.name)
     # Dump layered config into log (avoid direct stdout noise)
     try:
-        dump_config(cfg, log_fn=logging.info)
+        dump_config(cfg, log_fn=logging.debug)
         # Force flush of all file handlers so user immediately sees config in process.log
         for _h in logging.getLogger().handlers:
             try:
@@ -197,6 +199,7 @@ def _process_one(mol_dir: Path, project_root: Path, override_cfg: Path | None, m
     adjust_sym = getattr(proj, "adjust_symmetry", False)
     ignore_sym = getattr(proj, "ignore_symmetry", False)
     calc_group_average = getattr(proj, "calculate_group_average", False)
+    protocol = getattr(proj, "protocol", None)
 
     # Find GAFF mol2 inside acpype
     mol2_source_file_path = None
@@ -207,6 +210,22 @@ def _process_one(mol_dir: Path, project_root: Path, override_cfg: Path | None, m
             break
     if not mol2_source_file_path:
         return False, "no matching mol2"
+
+    # Decision logging BEFORE heavy aggregation logic
+    try:
+        symmetry_json_found = (extracted / 'equiv_groups.json').is_file() or any((mol_dir / 'run_gau_create_gmx_in').glob('*.json'))
+        # group_average_applied unknown yet -> set False (updated later if applied)
+        build_aggregation_decision(
+            protocol=protocol,
+            adjust_sym=adjust_sym,
+            ignore_sym=ignore_sym,
+            calc_group_average=calc_group_average,
+            group_average_applied=False,
+            symmetry_json_found=symmetry_json_found,
+        ).log('step6')
+        log_relevant_config('step6', proj, ['molecule_name','protocol','adjust_symmetry','ignore_symmetry','calculate_group_average'])
+    except Exception:
+        logging.debug('[step6][decisions] logging failed', exc_info=True)
 
     initial_charges_dict = adjust_atom_names(parse_charges_from_mol2(mol2_source_file_path))
     atoms_dict = extract_charges_from_subdirectories(str(extracted), str(results_dir))
@@ -249,6 +268,18 @@ def _process_one(mol_dir: Path, project_root: Path, override_cfg: Path | None, m
                 logging.info("[step6] Updating MOL2 with group average charges and running acpype (user charges mode)...")
                 update_mol2_charges(mol2_source_file_path, str(chg_file), str(updated_mol2_out))
                 run_acpype(str(updated_mol2_out), charge, str(results_dir), atom_type, charges="user")
+                # Log a follow-up aggregation decision reflecting applied group average
+                try:
+                    build_aggregation_decision(
+                        protocol=protocol,
+                        adjust_sym=adjust_sym,
+                        ignore_sym=ignore_sym,
+                        calc_group_average=calc_group_average,
+                        group_average_applied=True,
+                        symmetry_json_found=symmetry_json_found,
+                    ).log('step6')
+                except Exception:
+                    logging.debug('[step6][decisions] post-apply logging failed', exc_info=True)
             else:
                 # No group averaging requested -> still proceed with user charges update using average_charges.chg
                 avg_chg = results_dir / "average_charges.chg"

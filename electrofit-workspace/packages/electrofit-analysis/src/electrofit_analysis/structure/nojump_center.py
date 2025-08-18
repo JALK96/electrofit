@@ -2,7 +2,7 @@ import logging
 import os
 
 from electrofit.cli.run_commands import run_command
-from electrofit.logging import setup_logging
+from electrofit.infra.logging import setup_logging
 
 PROJECT_PATH = os.environ.get("ELECTROFIT_PROJECT_PATH", os.getcwd())
 project_path = PROJECT_PATH

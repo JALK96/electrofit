@@ -1,11 +1,18 @@
 """Config Snapshot Composition (infrastructure layer).
 
 Public entry:
-  compose_snapshot(...) -> Path|None
-  CONFIG_ARG_HELP (Reuse in CLI help strings)
+    compose_snapshot(...) -> Path|None
+    CONFIG_ARG_HELP (Reuse in CLI help strings)
 
 Legacy import path (electrofit.workflows.snapshot) still provides a shim with
 DeprecationWarning for one release cycle.
+
+2025-08 (behaviour change): Reruns now *always* re-seed the snapshot from the
+highest-precedence available *source* (upstream > molecule_input > process_cfg >
+project_defaults) instead of preserving an existing local snapshot file as
+immutable base. This yields a "clean" deterministic override each run. The
+previous local snapshot is ignored (overwritten) unless **no** source layer
+exists (fallback).
 """
 from __future__ import annotations
 from pathlib import Path
@@ -19,18 +26,24 @@ CONFIG_ARG_HELP = (
 
 # Internal helper
 
-def _ensure_snapshot(target_dir: Path, precedence: Iterable[Path]) -> Path | None:
+def _seed_snapshot(target_dir: Path, sources: Iterable[Path]) -> Path | None:
+    """(Re)create snapshot from first existing source.
+
+    Overwrites existing snapshot unconditionally (clean behaviour) except when
+    *no* source exists; then keeps existing snapshot if present, else returns None.
+    """
     snap = target_dir / "electrofit.toml"
-    if snap.is_file():
-        return snap
-    for cand in precedence:
-        if cand.is_file():
+    for cand in sources:
+        if cand and cand.is_file():
             try:
                 snap.write_text(cand.read_text())
-            except Exception:
-                pass
+            except Exception as e:  # log minimal diagnostic via print (no logger guaranteed here)
+                print(f"[snapshot][warn] failed to seed from {cand}: {e}")
             break
-    return snap if snap.exists() else None
+    else:  # no source found
+        if not snap.exists():
+            return None
+    return snap
 
 
 def compose_snapshot(
@@ -45,40 +58,39 @@ def compose_snapshot(
     project_defaults: Path | None = None,
     extra_override: Path | None = None,
 ) -> Path | None:
-    """Construct or update a snapshot in run_dir using unified precedence.
+    """Construct (or re-construct) snapshot in ``run_dir``.
 
-    Order:
-      Base: existing snapshot OR first existing among [upstream, molecule_input, process_cfg, project_defaults].
-      Strong overrides (replace values): molecule_input -> process_cfg -> extra_override.
-      Fill-only: project_defaults (adds missing keys only).
+    Clean semantics (idempotent but *not* sticky): Every invocation reseeds from
+    first existing source among: upstream, molecule_input, process_cfg, project_defaults.
+    Existing local snapshot content is ignored (overwritten) so upstream & lower
+    layers propagate on reruns.
 
-    Returns snapshot path or None if creation failed.
+    Strong override sequence:
+        molecule_input -> process_cfg -> extra_override
+    Fill phase (adds only missing keys):
+        project_defaults
     """
-    precedence: list[Path] = []
-    snap_existing = run_dir / "electrofit.toml"
-    precedence.append(snap_existing)
-    if upstream: precedence.append(upstream)
-    if molecule_input: precedence.append(molecule_input)
-    if process_cfg: precedence.append(process_cfg)
-    if project_defaults: precedence.append(project_defaults)
-    snap = _ensure_snapshot(run_dir, precedence)
+    sources: list[Path] = []
+    if upstream: sources.append(upstream)
+    if molecule_input: sources.append(molecule_input)
+    if process_cfg: sources.append(process_cfg)
+    if project_defaults: sources.append(project_defaults)
+    snap = _seed_snapshot(run_dir, sources)
     if not snap or not snap.is_file():
         return None
-
     # Strong overrides
     for layer in [molecule_input, process_cfg, extra_override]:
         if layer and layer.is_file():
             try:
                 merge_into_snapshot(snap, layer, multi_molecule=multi_molecule, log_fn=log_fn)
-            except Exception:
-                pass
-
+            except Exception as e:
+                log_fn(f"[snapshot][warn] merge failed for {layer}: {e}")
     # Fill missing
     if project_defaults and project_defaults.is_file():
         try:
             fill_missing_into_snapshot(snap, project_defaults, log_fn=log_fn)
-        except Exception:
-            pass
+        except Exception as e:
+            log_fn(f"[snapshot][warn] fill failed: {e}")
     return snap
 
 __all__ = ["compose_snapshot", "CONFIG_ARG_HELP"]

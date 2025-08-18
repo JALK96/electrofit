@@ -1,0 +1,1778 @@
+{
+  "generated_utc": "2025-08-17T12:56:33.068101+00:00",
+  "internal_top_level": [
+    "electrofit",
+    "electrofit_analysis",
+    "electrofit_fep"
+  ],
+  "modules": {
+    "electrofit": {
+      "file": "packages/electrofit/src/electrofit/__init__.py",
+      "imports": [],
+      "name": "electrofit"
+    },
+    "electrofit.__main__": {
+      "file": "packages/electrofit/src/electrofit/__main__.py",
+      "imports": [
+        "electrofit.cli.app"
+      ],
+      "name": "electrofit.__main__"
+    },
+    "electrofit.adapters": {
+      "file": "packages/electrofit/src/electrofit/adapters/__init__.py",
+      "imports": [
+        "electrofit.gromacs"
+      ],
+      "name": "electrofit.adapters"
+    },
+    "electrofit.adapters.gromacs": {
+      "file": "packages/electrofit/src/electrofit/adapters/gromacs.py",
+      "imports": [
+        "__future__",
+        "electrofit.cli.run_commands",
+        "electrofit.cli.safe_run",
+        "electrofit.infra.scratch_manager",
+        "electrofit.io.files",
+        "electrofit.logging",
+        "logging",
+        "matplotlib.pyplot",
+        "os",
+        "pandas",
+        "subprocess"
+      ],
+      "name": "electrofit.adapters.gromacs"
+    },
+    "electrofit.cli": {
+      "file": "packages/electrofit/src/electrofit/cli/__init__.py",
+      "imports": [
+        "electrofit.app"
+      ],
+      "name": "electrofit.cli"
+    },
+    "electrofit.cli.app": {
+      "file": "packages/electrofit/src/electrofit/cli/app.py",
+      "imports": [
+        "argparse",
+        "importlib",
+        "logging",
+        "os",
+        "pathlib",
+        "runpy",
+        "sys"
+      ],
+      "name": "electrofit.cli.app"
+    },
+    "electrofit.cli.common": {
+      "file": "packages/electrofit/src/electrofit/cli/common.py",
+      "imports": [
+        "__future__",
+        "argparse",
+        "os"
+      ],
+      "name": "electrofit.cli.common"
+    },
+    "electrofit.cli.run_commands": {
+      "file": "packages/electrofit/src/electrofit/cli/run_commands.py",
+      "imports": [
+        "contextlib",
+        "io",
+        "logging",
+        "os",
+        "pathlib",
+        "subprocess"
+      ],
+      "name": "electrofit.cli.run_commands"
+    },
+    "electrofit.cli.safe_run": {
+      "file": "packages/electrofit/src/electrofit/cli/safe_run.py",
+      "imports": [
+        "__future__",
+        "atexit",
+        "contextlib",
+        "electrofit.infra.scratch_manager",
+        "logging",
+        "signal",
+        "sys",
+        "threading",
+        "traceback",
+        "typing"
+      ],
+      "name": "electrofit.cli.safe_run"
+    },
+    "electrofit.config": {
+      "file": "packages/electrofit/src/electrofit/config/__init__.py",
+      "imports": [
+        "electrofit.loader"
+      ],
+      "name": "electrofit.config"
+    },
+    "electrofit.config.legacy": {
+      "file": "packages/electrofit/src/electrofit/config/legacy.py",
+      "imports": [
+        "os"
+      ],
+      "name": "electrofit.config.legacy"
+    },
+    "electrofit.config.loader": {
+      "file": "packages/electrofit/src/electrofit/config/loader.py",
+      "imports": [
+        "__future__",
+        "dataclasses",
+        "os",
+        "pathlib",
+        "tomli",
+        "tomllib",
+        "typing"
+      ],
+      "name": "electrofit.config.loader"
+    },
+    "electrofit.config.merger": {
+      "file": "packages/electrofit/src/electrofit/config/merger.py",
+      "imports": [
+        "__future__",
+        "copy",
+        "hashlib",
+        "json",
+        "pathlib",
+        "tomli",
+        "tomli_w",
+        "tomllib",
+        "typing"
+      ],
+      "name": "electrofit.config.merger"
+    },
+    "electrofit.core": {
+      "file": "packages/electrofit/src/electrofit/core/__init__.py",
+      "imports": [],
+      "name": "electrofit.core"
+    },
+    "electrofit.core.equiv_groups": {
+      "file": "packages/electrofit/src/electrofit/core/equiv_groups.py",
+      "imports": [
+        "electrofit.io.files",
+        "sys"
+      ],
+      "name": "electrofit.core.equiv_groups"
+    },
+    "electrofit.core.process_conform": {
+      "file": "packages/electrofit/src/electrofit/core/process_conform.py",
+      "imports": [
+        "electrofit.cli.run_commands",
+        "electrofit.cli.safe_run",
+        "electrofit.core.symmetry",
+        "electrofit.infra.scratch_manager",
+        "electrofit.io.files",
+        "electrofit.io.mol2",
+        "electrofit.io.resp",
+        "logging",
+        "os",
+        "shutil",
+        "subprocess",
+        "sys",
+        "time"
+      ],
+      "name": "electrofit.core.process_conform"
+    },
+    "electrofit.core.process_initial_structure": {
+      "file": "packages/electrofit/src/electrofit/core/process_initial_structure.py",
+      "imports": [
+        "electrofit.cli.run_commands",
+        "electrofit.cli.safe_run",
+        "electrofit.core.symmetry",
+        "electrofit.infra.scratch_manager",
+        "electrofit.io.files",
+        "electrofit.io.mol2",
+        "electrofit.io.resp",
+        "logging",
+        "os",
+        "subprocess"
+      ],
+      "name": "electrofit.core.process_initial_structure"
+    },
+    "electrofit.core.symmetry": {
+      "file": "packages/electrofit/src/electrofit/core/symmetry.py",
+      "imports": [
+        "contextlib",
+        "os",
+        "sys",
+        "typing"
+      ],
+      "name": "electrofit.core.symmetry"
+    },
+    "electrofit.external": {
+      "file": "packages/electrofit/src/electrofit/external/__init__.py",
+      "imports": [
+        "warnings"
+      ],
+      "name": "electrofit.external"
+    },
+    "electrofit.external.gromacs": {
+      "file": "packages/electrofit/src/electrofit/external/gromacs.py",
+      "imports": [
+        "electrofit.adapters.gromacs"
+      ],
+      "name": "electrofit.external.gromacs"
+    },
+    "electrofit.infra": {
+      "file": "packages/electrofit/src/electrofit/infra/__init__.py",
+      "imports": [
+        "electrofit.logging"
+      ],
+      "name": "electrofit.infra"
+    },
+    "electrofit.infra.config_snapshot": {
+      "file": "packages/electrofit/src/electrofit/infra/config_snapshot.py",
+      "imports": [
+        "__future__",
+        "electrofit.config.merger",
+        "pathlib",
+        "typing"
+      ],
+      "name": "electrofit.infra.config_snapshot"
+    },
+    "electrofit.infra.logging": {
+      "file": "packages/electrofit/src/electrofit/infra/logging.py",
+      "imports": [
+        "__future__",
+        "electrofit",
+        "logging",
+        "logging.handlers",
+        "os",
+        "pathlib",
+        "subprocess"
+      ],
+      "name": "electrofit.infra.logging"
+    },
+    "electrofit.infra.scratch_manager": {
+      "file": "packages/electrofit/src/electrofit/infra/scratch_manager.py",
+      "imports": [
+        "__future__",
+        "electrofit.infra.logging",
+        "filecmp",
+        "hashlib",
+        "logging",
+        "os",
+        "shutil"
+      ],
+      "name": "electrofit.infra.scratch_manager"
+    },
+    "electrofit.io": {
+      "file": "packages/electrofit/src/electrofit/io/__init__.py",
+      "imports": [],
+      "name": "electrofit.io"
+    },
+    "electrofit.io.files": {
+      "file": "packages/electrofit/src/electrofit/io/files.py",
+      "imports": [
+        "glob",
+        "json",
+        "logging",
+        "numpy",
+        "openbabel",
+        "os",
+        "re",
+        "shutil",
+        "sys",
+        "tempfile",
+        "uuid"
+      ],
+      "name": "electrofit.io.files"
+    },
+    "electrofit.io.mol2": {
+      "file": "packages/electrofit/src/electrofit/io/mol2.py",
+      "imports": [
+        "logging",
+        "openmol",
+        "os",
+        "sys"
+      ],
+      "name": "electrofit.io.mol2"
+    },
+    "electrofit.io.resp": {
+      "file": "packages/electrofit/src/electrofit/io/resp.py",
+      "imports": [
+        "argparse",
+        "electrofit.io.files"
+      ],
+      "name": "electrofit.io.resp"
+    },
+    "electrofit.logging": {
+      "file": "packages/electrofit/src/electrofit/logging.py",
+      "imports": [
+        "electrofit",
+        "logging",
+        "logging.handlers",
+        "os",
+        "pathlib",
+        "subprocess"
+      ],
+      "name": "electrofit.logging"
+    },
+    "electrofit.plotting": {
+      "file": "packages/electrofit/src/electrofit/plotting/__init__.py",
+      "imports": [
+        "__future__",
+        "viz",
+        "warnings"
+      ],
+      "name": "electrofit.plotting"
+    },
+    "electrofit.plotting.helpers": {
+      "file": "packages/electrofit/src/electrofit/plotting/helpers.py",
+      "imports": [
+        "electrofit.viz.curly_brace",
+        "matplotlib.pyplot",
+        "numpy",
+        "os",
+        "re"
+      ],
+      "name": "electrofit.plotting.helpers"
+    },
+    "electrofit.plotting.plots": {
+      "file": "packages/electrofit/src/electrofit/plotting/plots.py",
+      "imports": [
+        "argparse",
+        "electrofit.io.files",
+        "electrofit.viz.helpers",
+        "json",
+        "os"
+      ],
+      "name": "electrofit.plotting.plots"
+    },
+    "electrofit.scratch": {
+      "file": "packages/electrofit/src/electrofit/scratch/__init__.py",
+      "imports": [],
+      "name": "electrofit.scratch"
+    },
+    "electrofit.scratch.manager": {
+      "file": "packages/electrofit/src/electrofit/scratch/manager.py",
+      "imports": [
+        "electrofit.infra.logging",
+        "filecmp",
+        "hashlib",
+        "logging",
+        "os",
+        "shutil"
+      ],
+      "name": "electrofit.scratch.manager"
+    },
+    "electrofit.utils_curly_brace": {
+      "file": "packages/electrofit/src/electrofit/utils_curly_brace.py",
+      "imports": [
+        "numpy"
+      ],
+      "name": "electrofit.utils_curly_brace"
+    },
+    "electrofit.viz": {
+      "file": "packages/electrofit/src/electrofit/viz/__init__.py",
+      "imports": [
+        "electrofit.curly_brace",
+        "electrofit.helpers"
+      ],
+      "name": "electrofit.viz"
+    },
+    "electrofit.viz.curly_brace": {
+      "file": "packages/electrofit/src/electrofit/viz/curly_brace.py",
+      "imports": [
+        "__future__",
+        "numpy",
+        "typing"
+      ],
+      "name": "electrofit.viz.curly_brace"
+    },
+    "electrofit.viz.helpers": {
+      "file": "packages/electrofit/src/electrofit/viz/helpers.py",
+      "imports": [
+        "electrofit.viz.curly_brace",
+        "matplotlib.pyplot",
+        "numpy",
+        "os",
+        "re"
+      ],
+      "name": "electrofit.viz.helpers"
+    },
+    "electrofit.workflows": {
+      "file": "packages/electrofit/src/electrofit/workflows/__init__.py",
+      "imports": [],
+      "name": "electrofit.workflows"
+    },
+    "electrofit.workflows.run_process_conform": {
+      "file": "packages/electrofit/src/electrofit/workflows/run_process_conform.py",
+      "imports": [
+        "electrofit.config.loader",
+        "electrofit.core.process_conform",
+        "electrofit.infra.logging",
+        "electrofit.io.files",
+        "logging",
+        "os",
+        "pathlib"
+      ],
+      "name": "electrofit.workflows.run_process_conform"
+    },
+    "electrofit.workflows.run_process_initial_structure": {
+      "file": "packages/electrofit/src/electrofit/workflows/run_process_initial_structure.py",
+      "imports": [
+        "argparse",
+        "electrofit.config.loader",
+        "electrofit.core.process_initial_structure",
+        "electrofit.io.files",
+        "os"
+      ],
+      "name": "electrofit.workflows.run_process_initial_structure"
+    },
+    "electrofit.workflows.snapshot": {
+      "file": "packages/electrofit/src/electrofit/workflows/snapshot.py",
+      "imports": [
+        "__future__",
+        "electrofit.infra.config_snapshot",
+        "warnings"
+      ],
+      "name": "electrofit.workflows.snapshot"
+    },
+    "electrofit.workflows.step0_setup": {
+      "file": "packages/electrofit/src/electrofit/workflows/step0_setup.py",
+      "imports": [
+        "argparse",
+        "electrofit.infra.logging",
+        "electrofit.io.files",
+        "logging",
+        "os",
+        "pathlib"
+      ],
+      "name": "electrofit.workflows.step0_setup"
+    },
+    "electrofit.workflows.step1_initial_processing": {
+      "file": "packages/electrofit/src/electrofit/workflows/step1_initial_processing.py",
+      "imports": [
+        "argparse",
+        "contextlib",
+        "electrofit.infra.config_snapshot",
+        "electrofit.infra.logging",
+        "electrofit.workflows.run_process_initial_structure",
+        "logging",
+        "os",
+        "pathlib"
+      ],
+      "name": "electrofit.workflows.step1_initial_processing"
+    },
+    "electrofit.workflows.step2_setup_sim_dir": {
+      "file": "packages/electrofit/src/electrofit/workflows/step2_setup_sim_dir.py",
+      "imports": [
+        "argparse",
+        "electrofit.config.loader",
+        "electrofit.infra.config_snapshot",
+        "electrofit.infra.logging",
+        "fnmatch",
+        "json",
+        "logging",
+        "os",
+        "pathlib",
+        "shutil"
+      ],
+      "name": "electrofit.workflows.step2_setup_sim_dir"
+    },
+    "electrofit.workflows.step3_start_sim": {
+      "file": "packages/electrofit/src/electrofit/workflows/step3_start_sim.py",
+      "imports": [
+        "argparse",
+        "electrofit.adapters.gromacs",
+        "electrofit.config.loader",
+        "electrofit.infra.config_snapshot",
+        "electrofit.infra.logging",
+        "json",
+        "logging",
+        "os",
+        "pathlib"
+      ],
+      "name": "electrofit.workflows.step3_start_sim"
+    },
+    "electrofit.workflows.step4_extract_conforms": {
+      "file": "packages/electrofit/src/electrofit/workflows/step4_extract_conforms.py",
+      "imports": [
+        "argparse",
+        "concurrent.futures",
+        "electrofit.config.loader",
+        "electrofit.infra.config_snapshot",
+        "electrofit.infra.logging",
+        "electrofit.io.files",
+        "logging",
+        "mdtraj",
+        "multiprocessing",
+        "numpy",
+        "os",
+        "pathlib",
+        "random",
+        "shutil",
+        "sys",
+        "tomli",
+        "tomllib",
+        "tqdm",
+        "typing"
+      ],
+      "name": "electrofit.workflows.step4_extract_conforms"
+    },
+    "electrofit.workflows.step5_isolate_runner": {
+      "file": "packages/electrofit/src/electrofit/workflows/step5_isolate_runner.py",
+      "imports": [
+        "__future__",
+        "argparse",
+        "electrofit.workflows.step5_worker",
+        "json",
+        "sys"
+      ],
+      "name": "electrofit.workflows.step5_isolate_runner"
+    },
+    "electrofit.workflows.step5_process_conforms": {
+      "file": "packages/electrofit/src/electrofit/workflows/step5_process_conforms.py",
+      "imports": [
+        "__future__",
+        "argparse",
+        "concurrent.futures",
+        "electrofit.workflows.snapshot",
+        "electrofit.workflows.step5_worker",
+        "json",
+        "logging",
+        "multiprocessing",
+        "os",
+        "pathlib",
+        "subprocess",
+        "time",
+        "traceback",
+        "typing"
+      ],
+      "name": "electrofit.workflows.step5_process_conforms"
+    },
+    "electrofit.workflows.step5_worker": {
+      "file": "packages/electrofit/src/electrofit/workflows/step5_worker.py",
+      "imports": [
+        "atexit",
+        "electrofit.config.loader",
+        "electrofit.core.process_conform",
+        "electrofit.infra.config_snapshot",
+        "electrofit.infra.logging",
+        "electrofit.io.files",
+        "faulthandler",
+        "gc",
+        "logging",
+        "os",
+        "pathlib",
+        "signal",
+        "sys",
+        "traceback"
+      ],
+      "name": "electrofit.workflows.step5_worker"
+    },
+    "electrofit.workflows.step6_extract_average_charges": {
+      "file": "packages/electrofit/src/electrofit/workflows/step6_extract_average_charges.py",
+      "imports": [
+        "argparse",
+        "electrofit.cli.run_commands",
+        "electrofit.config.loader",
+        "electrofit.infra.config_snapshot",
+        "electrofit.infra.logging",
+        "electrofit.io.files",
+        "electrofit.io.mol2",
+        "electrofit.viz.helpers",
+        "fnmatch",
+        "glob",
+        "json",
+        "logging",
+        "matplotlib.pyplot",
+        "os",
+        "pandas",
+        "pathlib",
+        "shutil"
+      ],
+      "name": "electrofit.workflows.step6_extract_average_charges"
+    },
+    "electrofit.workflows.step7_setup_final_sim": {
+      "file": "packages/electrofit/src/electrofit/workflows/step7_setup_final_sim.py",
+      "imports": [
+        "argparse",
+        "electrofit.config.loader",
+        "electrofit.infra.config_snapshot",
+        "electrofit.infra.logging",
+        "fnmatch",
+        "logging",
+        "os",
+        "pathlib",
+        "shutil"
+      ],
+      "name": "electrofit.workflows.step7_setup_final_sim"
+    },
+    "electrofit.workflows.step8_start_final_sim": {
+      "file": "packages/electrofit/src/electrofit/workflows/step8_start_final_sim.py",
+      "imports": [
+        "argparse",
+        "electrofit.adapters.gromacs",
+        "electrofit.config.loader",
+        "electrofit.infra.config_snapshot",
+        "electrofit.infra.logging",
+        "logging",
+        "os",
+        "pathlib"
+      ],
+      "name": "electrofit.workflows.step8_start_final_sim"
+    },
+    "electrofit_analysis": {
+      "file": "packages/electrofit-analysis/src/electrofit_analysis/__init__.py",
+      "imports": [],
+      "name": "electrofit_analysis"
+    },
+    "electrofit_analysis.charges.plot_charges": {
+      "file": "packages/electrofit-analysis/src/electrofit_analysis/charges/plot_charges.py",
+      "imports": [
+        "copy",
+        "electrofit.config.legacy",
+        "electrofit.io.files",
+        "electrofit.viz.helpers",
+        "fnmatch",
+        "glob",
+        "matplotlib.pyplot",
+        "numpy",
+        "os",
+        "pandas"
+      ],
+      "name": "electrofit_analysis.charges.plot_charges"
+    },
+    "electrofit_analysis.cli": {
+      "file": "packages/electrofit-analysis/src/electrofit_analysis/cli.py",
+      "imports": [
+        "typer"
+      ],
+      "name": "electrofit_analysis.cli"
+    },
+    "electrofit_analysis.fep.breakdown_fep": {
+      "file": "packages/electrofit-analysis/src/electrofit_analysis/fep/breakdown_fep.py",
+      "imports": [
+        "argparse",
+        "matplotlib.pyplot",
+        "numpy",
+        "os",
+        "pandas",
+        "pathlib",
+        "seaborn",
+        "sys"
+      ],
+      "name": "electrofit_analysis.fep.breakdown_fep"
+    },
+    "electrofit_analysis.fep.collect_dhdl_files": {
+      "file": "packages/electrofit-analysis/src/electrofit_analysis/fep/collect_dhdl_files.py",
+      "imports": [
+        "os",
+        "shutil",
+        "sys"
+      ],
+      "name": "electrofit_analysis.fep.collect_dhdl_files"
+    },
+    "electrofit_analysis.fep.fep_analysis": {
+      "file": "packages/electrofit-analysis/src/electrofit_analysis/fep/fep_analysis.py",
+      "imports": [
+        "alchemlyb",
+        "alchemlyb.convergence",
+        "alchemlyb.estimators",
+        "alchemlyb.parsing",
+        "alchemlyb.postprocessors.units",
+        "alchemlyb.preprocessing.subsampling",
+        "alchemlyb.visualisation",
+        "argparse",
+        "electrofit.infra.logging",
+        "joblib",
+        "logging",
+        "matplotlib.font_manager",
+        "matplotlib.pyplot",
+        "matplotlib.ticker",
+        "numpy",
+        "os",
+        "pandas",
+        "pathlib",
+        "seaborn",
+        "sklearn.base"
+      ],
+      "name": "electrofit_analysis.fep.fep_analysis"
+    },
+    "electrofit_analysis.fep.h_bond_correlation": {
+      "file": "packages/electrofit-analysis/src/electrofit_analysis/fep/h_bond_correlation.py",
+      "imports": [
+        "argparse",
+        "json",
+        "logging",
+        "matplotlib.pyplot",
+        "numpy",
+        "re",
+        "sys",
+        "typing"
+      ],
+      "name": "electrofit_analysis.fep.h_bond_correlation"
+    },
+    "electrofit_analysis.fep.p_dU_example": {
+      "file": "packages/electrofit-analysis/src/electrofit_analysis/fep/p_dU_example.py",
+      "imports": [
+        "matplotlib.patches",
+        "matplotlib.pyplot",
+        "numpy",
+        "seaborn"
+      ],
+      "name": "electrofit_analysis.fep.p_dU_example"
+    },
+    "electrofit_analysis.fep.plot_dU_distributions_vertical": {
+      "file": "packages/electrofit-analysis/src/electrofit_analysis/fep/plot_dU_distributions_vertical.py",
+      "imports": [
+        "argparse",
+        "matplotlib",
+        "matplotlib.pyplot",
+        "numpy",
+        "os",
+        "re",
+        "scipy.stats",
+        "seaborn"
+      ],
+      "name": "electrofit_analysis.fep.plot_dU_distributions_vertical"
+    },
+    "electrofit_analysis.fep.plot_dU_fwd_rev": {
+      "file": "packages/electrofit-analysis/src/electrofit_analysis/fep/plot_dU_fwd_rev.py",
+      "imports": [
+        "argparse",
+        "math",
+        "matplotlib.offsetbox",
+        "matplotlib.pyplot",
+        "numpy",
+        "os",
+        "re",
+        "scipy.stats",
+        "seaborn"
+      ],
+      "name": "electrofit_analysis.fep.plot_dU_fwd_rev"
+    },
+    "electrofit_analysis.fep.plot_dU_fwd_rev_consecutive": {
+      "file": "packages/electrofit-analysis/src/electrofit_analysis/fep/plot_dU_fwd_rev_consecutive.py",
+      "imports": [
+        "argparse",
+        "math",
+        "matplotlib.offsetbox",
+        "matplotlib.pyplot",
+        "numpy",
+        "os",
+        "re",
+        "scipy.stats",
+        "seaborn"
+      ],
+      "name": "electrofit_analysis.fep.plot_dU_fwd_rev_consecutive"
+    },
+    "electrofit_analysis.fep.plot_dU_p_and_product": {
+      "file": "packages/electrofit-analysis/src/electrofit_analysis/fep/plot_dU_p_and_product.py",
+      "imports": [
+        "argparse",
+        "math",
+        "matplotlib.offsetbox",
+        "matplotlib.pyplot",
+        "numpy",
+        "os",
+        "re",
+        "scipy.stats",
+        "seaborn"
+      ],
+      "name": "electrofit_analysis.fep.plot_dU_p_and_product"
+    },
+    "electrofit_analysis.fep.plot_energy_density_vertical": {
+      "file": "packages/electrofit-analysis/src/electrofit_analysis/fep/plot_energy_density_vertical.py",
+      "imports": [
+        "argparse",
+        "matplotlib",
+        "matplotlib.pyplot",
+        "matplotlib.ticker",
+        "numpy",
+        "os",
+        "seaborn",
+        "subprocess"
+      ],
+      "name": "electrofit_analysis.fep.plot_energy_density_vertical"
+    },
+    "electrofit_analysis.fep.run_analysis_parallel": {
+      "file": "packages/electrofit-analysis/src/electrofit_analysis/fep/run_analysis_parallel.py",
+      "imports": [
+        "concurrent.futures",
+        "os",
+        "pathlib",
+        "re",
+        "subprocess"
+      ],
+      "name": "electrofit_analysis.fep.run_analysis_parallel"
+    },
+    "electrofit_analysis.fep.run_fep_analysis_scripts": {
+      "file": "packages/electrofit-analysis/src/electrofit_analysis/fep/run_fep_analysis_scripts.py",
+      "imports": [
+        "os",
+        "pathlib",
+        "re",
+        "subprocess"
+      ],
+      "name": "electrofit_analysis.fep.run_fep_analysis_scripts"
+    },
+    "electrofit_analysis.fep.summerize_nap_dist_count": {
+      "file": "packages/electrofit-analysis/src/electrofit_analysis/fep/summerize_nap_dist_count.py",
+      "imports": [
+        "itertools",
+        "matplotlib.cm",
+        "matplotlib.colors",
+        "matplotlib.pyplot",
+        "matplotlib.ticker",
+        "numpy",
+        "os",
+        "sys"
+      ],
+      "name": "electrofit_analysis.fep.summerize_nap_dist_count"
+    },
+    "electrofit_analysis.structure.dihedral_density": {
+      "file": "packages/electrofit-analysis/src/electrofit_analysis/structure/dihedral_density.py",
+      "imports": [
+        "MDAnalysis",
+        "MDAnalysis.lib.distances",
+        "matplotlib.pyplot",
+        "numpy",
+        "os",
+        "re",
+        "scipy.stats",
+        "seaborn",
+        "types"
+      ],
+      "name": "electrofit_analysis.structure.dihedral_density"
+    },
+    "electrofit_analysis.structure.h_bonds": {
+      "file": "packages/electrofit-analysis/src/electrofit_analysis/structure/h_bonds.py",
+      "imports": [
+        "electrofit.cli.run_commands",
+        "electrofit.io.files",
+        "itertools",
+        "math",
+        "matplotlib.pyplot",
+        "numpy",
+        "os",
+        "pandas",
+        "rdkit",
+        "rdkit.Chem",
+        "rdkit.Chem.Draw",
+        "re",
+        "seaborn",
+        "uuid"
+      ],
+      "name": "electrofit_analysis.structure.h_bonds"
+    },
+    "electrofit_analysis.structure.na_p_count": {
+      "file": "packages/electrofit-analysis/src/electrofit_analysis/structure/na_p_count.py",
+      "imports": [
+        "electrofit.cli.run_commands",
+        "electrofit.infra.logging",
+        "logging",
+        "math",
+        "matplotlib.pyplot",
+        "numpy",
+        "os",
+        "seaborn",
+        "sys"
+      ],
+      "name": "electrofit_analysis.structure.na_p_count"
+    },
+    "electrofit_analysis.structure.na_p_distance": {
+      "file": "packages/electrofit-analysis/src/electrofit_analysis/structure/na_p_distance.py",
+      "imports": [
+        "electrofit.cli.run_commands",
+        "electrofit.infra.logging",
+        "logging",
+        "matplotlib.pyplot",
+        "numpy",
+        "os",
+        "seaborn",
+        "sys"
+      ],
+      "name": "electrofit_analysis.structure.na_p_distance"
+    },
+    "electrofit_analysis.structure.nojump_center": {
+      "file": "packages/electrofit-analysis/src/electrofit_analysis/structure/nojump_center.py",
+      "imports": [
+        "electrofit.cli.run_commands",
+        "electrofit.infra.logging",
+        "logging",
+        "os"
+      ],
+      "name": "electrofit_analysis.structure.nojump_center"
+    },
+    "electrofit_analysis.structure.plot_molecule_2d": {
+      "file": "packages/electrofit-analysis/src/electrofit_analysis/structure/plot_molecule_2d.py",
+      "imports": [
+        "electrofit.io.files",
+        "os",
+        "rdkit",
+        "rdkit.Chem",
+        "rdkit.Chem.Draw"
+      ],
+      "name": "electrofit_analysis.structure.plot_molecule_2d"
+    },
+    "electrofit_analysis.structure.structure_2d_charge_annotation": {
+      "file": "packages/electrofit-analysis/src/electrofit_analysis/structure/structure_2d_charge_annotation.py",
+      "imports": [
+        "rdkit",
+        "rdkit.Chem",
+        "rdkit.Chem.Draw"
+      ],
+      "name": "electrofit_analysis.structure.structure_2d_charge_annotation"
+    },
+    "electrofit_fep": {
+      "file": "packages/electrofit-fep/src/electrofit_fep/__init__.py",
+      "imports": [],
+      "name": "electrofit_fep"
+    },
+    "electrofit_fep.cli": {
+      "file": "packages/electrofit-fep/src/electrofit_fep/cli.py",
+      "imports": [
+        "typer"
+      ],
+      "name": "electrofit_fep.cli"
+    },
+    "electrofit_fep.core.eqfep": {
+      "file": "packages/electrofit-fep/src/electrofit_fep/core/eqfep.py",
+      "imports": [
+        "concurrent.futures",
+        "electrofit.cli.run_commands",
+        "glob",
+        "logging",
+        "numpy",
+        "os",
+        "pandas",
+        "pmx",
+        "pmx.utils"
+      ],
+      "name": "electrofit_fep.core.eqfep"
+    },
+    "electrofit_fep.core.neqfep": {
+      "file": "packages/electrofit-fep/src/electrofit_fep/core/neqfep.py",
+      "imports": [
+        "glob",
+        "numpy",
+        "os",
+        "pandas",
+        "pmx",
+        "pmx.utils",
+        "subprocess"
+      ],
+      "name": "electrofit_fep.core.neqfep"
+    },
+    "electrofit_fep.workflows.run_eqfep": {
+      "file": "packages/electrofit-fep/src/electrofit_fep/workflows/run_eqfep.py",
+      "imports": [
+        "argparse",
+        "electrofit.cli.safe_run",
+        "electrofit.infra.logging",
+        "electrofit.infra.scratch_manager",
+        "electrofit_fep.core.eqfep",
+        "logging",
+        "numpy",
+        "os"
+      ],
+      "name": "electrofit_fep.workflows.run_eqfep"
+    },
+    "electrofit_fep.workflows.run_fep_old": {
+      "file": "packages/electrofit-fep/src/electrofit_fep/workflows/run_fep_old.py",
+      "imports": [
+        "electrofit.cli.run_commands",
+        "electrofit.cli.safe_run",
+        "electrofit.infra.logging",
+        "electrofit.infra.scratch_manager",
+        "electrofit.io.files",
+        "logging",
+        "matplotlib.pyplot",
+        "os",
+        "pandas",
+        "shutil",
+        "subprocess"
+      ],
+      "name": "electrofit_fep.workflows.run_fep_old"
+    },
+    "electrofit_fep.workflows.run_neqfep": {
+      "file": "packages/electrofit-fep/src/electrofit_fep/workflows/run_neqfep.py",
+      "imports": [
+        "argparse",
+        "electrofit.cli.safe_run",
+        "electrofit.infra.logging",
+        "electrofit.infra.scratch_manager",
+        "electrofit_fep.core.neqfep",
+        "logging",
+        "os",
+        "sys"
+      ],
+      "name": "electrofit_fep.workflows.run_neqfep"
+    }
+  },
+  "package_meta": {
+    "electrofit": {
+      "dependencies": [
+        "app",
+        "matplotlib",
+        "mdtraj",
+        "numpy",
+        "openbabel-wheel",
+        "openmol",
+        "pandas",
+        "typer",
+        "tomli>=2.0.1; python_version < \"3.11\"",
+        "acpype",
+        "tqdm",
+        "tomli_w"
+      ],
+      "name": "electrofit",
+      "scripts": {
+        "electrofit": "electrofit.cli.app:main"
+      },
+      "version": "0.1.0"
+    },
+    "electrofit-analysis": {
+      "dependencies": [
+        "MDAnalysis",
+        "alchemlyb",
+        "joblib",
+        "matplotlib",
+        "numpy",
+        "pandas",
+        "rdkit",
+        "scikit-learn",
+        "scipy",
+        "seaborn",
+        "typer"
+      ],
+      "name": "electrofit-analysis",
+      "scripts": {
+        "electrofit-analysis": "electrofit_analysis.cli:main"
+      },
+      "version": "0.1.0"
+    },
+    "electrofit-fep": {
+      "dependencies": [
+        "electrofit>=0.1.0",
+        "typer>=0.12",
+        "rich>=13"
+      ],
+      "name": "electrofit-fep",
+      "scripts": {
+        "electrofit-fep": "electrofit_fep.cli:main"
+      },
+      "version": "0.1.0"
+    }
+  },
+  "reverse": {
+    "MDAnalysis": [
+      "electrofit_analysis.structure.dihedral_density"
+    ],
+    "MDAnalysis.lib.distances": [
+      "electrofit_analysis.structure.dihedral_density"
+    ],
+    "__future__": [
+      "electrofit.adapters.gromacs",
+      "electrofit.cli.common",
+      "electrofit.cli.safe_run",
+      "electrofit.config.loader",
+      "electrofit.config.merger",
+      "electrofit.infra.config_snapshot",
+      "electrofit.infra.logging",
+      "electrofit.infra.scratch_manager",
+      "electrofit.plotting",
+      "electrofit.viz.curly_brace",
+      "electrofit.workflows.snapshot",
+      "electrofit.workflows.step5_isolate_runner",
+      "electrofit.workflows.step5_process_conforms"
+    ],
+    "alchemlyb": [
+      "electrofit_analysis.fep.fep_analysis"
+    ],
+    "alchemlyb.convergence": [
+      "electrofit_analysis.fep.fep_analysis"
+    ],
+    "alchemlyb.estimators": [
+      "electrofit_analysis.fep.fep_analysis"
+    ],
+    "alchemlyb.parsing": [
+      "electrofit_analysis.fep.fep_analysis"
+    ],
+    "alchemlyb.postprocessors.units": [
+      "electrofit_analysis.fep.fep_analysis"
+    ],
+    "alchemlyb.preprocessing.subsampling": [
+      "electrofit_analysis.fep.fep_analysis"
+    ],
+    "alchemlyb.visualisation": [
+      "electrofit_analysis.fep.fep_analysis"
+    ],
+    "argparse": [
+      "electrofit.cli.app",
+      "electrofit.cli.common",
+      "electrofit.io.resp",
+      "electrofit.plotting.plots",
+      "electrofit.workflows.run_process_initial_structure",
+      "electrofit.workflows.step0_setup",
+      "electrofit.workflows.step1_initial_processing",
+      "electrofit.workflows.step2_setup_sim_dir",
+      "electrofit.workflows.step3_start_sim",
+      "electrofit.workflows.step4_extract_conforms",
+      "electrofit.workflows.step5_isolate_runner",
+      "electrofit.workflows.step5_process_conforms",
+      "electrofit.workflows.step6_extract_average_charges",
+      "electrofit.workflows.step7_setup_final_sim",
+      "electrofit.workflows.step8_start_final_sim",
+      "electrofit_analysis.fep.breakdown_fep",
+      "electrofit_analysis.fep.fep_analysis",
+      "electrofit_analysis.fep.h_bond_correlation",
+      "electrofit_analysis.fep.plot_dU_distributions_vertical",
+      "electrofit_analysis.fep.plot_dU_fwd_rev",
+      "electrofit_analysis.fep.plot_dU_fwd_rev_consecutive",
+      "electrofit_analysis.fep.plot_dU_p_and_product",
+      "electrofit_analysis.fep.plot_energy_density_vertical",
+      "electrofit_fep.workflows.run_eqfep",
+      "electrofit_fep.workflows.run_neqfep"
+    ],
+    "atexit": [
+      "electrofit.cli.safe_run",
+      "electrofit.workflows.step5_worker"
+    ],
+    "concurrent.futures": [
+      "electrofit.workflows.step4_extract_conforms",
+      "electrofit.workflows.step5_process_conforms",
+      "electrofit_analysis.fep.run_analysis_parallel",
+      "electrofit_fep.core.eqfep"
+    ],
+    "contextlib": [
+      "electrofit.cli.run_commands",
+      "electrofit.cli.safe_run",
+      "electrofit.core.symmetry",
+      "electrofit.workflows.step1_initial_processing"
+    ],
+    "copy": [
+      "electrofit.config.merger",
+      "electrofit_analysis.charges.plot_charges"
+    ],
+    "dataclasses": [
+      "electrofit.config.loader"
+    ],
+    "electrofit": [
+      "electrofit.infra.logging",
+      "electrofit.logging"
+    ],
+    "electrofit.adapters.gromacs": [
+      "electrofit.external.gromacs",
+      "electrofit.workflows.step3_start_sim",
+      "electrofit.workflows.step8_start_final_sim"
+    ],
+    "electrofit.app": [
+      "electrofit.cli"
+    ],
+    "electrofit.cli.app": [
+      "electrofit.__main__"
+    ],
+    "electrofit.cli.run_commands": [
+      "electrofit.adapters.gromacs",
+      "electrofit.core.process_conform",
+      "electrofit.core.process_initial_structure",
+      "electrofit.workflows.step6_extract_average_charges",
+      "electrofit_analysis.structure.h_bonds",
+      "electrofit_analysis.structure.na_p_count",
+      "electrofit_analysis.structure.na_p_distance",
+      "electrofit_analysis.structure.nojump_center",
+      "electrofit_fep.core.eqfep",
+      "electrofit_fep.workflows.run_fep_old"
+    ],
+    "electrofit.cli.safe_run": [
+      "electrofit.adapters.gromacs",
+      "electrofit.core.process_conform",
+      "electrofit.core.process_initial_structure",
+      "electrofit_fep.workflows.run_eqfep",
+      "electrofit_fep.workflows.run_fep_old",
+      "electrofit_fep.workflows.run_neqfep"
+    ],
+    "electrofit.config.legacy": [
+      "electrofit_analysis.charges.plot_charges"
+    ],
+    "electrofit.config.loader": [
+      "electrofit.workflows.run_process_conform",
+      "electrofit.workflows.run_process_initial_structure",
+      "electrofit.workflows.step2_setup_sim_dir",
+      "electrofit.workflows.step3_start_sim",
+      "electrofit.workflows.step4_extract_conforms",
+      "electrofit.workflows.step5_worker",
+      "electrofit.workflows.step6_extract_average_charges",
+      "electrofit.workflows.step7_setup_final_sim",
+      "electrofit.workflows.step8_start_final_sim"
+    ],
+    "electrofit.config.merger": [
+      "electrofit.infra.config_snapshot"
+    ],
+    "electrofit.core.process_conform": [
+      "electrofit.workflows.run_process_conform",
+      "electrofit.workflows.step5_worker"
+    ],
+    "electrofit.core.process_initial_structure": [
+      "electrofit.workflows.run_process_initial_structure"
+    ],
+    "electrofit.core.symmetry": [
+      "electrofit.core.process_conform",
+      "electrofit.core.process_initial_structure"
+    ],
+    "electrofit.curly_brace": [
+      "electrofit.viz"
+    ],
+    "electrofit.gromacs": [
+      "electrofit.adapters"
+    ],
+    "electrofit.helpers": [
+      "electrofit.viz"
+    ],
+    "electrofit.infra.config_snapshot": [
+      "electrofit.workflows.snapshot",
+      "electrofit.workflows.step1_initial_processing",
+      "electrofit.workflows.step2_setup_sim_dir",
+      "electrofit.workflows.step3_start_sim",
+      "electrofit.workflows.step4_extract_conforms",
+      "electrofit.workflows.step5_worker",
+      "electrofit.workflows.step6_extract_average_charges",
+      "electrofit.workflows.step7_setup_final_sim",
+      "electrofit.workflows.step8_start_final_sim"
+    ],
+    "electrofit.infra.logging": [
+      "electrofit.infra.scratch_manager",
+      "electrofit.scratch.manager",
+      "electrofit.workflows.run_process_conform",
+      "electrofit.workflows.step0_setup",
+      "electrofit.workflows.step1_initial_processing",
+      "electrofit.workflows.step2_setup_sim_dir",
+      "electrofit.workflows.step3_start_sim",
+      "electrofit.workflows.step4_extract_conforms",
+      "electrofit.workflows.step5_worker",
+      "electrofit.workflows.step6_extract_average_charges",
+      "electrofit.workflows.step7_setup_final_sim",
+      "electrofit.workflows.step8_start_final_sim",
+      "electrofit_analysis.fep.fep_analysis",
+      "electrofit_analysis.structure.na_p_count",
+      "electrofit_analysis.structure.na_p_distance",
+      "electrofit_analysis.structure.nojump_center",
+      "electrofit_fep.workflows.run_eqfep",
+      "electrofit_fep.workflows.run_fep_old",
+      "electrofit_fep.workflows.run_neqfep"
+    ],
+    "electrofit.infra.scratch_manager": [
+      "electrofit.adapters.gromacs",
+      "electrofit.cli.safe_run",
+      "electrofit.core.process_conform",
+      "electrofit.core.process_initial_structure",
+      "electrofit_fep.workflows.run_eqfep",
+      "electrofit_fep.workflows.run_fep_old",
+      "electrofit_fep.workflows.run_neqfep"
+    ],
+    "electrofit.io.files": [
+      "electrofit.adapters.gromacs",
+      "electrofit.core.equiv_groups",
+      "electrofit.core.process_conform",
+      "electrofit.core.process_initial_structure",
+      "electrofit.io.resp",
+      "electrofit.plotting.plots",
+      "electrofit.workflows.run_process_conform",
+      "electrofit.workflows.run_process_initial_structure",
+      "electrofit.workflows.step0_setup",
+      "electrofit.workflows.step4_extract_conforms",
+      "electrofit.workflows.step5_worker",
+      "electrofit.workflows.step6_extract_average_charges",
+      "electrofit_analysis.charges.plot_charges",
+      "electrofit_analysis.structure.h_bonds",
+      "electrofit_analysis.structure.plot_molecule_2d",
+      "electrofit_fep.workflows.run_fep_old"
+    ],
+    "electrofit.io.mol2": [
+      "electrofit.core.process_conform",
+      "electrofit.core.process_initial_structure",
+      "electrofit.workflows.step6_extract_average_charges"
+    ],
+    "electrofit.io.resp": [
+      "electrofit.core.process_conform",
+      "electrofit.core.process_initial_structure"
+    ],
+    "electrofit.loader": [
+      "electrofit.config"
+    ],
+    "electrofit.logging": [
+      "electrofit.adapters.gromacs",
+      "electrofit.infra"
+    ],
+    "electrofit.viz.curly_brace": [
+      "electrofit.plotting.helpers",
+      "electrofit.viz.helpers"
+    ],
+    "electrofit.viz.helpers": [
+      "electrofit.plotting.plots",
+      "electrofit.workflows.step6_extract_average_charges",
+      "electrofit_analysis.charges.plot_charges"
+    ],
+    "electrofit.workflows.run_process_initial_structure": [
+      "electrofit.workflows.step1_initial_processing"
+    ],
+    "electrofit.workflows.snapshot": [
+      "electrofit.workflows.step5_process_conforms"
+    ],
+    "electrofit.workflows.step5_worker": [
+      "electrofit.workflows.step5_isolate_runner",
+      "electrofit.workflows.step5_process_conforms"
+    ],
+    "electrofit_fep.core.eqfep": [
+      "electrofit_fep.workflows.run_eqfep"
+    ],
+    "electrofit_fep.core.neqfep": [
+      "electrofit_fep.workflows.run_neqfep"
+    ],
+    "faulthandler": [
+      "electrofit.workflows.step5_worker"
+    ],
+    "filecmp": [
+      "electrofit.infra.scratch_manager",
+      "electrofit.scratch.manager"
+    ],
+    "fnmatch": [
+      "electrofit.workflows.step2_setup_sim_dir",
+      "electrofit.workflows.step6_extract_average_charges",
+      "electrofit.workflows.step7_setup_final_sim",
+      "electrofit_analysis.charges.plot_charges"
+    ],
+    "gc": [
+      "electrofit.workflows.step5_worker"
+    ],
+    "glob": [
+      "electrofit.io.files",
+      "electrofit.workflows.step6_extract_average_charges",
+      "electrofit_analysis.charges.plot_charges",
+      "electrofit_fep.core.eqfep",
+      "electrofit_fep.core.neqfep"
+    ],
+    "hashlib": [
+      "electrofit.config.merger",
+      "electrofit.infra.scratch_manager",
+      "electrofit.scratch.manager"
+    ],
+    "importlib": [
+      "electrofit.cli.app"
+    ],
+    "io": [
+      "electrofit.cli.run_commands"
+    ],
+    "itertools": [
+      "electrofit_analysis.fep.summerize_nap_dist_count",
+      "electrofit_analysis.structure.h_bonds"
+    ],
+    "joblib": [
+      "electrofit_analysis.fep.fep_analysis"
+    ],
+    "json": [
+      "electrofit.config.merger",
+      "electrofit.io.files",
+      "electrofit.plotting.plots",
+      "electrofit.workflows.step2_setup_sim_dir",
+      "electrofit.workflows.step3_start_sim",
+      "electrofit.workflows.step5_isolate_runner",
+      "electrofit.workflows.step5_process_conforms",
+      "electrofit.workflows.step6_extract_average_charges",
+      "electrofit_analysis.fep.h_bond_correlation"
+    ],
+    "logging": [
+      "electrofit.adapters.gromacs",
+      "electrofit.cli.app",
+      "electrofit.cli.run_commands",
+      "electrofit.cli.safe_run",
+      "electrofit.core.process_conform",
+      "electrofit.core.process_initial_structure",
+      "electrofit.infra.logging",
+      "electrofit.infra.scratch_manager",
+      "electrofit.io.files",
+      "electrofit.io.mol2",
+      "electrofit.logging",
+      "electrofit.scratch.manager",
+      "electrofit.workflows.run_process_conform",
+      "electrofit.workflows.step0_setup",
+      "electrofit.workflows.step1_initial_processing",
+      "electrofit.workflows.step2_setup_sim_dir",
+      "electrofit.workflows.step3_start_sim",
+      "electrofit.workflows.step4_extract_conforms",
+      "electrofit.workflows.step5_process_conforms",
+      "electrofit.workflows.step5_worker",
+      "electrofit.workflows.step6_extract_average_charges",
+      "electrofit.workflows.step7_setup_final_sim",
+      "electrofit.workflows.step8_start_final_sim",
+      "electrofit_analysis.fep.fep_analysis",
+      "electrofit_analysis.fep.h_bond_correlation",
+      "electrofit_analysis.structure.na_p_count",
+      "electrofit_analysis.structure.na_p_distance",
+      "electrofit_analysis.structure.nojump_center",
+      "electrofit_fep.core.eqfep",
+      "electrofit_fep.workflows.run_eqfep",
+      "electrofit_fep.workflows.run_fep_old",
+      "electrofit_fep.workflows.run_neqfep"
+    ],
+    "logging.handlers": [
+      "electrofit.infra.logging",
+      "electrofit.logging"
+    ],
+    "math": [
+      "electrofit_analysis.fep.plot_dU_fwd_rev",
+      "electrofit_analysis.fep.plot_dU_fwd_rev_consecutive",
+      "electrofit_analysis.fep.plot_dU_p_and_product",
+      "electrofit_analysis.structure.h_bonds",
+      "electrofit_analysis.structure.na_p_count"
+    ],
+    "matplotlib": [
+      "electrofit_analysis.fep.plot_dU_distributions_vertical",
+      "electrofit_analysis.fep.plot_energy_density_vertical"
+    ],
+    "matplotlib.cm": [
+      "electrofit_analysis.fep.summerize_nap_dist_count"
+    ],
+    "matplotlib.colors": [
+      "electrofit_analysis.fep.summerize_nap_dist_count"
+    ],
+    "matplotlib.font_manager": [
+      "electrofit_analysis.fep.fep_analysis"
+    ],
+    "matplotlib.offsetbox": [
+      "electrofit_analysis.fep.plot_dU_fwd_rev",
+      "electrofit_analysis.fep.plot_dU_fwd_rev_consecutive",
+      "electrofit_analysis.fep.plot_dU_p_and_product"
+    ],
+    "matplotlib.patches": [
+      "electrofit_analysis.fep.p_dU_example"
+    ],
+    "matplotlib.pyplot": [
+      "electrofit.adapters.gromacs",
+      "electrofit.plotting.helpers",
+      "electrofit.viz.helpers",
+      "electrofit.workflows.step6_extract_average_charges",
+      "electrofit_analysis.charges.plot_charges",
+      "electrofit_analysis.fep.breakdown_fep",
+      "electrofit_analysis.fep.fep_analysis",
+      "electrofit_analysis.fep.h_bond_correlation",
+      "electrofit_analysis.fep.p_dU_example",
+      "electrofit_analysis.fep.plot_dU_distributions_vertical",
+      "electrofit_analysis.fep.plot_dU_fwd_rev",
+      "electrofit_analysis.fep.plot_dU_fwd_rev_consecutive",
+      "electrofit_analysis.fep.plot_dU_p_and_product",
+      "electrofit_analysis.fep.plot_energy_density_vertical",
+      "electrofit_analysis.fep.summerize_nap_dist_count",
+      "electrofit_analysis.structure.dihedral_density",
+      "electrofit_analysis.structure.h_bonds",
+      "electrofit_analysis.structure.na_p_count",
+      "electrofit_analysis.structure.na_p_distance",
+      "electrofit_fep.workflows.run_fep_old"
+    ],
+    "matplotlib.ticker": [
+      "electrofit_analysis.fep.fep_analysis",
+      "electrofit_analysis.fep.plot_energy_density_vertical",
+      "electrofit_analysis.fep.summerize_nap_dist_count"
+    ],
+    "mdtraj": [
+      "electrofit.workflows.step4_extract_conforms"
+    ],
+    "multiprocessing": [
+      "electrofit.workflows.step4_extract_conforms",
+      "electrofit.workflows.step5_process_conforms"
+    ],
+    "numpy": [
+      "electrofit.io.files",
+      "electrofit.plotting.helpers",
+      "electrofit.utils_curly_brace",
+      "electrofit.viz.curly_brace",
+      "electrofit.viz.helpers",
+      "electrofit.workflows.step4_extract_conforms",
+      "electrofit_analysis.charges.plot_charges",
+      "electrofit_analysis.fep.breakdown_fep",
+      "electrofit_analysis.fep.fep_analysis",
+      "electrofit_analysis.fep.h_bond_correlation",
+      "electrofit_analysis.fep.p_dU_example",
+      "electrofit_analysis.fep.plot_dU_distributions_vertical",
+      "electrofit_analysis.fep.plot_dU_fwd_rev",
+      "electrofit_analysis.fep.plot_dU_fwd_rev_consecutive",
+      "electrofit_analysis.fep.plot_dU_p_and_product",
+      "electrofit_analysis.fep.plot_energy_density_vertical",
+      "electrofit_analysis.fep.summerize_nap_dist_count",
+      "electrofit_analysis.structure.dihedral_density",
+      "electrofit_analysis.structure.h_bonds",
+      "electrofit_analysis.structure.na_p_count",
+      "electrofit_analysis.structure.na_p_distance",
+      "electrofit_fep.core.eqfep",
+      "electrofit_fep.core.neqfep",
+      "electrofit_fep.workflows.run_eqfep"
+    ],
+    "openbabel": [
+      "electrofit.io.files"
+    ],
+    "openmol": [
+      "electrofit.io.mol2"
+    ],
+    "os": [
+      "electrofit.adapters.gromacs",
+      "electrofit.cli.app",
+      "electrofit.cli.common",
+      "electrofit.cli.run_commands",
+      "electrofit.config.legacy",
+      "electrofit.config.loader",
+      "electrofit.core.process_conform",
+      "electrofit.core.process_initial_structure",
+      "electrofit.core.symmetry",
+      "electrofit.infra.logging",
+      "electrofit.infra.scratch_manager",
+      "electrofit.io.files",
+      "electrofit.io.mol2",
+      "electrofit.logging",
+      "electrofit.plotting.helpers",
+      "electrofit.plotting.plots",
+      "electrofit.scratch.manager",
+      "electrofit.viz.helpers",
+      "electrofit.workflows.run_process_conform",
+      "electrofit.workflows.run_process_initial_structure",
+      "electrofit.workflows.step0_setup",
+      "electrofit.workflows.step1_initial_processing",
+      "electrofit.workflows.step2_setup_sim_dir",
+      "electrofit.workflows.step3_start_sim",
+      "electrofit.workflows.step4_extract_conforms",
+      "electrofit.workflows.step5_process_conforms",
+      "electrofit.workflows.step5_worker",
+      "electrofit.workflows.step6_extract_average_charges",
+      "electrofit.workflows.step7_setup_final_sim",
+      "electrofit.workflows.step8_start_final_sim",
+      "electrofit_analysis.charges.plot_charges",
+      "electrofit_analysis.fep.breakdown_fep",
+      "electrofit_analysis.fep.collect_dhdl_files",
+      "electrofit_analysis.fep.fep_analysis",
+      "electrofit_analysis.fep.plot_dU_distributions_vertical",
+      "electrofit_analysis.fep.plot_dU_fwd_rev",
+      "electrofit_analysis.fep.plot_dU_fwd_rev_consecutive",
+      "electrofit_analysis.fep.plot_dU_p_and_product",
+      "electrofit_analysis.fep.plot_energy_density_vertical",
+      "electrofit_analysis.fep.run_analysis_parallel",
+      "electrofit_analysis.fep.run_fep_analysis_scripts",
+      "electrofit_analysis.fep.summerize_nap_dist_count",
+      "electrofit_analysis.structure.dihedral_density",
+      "electrofit_analysis.structure.h_bonds",
+      "electrofit_analysis.structure.na_p_count",
+      "electrofit_analysis.structure.na_p_distance",
+      "electrofit_analysis.structure.nojump_center",
+      "electrofit_analysis.structure.plot_molecule_2d",
+      "electrofit_fep.core.eqfep",
+      "electrofit_fep.core.neqfep",
+      "electrofit_fep.workflows.run_eqfep",
+      "electrofit_fep.workflows.run_fep_old",
+      "electrofit_fep.workflows.run_neqfep"
+    ],
+    "pandas": [
+      "electrofit.adapters.gromacs",
+      "electrofit.workflows.step6_extract_average_charges",
+      "electrofit_analysis.charges.plot_charges",
+      "electrofit_analysis.fep.breakdown_fep",
+      "electrofit_analysis.fep.fep_analysis",
+      "electrofit_analysis.structure.h_bonds",
+      "electrofit_fep.core.eqfep",
+      "electrofit_fep.core.neqfep",
+      "electrofit_fep.workflows.run_fep_old"
+    ],
+    "pathlib": [
+      "electrofit.cli.app",
+      "electrofit.cli.run_commands",
+      "electrofit.config.loader",
+      "electrofit.config.merger",
+      "electrofit.infra.config_snapshot",
+      "electrofit.infra.logging",
+      "electrofit.logging",
+      "electrofit.workflows.run_process_conform",
+      "electrofit.workflows.step0_setup",
+      "electrofit.workflows.step1_initial_processing",
+      "electrofit.workflows.step2_setup_sim_dir",
+      "electrofit.workflows.step3_start_sim",
+      "electrofit.workflows.step4_extract_conforms",
+      "electrofit.workflows.step5_process_conforms",
+      "electrofit.workflows.step5_worker",
+      "electrofit.workflows.step6_extract_average_charges",
+      "electrofit.workflows.step7_setup_final_sim",
+      "electrofit.workflows.step8_start_final_sim",
+      "electrofit_analysis.fep.breakdown_fep",
+      "electrofit_analysis.fep.fep_analysis",
+      "electrofit_analysis.fep.run_analysis_parallel",
+      "electrofit_analysis.fep.run_fep_analysis_scripts"
+    ],
+    "pmx": [
+      "electrofit_fep.core.eqfep",
+      "electrofit_fep.core.neqfep"
+    ],
+    "pmx.utils": [
+      "electrofit_fep.core.eqfep",
+      "electrofit_fep.core.neqfep"
+    ],
+    "random": [
+      "electrofit.workflows.step4_extract_conforms"
+    ],
+    "rdkit": [
+      "electrofit_analysis.structure.h_bonds",
+      "electrofit_analysis.structure.plot_molecule_2d",
+      "electrofit_analysis.structure.structure_2d_charge_annotation"
+    ],
+    "rdkit.Chem": [
+      "electrofit_analysis.structure.h_bonds",
+      "electrofit_analysis.structure.plot_molecule_2d",
+      "electrofit_analysis.structure.structure_2d_charge_annotation"
+    ],
+    "rdkit.Chem.Draw": [
+      "electrofit_analysis.structure.h_bonds",
+      "electrofit_analysis.structure.plot_molecule_2d",
+      "electrofit_analysis.structure.structure_2d_charge_annotation"
+    ],
+    "re": [
+      "electrofit.io.files",
+      "electrofit.plotting.helpers",
+      "electrofit.viz.helpers",
+      "electrofit_analysis.fep.h_bond_correlation",
+      "electrofit_analysis.fep.plot_dU_distributions_vertical",
+      "electrofit_analysis.fep.plot_dU_fwd_rev",
+      "electrofit_analysis.fep.plot_dU_fwd_rev_consecutive",
+      "electrofit_analysis.fep.plot_dU_p_and_product",
+      "electrofit_analysis.fep.run_analysis_parallel",
+      "electrofit_analysis.fep.run_fep_analysis_scripts",
+      "electrofit_analysis.structure.dihedral_density",
+      "electrofit_analysis.structure.h_bonds"
+    ],
+    "runpy": [
+      "electrofit.cli.app"
+    ],
+    "scipy.stats": [
+      "electrofit_analysis.fep.plot_dU_distributions_vertical",
+      "electrofit_analysis.fep.plot_dU_fwd_rev",
+      "electrofit_analysis.fep.plot_dU_fwd_rev_consecutive",
+      "electrofit_analysis.fep.plot_dU_p_and_product",
+      "electrofit_analysis.structure.dihedral_density"
+    ],
+    "seaborn": [
+      "electrofit_analysis.fep.breakdown_fep",
+      "electrofit_analysis.fep.fep_analysis",
+      "electrofit_analysis.fep.p_dU_example",
+      "electrofit_analysis.fep.plot_dU_distributions_vertical",
+      "electrofit_analysis.fep.plot_dU_fwd_rev",
+      "electrofit_analysis.fep.plot_dU_fwd_rev_consecutive",
+      "electrofit_analysis.fep.plot_dU_p_and_product",
+      "electrofit_analysis.fep.plot_energy_density_vertical",
+      "electrofit_analysis.structure.dihedral_density",
+      "electrofit_analysis.structure.h_bonds",
+      "electrofit_analysis.structure.na_p_count",
+      "electrofit_analysis.structure.na_p_distance"
+    ],
+    "shutil": [
+      "electrofit.core.process_conform",
+      "electrofit.infra.scratch_manager",
+      "electrofit.io.files",
+      "electrofit.scratch.manager",
+      "electrofit.workflows.step2_setup_sim_dir",
+      "electrofit.workflows.step4_extract_conforms",
+      "electrofit.workflows.step6_extract_average_charges",
+      "electrofit.workflows.step7_setup_final_sim",
+      "electrofit_analysis.fep.collect_dhdl_files",
+      "electrofit_fep.workflows.run_fep_old"
+    ],
+    "signal": [
+      "electrofit.cli.safe_run",
+      "electrofit.workflows.step5_worker"
+    ],
+    "sklearn.base": [
+      "electrofit_analysis.fep.fep_analysis"
+    ],
+    "subprocess": [
+      "electrofit.adapters.gromacs",
+      "electrofit.cli.run_commands",
+      "electrofit.core.process_conform",
+      "electrofit.core.process_initial_structure",
+      "electrofit.infra.logging",
+      "electrofit.logging",
+      "electrofit.workflows.step5_process_conforms",
+      "electrofit_analysis.fep.plot_energy_density_vertical",
+      "electrofit_analysis.fep.run_analysis_parallel",
+      "electrofit_analysis.fep.run_fep_analysis_scripts",
+      "electrofit_fep.core.neqfep",
+      "electrofit_fep.workflows.run_fep_old"
+    ],
+    "sys": [
+      "electrofit.cli.app",
+      "electrofit.cli.safe_run",
+      "electrofit.core.equiv_groups",
+      "electrofit.core.process_conform",
+      "electrofit.core.symmetry",
+      "electrofit.io.files",
+      "electrofit.io.mol2",
+      "electrofit.workflows.step4_extract_conforms",
+      "electrofit.workflows.step5_isolate_runner",
+      "electrofit.workflows.step5_worker",
+      "electrofit_analysis.fep.breakdown_fep",
+      "electrofit_analysis.fep.collect_dhdl_files",
+      "electrofit_analysis.fep.h_bond_correlation",
+      "electrofit_analysis.fep.summerize_nap_dist_count",
+      "electrofit_analysis.structure.na_p_count",
+      "electrofit_analysis.structure.na_p_distance",
+      "electrofit_fep.workflows.run_neqfep"
+    ],
+    "tempfile": [
+      "electrofit.io.files"
+    ],
+    "threading": [
+      "electrofit.cli.safe_run"
+    ],
+    "time": [
+      "electrofit.core.process_conform",
+      "electrofit.workflows.step5_process_conforms"
+    ],
+    "tomli": [
+      "electrofit.config.loader",
+      "electrofit.config.merger",
+      "electrofit.workflows.step4_extract_conforms"
+    ],
+    "tomli_w": [
+      "electrofit.config.merger"
+    ],
+    "tomllib": [
+      "electrofit.config.loader",
+      "electrofit.config.merger",
+      "electrofit.workflows.step4_extract_conforms"
+    ],
+    "tqdm": [
+      "electrofit.workflows.step4_extract_conforms"
+    ],
+    "traceback": [
+      "electrofit.cli.safe_run",
+      "electrofit.workflows.step5_process_conforms",
+      "electrofit.workflows.step5_worker"
+    ],
+    "typer": [
+      "electrofit_analysis.cli",
+      "electrofit_fep.cli"
+    ],
+    "types": [
+      "electrofit_analysis.structure.dihedral_density"
+    ],
+    "typing": [
+      "electrofit.cli.safe_run",
+      "electrofit.config.loader",
+      "electrofit.config.merger",
+      "electrofit.core.symmetry",
+      "electrofit.infra.config_snapshot",
+      "electrofit.viz.curly_brace",
+      "electrofit.workflows.step4_extract_conforms",
+      "electrofit.workflows.step5_process_conforms",
+      "electrofit_analysis.fep.h_bond_correlation"
+    ],
+    "uuid": [
+      "electrofit.io.files",
+      "electrofit_analysis.structure.h_bonds"
+    ],
+    "viz": [
+      "electrofit.plotting"
+    ],
+    "warnings": [
+      "electrofit.external",
+      "electrofit.plotting",
+      "electrofit.workflows.snapshot"
+    ]
+  }
+}

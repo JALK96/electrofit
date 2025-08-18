@@ -21,6 +21,8 @@ from electrofit.config.loader import load_config, dump_config
 from electrofit.io.files import mol2_to_pdb_with_bonds
 from electrofit.infra.config_snapshot import compose_snapshot, CONFIG_ARG_HELP
 from electrofit.infra.logging import setup_logging
+from electrofit.infra.step_logging import log_relevant_config
+from electrofit.infra.decisions import build_sampling_decision
 
 
 def _select_indices(traj: md.Trajectory, n: int, method: str, seed: int | None) -> List[int]:
@@ -128,6 +130,22 @@ def _extract_for_molecule(mol_proc_dir: Path, project_root: Path, sample: int, m
         except Exception as e:  # pragma: no cover
             logging.warning(f"failed to dump existing extracted_conforms snapshot: {e}")
 
+    # Structured decision (sampling) + minimal relevant config logging
+    try:
+        symmetry_json_present = any(pis_dir.glob('*.json'))
+        build_sampling_decision(
+            protocol=protocol,
+            adjust_sym=adjust_sym,
+            ignore_sym=getattr(proj, 'ignore_symmetry', False),
+            sampling_method=method,
+            sample_count=sample,
+            seed=seed,
+            symmetry_json_present=symmetry_json_present,
+        ).log('step4')
+        log_relevant_config('step4', proj, ['molecule_name','residue_name','protocol','adjust_symmetry','ignore_symmetry'])
+    except Exception:
+        logging.debug('[step4][decisions] logging failed', exc_info=True)
+
     traj_path = sim_dir / "md_center.xtc"
     gro_path = sim_dir / "md.gro"
     if not traj_path.is_file() or not gro_path.is_file():
@@ -152,11 +170,25 @@ def _extract_for_molecule(mol_proc_dir: Path, project_root: Path, sample: int, m
     logging.info(f"Step4: start extraction for molecule_dir={mol_proc_dir.name} method={method} sample={sample}")
     dump_config(cfg, log_fn=logging.info)
     raw_traj = md.load(str(traj_path), top=str(gro_path))
+    # Residue inventory logging (diagnostics for mismatches)
+    try:
+        res_counts: dict[str, int] = {}
+        for res in raw_traj.topology.residues:
+            # Count atoms belonging to residue
+            res_counts[res.name] = res_counts.get(res.name, 0) + len(res.atoms)
+        inv_str = ", ".join(f"{k}:{v}" for k, v in sorted(res_counts.items()))
+        logging.info(f"[step4][{mol_proc_dir.name}] residue inventory -> {inv_str}")
+    except Exception as e:  # pragma: no cover
+        logging.debug(f"[step4][{mol_proc_dir.name}] residue inventory logging failed: {e}")
     ipl = raw_traj.top.select(f"resname {residue_name}")
+    if len(ipl) == 0:
+        # Strikter: statt stiller Fallback jetzt harter Abbruch, damit Residueninkonsistenz früh sichtbar wird
+        logging.error(f"[step4][{mol_proc_dir.name}] residue '{residue_name}' not found in trajectory topology; abort extraction (fix residue_name or input files).")
+        return False, f"residue '{residue_name}' not in topology"
     traj = raw_traj.atom_slice(ipl)
-    if len(traj) == 0:
-        logging.warning("No frames after residue atom slice; skipping")
-        return False, "no frames after atom slice"
+    if traj.n_atoms == 0:
+        logging.warning(f"[step4][{mol_proc_dir.name}] zero atoms after selection; skipping")
+        return False, "no atoms after selection"
 
     total = len(traj)
     n = min(sample, total)

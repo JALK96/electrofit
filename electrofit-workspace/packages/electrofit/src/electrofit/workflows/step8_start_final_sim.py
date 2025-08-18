@@ -26,7 +26,7 @@ def main():
     ap.add_argument("--log-console", action="store_true", help="Also echo logs to console")
     args = ap.parse_args()
     project_root = Path(args.project).resolve()
-    setup_logging(str(project_root / "step8.log"), also_console=args.log_console)
+    setup_logging(str(project_root / "step.log"), also_console=args.log_console)
     log_run_header("step8")
     # Multi-molecule context (affects logging annotations in mergers)
     process_root = project_root / "process"
@@ -41,7 +41,8 @@ def main():
         setup_logging(str(run_dir / "process.log"), also_console=False)
         log_run_header("step8")
         mol = run_dir.parent.name
-        compose_snapshot(
+        # Clean reseed snapshot (upstream overrides propagate every run)
+        snap_path = compose_snapshot(
             run_dir,
             project_root,
             mol,
@@ -53,6 +54,9 @@ def main():
             project_defaults=project_root / "electrofit.toml",
             extra_override=extra_override,
         )
+        if not snap_path:
+            logging.warning(f"[step8][warn] snapshot could not be created in {run_dir}; skipping")
+            continue
         cfg = load_config(project_root, context_dir=run_dir, molecule_name=mol)
         dump_config(cfg, log_fn=logging.info)
         sim = cfg.simulation

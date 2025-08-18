@@ -11,8 +11,8 @@ import logging
 import os
 
 import numpy as np
-from electrofit.logging import setup_logging
-from electrofit.scratch.manager import (
+from electrofit.infra.logging import setup_logging
+from electrofit.infra.scratch_manager import (
     finalize_scratch_directory,
     setup_scratch_directory,
 )

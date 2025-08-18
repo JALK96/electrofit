@@ -15,9 +15,9 @@ from electrofit.io.files import (
     load_symmetry_groups,
     parse_charges_from_mol2,
 )
-from electrofit.plotting.helpers import (
+from electrofit.viz.helpers import (
     plot_charges_by_atom,
-    plot_charges_by_atom_new_4,
+    plot_charges_by_atom_sym,
     plot_charges_by_symmetry,
 )
 
@@ -492,7 +492,7 @@ for sub_dir in os.listdir(process_dir):
         plot_charges_by_symmetry(
             atoms_dict, initial_charges_dict, plots_dir, equiv_group
         )
-        plot_charges_by_atom_new_4(atoms_dict, initial_charges_dict, plots_dir)
+        plot_charges_by_atom_sym(atoms_dict, initial_charges_dict, plots_dir)
     else:
         # Plot the charges by atom
         plot_charges_by_atom(atoms_dict, initial_charges_dict, plots_dir)
@@ -668,7 +668,7 @@ for sub_dir in os.listdir(process_dir):
             )
 
             # Note: This plot only works for IP6 Configs
-            plot_charges_by_atom_new_4(
+            plot_charges_by_atom_sym(
                 atoms_dict,
                 initial_charges_dict,
                 plots_dir,

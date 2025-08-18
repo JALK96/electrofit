@@ -23,6 +23,9 @@ dependencies = [
 
 [project.scripts]
 electrofit = "electrofit.cli.app:main"
+electrofit-plot-charges = "electrofit.cli.plot_charges:main"
+electrofit-write-symmetry = "electrofit.cli.write_symmetry:main"
+electrofit-create-equiv-groups = "electrofit.cli.create_equiv_groups:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/electrofit"]

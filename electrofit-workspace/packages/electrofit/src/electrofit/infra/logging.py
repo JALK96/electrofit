@@ -1,4 +1,28 @@
-"""Logging Infrastruktur (aus Top-Level logging.py verschoben)."""
+"""Central logging infrastructure for electrofit.
+
+This module supersedes the earlier top-level :mod:`electrofit.logging` module,
+which is now deprecated and slated for removal. All workflow steps and
+adapters should import from ``electrofit.infra.logging``.
+
+Design goals:
+    * Single active file handler per currently processed run directory.
+    * Optional console (stderr) emission without duplication.
+    * Deterministic suppression of stale handlers to avoid cross-run leakage.
+    * Header lines and configuration tables emitted only once (no raw
+        unformatted file appends, which previously caused duplicate header lines).
+
+Environment variables:
+    ELECTROFIT_LOG_LEVEL   Override root log level (default: INFO).
+
+Public API:
+    setup_logging(path, also_console=True, suppress_initial_message=False)
+    log_run_header(step_name)
+    reset_logging()
+
+All public functions have concise, side‑effect focused semantics; errors in
+logging setup are deliberately non-fatal to avoid interfering with scientific
+pipeline execution.
+"""
 from __future__ import annotations
 
 import logging
@@ -14,6 +38,29 @@ except Exception:  # pragma: no cover
 
 
 def setup_logging(log_path, also_console: bool = True, suppress_initial_message: bool = False) -> None:
+    """Configure root logger for the current execution context.
+
+    Parameters
+    ----------
+    log_path : str | Path
+        Destination log file. A ``WatchedFileHandler`` is (re)used so external
+        rotation/truncation tools are respected.
+    also_console : bool, default True
+        When True ensure exactly one stream handler to stderr. When False any
+        existing non-file stream handlers are removed to silence console
+        output (useful for multi-process workers).
+    suppress_initial_message : bool, default False
+        Suppress the standardized "Logging initialized" line if the caller
+        already produced context or wants a silent re-bind of the file handler.
+
+    Behaviour
+    ---------
+    * Removes all previous ``FileHandler`` instances whose target path differs
+      from ``log_path``.
+    * Leaves a pre-existing handler for the same file intact (idempotent).
+    * Does not downgrade an already more verbose root level (e.g. DEBUG).
+    * Emits one initialization INFO line unless suppressed.
+    """
     path = Path(log_path).resolve()
     root = logging.getLogger()
     env_level = os.getenv("ELECTROFIT_LOG_LEVEL", "INFO").upper()
@@ -72,6 +119,14 @@ def _git_commit_short() -> str:
 
 
 def log_run_header(step_name: str):
+    """Emit a standardized single header line for a workflow step.
+
+    Format: ``electrofit <version> | step=<step_name> | git=<short-hash>``
+    (the git part is omitted if the repository metadata cannot be resolved).
+
+    The line is intentionally only passed through the logging formatter to
+    avoid any out-of-band file writes that could create duplicates.
+    """
     commit = _git_commit_short()
     parts = [f"electrofit { _electrofit_version }", f"step={step_name}"]
     if commit:
@@ -79,24 +134,16 @@ def log_run_header(step_name: str):
     header = " | ".join(parts)
     logger = logging.getLogger()
     logger.info(header)
-    try:
-        for h in logger.handlers:
-            if hasattr(h, 'baseFilename'):
-                fp = getattr(h, 'baseFilename')
-                if not fp:
-                    continue
-                try:
-                    with open(fp, 'r+') as f:
-                        lines = f.read().splitlines()
-                        if header not in lines:
-                            f.write(header + "\n")
-                except Exception:
-                    pass
-    except Exception:  # pragma: no cover
-        pass
 
 
 def reset_logging():
+    """Fully remove all handlers from the root logger (and known children).
+
+    Use this before switching to a new per-run log file to prevent future log
+    records from leaking into earlier run files. This performs a clean
+    shutdown, closes handlers, and clears filters. It is deliberately robust
+    and silent upon errors.
+    """
     logging.shutdown()
     root_logger = logging.getLogger()
     handlers = root_logger.handlers[:]

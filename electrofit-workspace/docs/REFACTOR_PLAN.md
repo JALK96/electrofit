@@ -1,6 +1,6 @@
 # Elektrofit Refactor & Architektur Leitfaden
 
-Stand: 2025-08-17
+Stand: 2025-08-17 (aktualisiert nach Domain‑Prep & Charges Shims Deprecation Warnings + RESP-Symmetrie Deduplikation)
 
 Dieses Dokument dient als lebende Referenz für die laufende Struktur‑Konsolidierung und Architektur‑Verbesserungen. Ziel: Klare Schichten, minimale Kopplung, eindeutige Verantwortlichkeiten, konsistente Namensgebung und wartbare Public API.
 
@@ -56,18 +56,31 @@ electrofit/
 ---
 ## Phasenplan
 ### Phase 1 – Reorganisation (Low Risk)
-- [x] Verschiebe `workflows/snapshot.py` → `infra/config_snapshot.py` (Export: `compose_snapshot` (alias für `build_snapshot_with_layers`), `CONFIG_ARG_HELP`).
+- [x] Verschiebe `workflows/snapshot.py` → `infra/config_snapshot.py` (Export: `compose_snapshot` (Alias für `build_snapshot_with_layers`), `CONFIG_ARG_HELP`).
 - [x] Umbenenne / entferne `external/` → `adapters/` (alter Namespace gelöscht, kein Shim nötig).
 - [x] Verschiebe `logging.py` → `infra/logging.py`.
 - [x] Verschiebe `scratch/manager.py` → `infra/scratch_manager.py`; entferne Paket `scratch`.
-- [ ] Benenne `utils_curly_brace.py` → `templating.py` (oder integriere in `io/`).
-- [ ] Re-Exports für alte Pfade mit DeprecationWarning (nur falls extern genutzt; aktuell nicht benötigt für GROMACS Adapter).
+- [x] Verschiebe `utils_curly_brace.py` → `viz/curly_brace.py` (finaler Funktionsname `draw_curly_brace`).
+- [x] Migriere frühere `plotting/helpers.py` Funktionen nach `viz/helpers.py` und entferne Altdatei.
+- [x] Füge Deprecation-Shim in `plotting/__init__.py` hinzu (re-exportiert `viz`, gibt `DeprecationWarning`).
+- [ ] Entferne Shim nach mindestens einem Minor Release (Release-Note ankündigen).
+- [ ] Bereinige veraltete Einträge in `rewrite_imports.py` (alte Pfade `electrofit.plotting.helpers`).
 
 ### Phase 2 – Domain-Isolation
-- [ ] Erzeuge `domain/symmetry/` (move `symmetry.py`, `equiv_groups.py`).
-- [ ] Erzeuge `domain/charges/` (move `process_conform.py` + spätere Aggregationslogik).
-- [ ] Erzeuge `domain/prep/` (move `process_initial_structure.py`).
-- [ ] Ergänze Services: `services/conformer_sampling.py`, `services/config_service.py` (Wrapper um Snapshot + Loader).
+Zwischenstand aktualisiert: `equiv_groups` und `write_symmetry` vollständig in `domain.symmetry`; `process_conformer` und `process_initial` domänisiert; Legacy-Shims vorhanden mit DeprecationWarning & Forwarding für Tests.
+
+- [x] Verschiebe `core/equiv_groups.py` → `domain/symmetry/equiv_groups.py` (Funktions-API `generate_equivalence_groups`).
+- [x] CLI Wrapper `electrofit-create-equiv-groups` hinzugefügt.
+- [x] Extrahiere gemeinsame RESP‑Symmetrie Hilfsfunktion (jetzt `domain/symmetry/resp_constraints.py`, genutzt von prep & charges).
+- [x] Verschiebe `core/process_conform.py` → `domain/charges/process_conformer.py` (erste Zerlegung erfolgt; weitergehende Feingliederung offen).
+- [x] Verschiebe `core/process_initial_structure.py` → `domain/prep/process_initial.py` (Injection-Punkt `run_acpype` + Shim Warnung).
+- [ ] Ergänze Services: `services/conformer_sampling.py`, `services/config_service.py` (noch offen).
+
+Design Notes für Zerlegung (Vorab):
+1. Keine `print` Statements in Domain – nur Logger.
+2. Scratch Handling via dünne Orchestrator-Funktion, Pure Functions erhalten explizite Pfade.
+3. Externe Tools (gaussian, respgen, bondtype, espgen) über Adapter‐Layer kapseln (künftige Phase, jetzt nur leichte Isolierung durch Wrapper‑Funktionen).
+4. Fehlerklassen vereinheitlichen (`ChargeComputationError`, `SymmetryDerivationError`).
 
 ### Phase 3 – API & Services
 - [ ] `pipeline/steps/stepX.py` einführen; vorhandene `stepX_*.py` umbenennen / verschieben.
@@ -79,6 +92,8 @@ electrofit/
 - [ ] Entferne `merge_into_snapshot` aus Public Surface (nur intern verfügbar).
 - [ ] Einheitliche Schritt-Namen: `step1.py`, `step2.py` ...
 - [ ] Dokumentiere neue Modulkarte in README / docs/architecture.md.
+- [ ] Entferne Deprecation-Shim (`plotting` → `viz`).
+- [ ] Entferne verbliebene Alt-Import-Rewrites.
 
 ### Phase 5 – Optional Enhancements
 - [ ] Optionales Extra: `pip install electrofit[viz]` für plotting.
@@ -120,18 +135,37 @@ electrofit/
 | 1 | external -> adapters (Namespace entfernt) | done |
 | 1 | logging -> infra | done |
 | 1 | scratch -> infra | done |
-| 1 | utils_curly_brace rename | open |
-| 2 | domain symmetry | open |
-| 2 | domain charges | open |
-| 2 | domain prep | open |
+| 1 | utils_curly_brace -> viz/curly_brace.py | done |
+| 1 | plotting/helpers -> viz/helpers Migration | done |
+| 1 | Deprecation Shim plotting/__init__ | done |
+| 1 | rewrite_imports alte Einträge entfernen | done |
+| 2 | domain symmetry | done (write_symmetry + equiv_groups + CLI) |
+| 2 | domain charges | partial (process_conformer extrahiert, weitere Zerlegung offen) |
+| 2 | domain prep | partial (process_initial extrahiert, RESP-Symmetrie jetzt shared) |
 | 3 | pipeline/steps Struktur | open |
 | 3 | api facade | open |
 | 4 | remove legacy aliases | open |
 | 4 | hide merge_into_snapshot | partial (intern markiert) |
+| 4 | Entferne plotting Shim | in-progress (Dateisystem-Cleanup: leeres 'plotting/' Verzeichnis + Bytecode entfernen) |
+| 4 | Entferne alte Import-Rewrites | partial (Hauptmapping bereinigt) |
 
 (Beim Fortschritt jeweils "open | in-progress | done" einsetzen.)
 
 ---
 ## Pflege
 Dieses Dokument wird bei jeder abgeschlossenen Umsetzungs-Phase aktualisiert. Bitte Pull Requests mit Änderungen an Architektur / Struktur verlinken und Status-Tabelle pflegen.
+
+---
+## Ergänzende durchgeführte Arbeiten
+- Dependency-Inventar Tool (`tools/dependency_inventory.py`) hinzugefügt: erzeugt `dependency_graph.json` & `dependency_report.md` (AST-basierte Importanalyse) – unterstützt sichere Refactors.
+- Timestamps des Inventars auf `datetime.now(timezone.utc)` (TZ-aware) umgestellt.
+- Tests nach jeder Migrationsetappe ausgeführt (alle grün; nur externe DeprecationWarnings von SWIG-Typen).
+- Deprecation Shim für `core.process_conform` vereinheitlicht (einmalige Warnung, `__all__` Export nur `process_conform`).
+
+## Nächste kurzfristige Low-Risk Schritte (Update 2025-08-17, nach Prep & Charges Shim-Warnungen)
+1. Konsolidierte RESP-Symmetrie Utility extrahieren (verhindert Divergenz; Kandidat: `domain/symmetry/resp_constraints.py`).
+2. Feingranulare Aufteilung `process_conformer` (Gaussian Phase, RESP Phase) zur Vorbereitung Adapter-Layer.
+3. Services-Skelett: `services/config_service.py` (Snapshot Laden) & `services/conformer_sampling.py` (späterer Sampling-API Einstieg).
+4. Deprecation-Zeitplan dokumentieren (Entfernung Shims earliest nach 2 Minor Releases) + README Abschnitt „Migration“. 
+5. Cleanup verwaiste Alt-Workflows sobald Pipeline/Steps eingeführt.
 

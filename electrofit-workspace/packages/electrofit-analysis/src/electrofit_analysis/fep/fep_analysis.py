@@ -55,7 +55,7 @@ from alchemlyb.preprocessing.subsampling import decorrelate_dhdl, decorrelate_u_
 from alchemlyb.visualisation import plot_mbar_overlap_matrix
 
 try:
-    from electrofit.logging import setup_logging
+    from electrofit.infra.logging import setup_logging
 except ImportError:
     # If not available, use a basic logging configuration.
     def setup_logging(log_path):

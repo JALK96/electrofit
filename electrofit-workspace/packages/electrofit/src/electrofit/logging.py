@@ -98,23 +98,6 @@ def log_run_header(step_name: str):
     header = " | ".join(parts)
     logger = logging.getLogger()
     logger.info(header)
-    # Also append a plain header line WITHOUT timestamp/level so tests can match easily
-    try:
-        for h in logger.handlers:
-            if hasattr(h, 'baseFilename'):
-                fp = getattr(h, 'baseFilename')
-                if not fp:
-                    continue
-                # Only append if not already present as standalone line
-                try:
-                    with open(fp, 'r+') as f:
-                        lines = f.read().splitlines()
-                        if header not in lines:
-                            f.write(header + "\n")
-                except Exception:
-                    pass
-    except Exception:  # pragma: no cover
-        pass
 
 
 def reset_logging():

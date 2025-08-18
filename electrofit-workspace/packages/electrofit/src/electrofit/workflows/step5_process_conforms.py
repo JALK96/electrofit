@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Iterable, List
 from concurrent.futures import ProcessPoolExecutor, as_completed, Future
 from electrofit.workflows.step5_worker import process_one
-from electrofit.workflows.snapshot import CONFIG_ARG_HELP
+from electrofit.infra.config_snapshot import CONFIG_ARG_HELP
 import logging
 
 
@@ -135,6 +135,7 @@ def run_step5(
                             except Exception as e:  # launch failure
                                 result = (str(rel), False, f"isolation failure: {e}")
                         else:
+                            # Single source of truth: process_one performs snapshot reseed; avoid duplicate call here.
                             result = process_one(
                                 str(conf_dir),
                                 str(project),

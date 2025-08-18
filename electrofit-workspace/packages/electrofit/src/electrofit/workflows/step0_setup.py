@@ -20,7 +20,7 @@ def main():  # pragma: no cover (CLI wrapper)
     src = project_path / "data" / "input"
     dst = project_path / "process"
     dst.mkdir(exist_ok=True)
-    setup_logging(str(project_path / "step0.log"), also_console=args.log_console)
+    setup_logging(str(project_path / "step.log"), also_console=args.log_console)
     log_run_header("step0")
     logging.info(f"[step0] Source: {src}")
     logging.info(f"[step0] Destination: {dst}")

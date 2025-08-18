@@ -118,6 +118,46 @@ Planned extensions: RMSD cutoff incremental selection, k-medoids clustering, PCA
 
 Scratch directories are created under `base_scratch_dir` (environment variables expanded). Finalisation is idempotent. GROMACS step automates interactive selections (e.g. `trjconv`).
 
+## Architecture Overview & Ongoing Refactor
+
+Layered Struktur (in Arbeit):
+
+```
+electrofit/
+	domain/              # Fachlogik (prep, charges, symmetry, sampling)
+	adapters/            # Technische Tool-Anbindungen (gromacs, gaussian, resp)
+	infra/               # Infrastruktur (scratch, config snapshot, logging)
+	workflows/           # Thin CLI-Orchestrierung (step*-Skripte)
+	io/                  # Dateiformat Operationen (mol2, resp, files)
+	viz/                 # Plotting / Visualisierung (optional)
+```
+
+Zentrale Prinzipien:
+* Domain-Funktionen kapseln Logik ohne direkte Shell-Kommandos.
+* Adapters kapseln externe Tools (GROMACS bereits migriert; Gaussian/RESP folgen).
+* Einheitliche Deprecation-Shims für alte `core.*` Entry Points (einmalige Warnung).
+
+### Gemeinsame RESP Symmetry Utility
+
+Vorher doppelte Logik in Prep & Charges: Jetzt zentralisiert in `domain.symmetry.resp_constraints.apply_and_optionally_modify`.
+Vorteile: Single Source of Truth für JSON Equivalence Groups Anwendung; konsistente Logging & Fehlerbehandlung.
+
+### Geplanter Adapter-Ausbau
+
+Neu (Skeletons):
+* `adapters/gaussian.py` – Bau & Ausführung von Gaussian Inputs + Cache-Hydration API.
+* `adapters/resp.py` – Zwei-Phasen RESP Pipeline (ac/respgen + symmetry + charge update).
+
+Aktuelle Domain-Pfade rufen noch `cli.run_commands` Funktionen direkt; schrittweise Migration wird diese durch Adapter-Funktionen ersetzen, wodurch Testbarkeit (Mocking / Timing) verbessert und zukünftige Engines (z.B. Psi4) pluggable werden.
+
+Migrationsstrategie (Kurz):
+1. Skeletons hinzufügen (done).
+2. Domain `process_conformer` & `process_initial` intern umstellen auf Adapter-Aufrufe (keine Public API Änderung).
+3. Entfernen direkter `run_command`-Abhängigkeiten aus Domain (nur Adapters dürfen shellen).
+4. Optional: strukturierte Rückgabeobjekte (Timing, Pfade, Checksums) für reproducibility / Caching.
+
+Siehe `docs/REFACTOR_PLAN.md` für detaillierten Status & weitere Phasen.
+
 ## Testing
 
 Unit tests include sampling selection determinism and basic functional checks. Shortened MDP templates keep test runtime low.

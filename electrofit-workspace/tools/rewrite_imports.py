@@ -14,20 +14,19 @@ ROOTS = [
 # 1) Exact module path renames (handles both `from X import` and `import X`)
 RENAMES = {
     # --- legacy bare-package forms ---
-    "electrofit.helper.curlyBrace": "electrofit.utils_curly_brace",
-    "helper.curlyBrace": "electrofit.utils_curly_brace",
+    # removed: curlyBrace legacy (now electrofit.viz.curly_brace.draw_curly_brace)
     "electrofit.helper.config_parser": "electrofit.config_parser",
     "helper.config_parser": "electrofit.config_parser",
     "helper.file_manipulation": "electrofit.io.files",
     "helper.setup_finalize_scratch": "electrofit.scratch.manager",
-    "helper.plotting": "electrofit.plotting.helpers",
+    # removed: old plotting helpers (now electrofit.viz.helpers)
     "helper.set_logging": "electrofit.logging",
     "helper.eqFEP": "electrofit_fep.core.eqfep",
     "helper.neqFEP": "electrofit_fep.core.neqfep",
     "execution.update_mol2": "electrofit.io.mol2",
     "execution.edit_resp": "electrofit.io.resp",
     "execution.write_symmetry": "electrofit.core.symmetry",
-    "execution.create_equiv_groups": "electrofit.core.equiv_groups",
+    "execution.create_equiv_groups": "electrofit.domain.symmetry.equiv_groups",
     "execution.run_eqFEP": "electrofit_fep.workflows.run_eqfep",
     "execution.run_neqFEP": "electrofit_fep.workflows.run_neqfep",
     "execution.run_FEP_old": "electrofit_fep.workflows.run_fep_old",
@@ -49,14 +48,14 @@ RENAMES = {
     # --- names already qualified with `electrofit.` ---
     "electrofit.helper.file_manipulation": "electrofit.io.files",
     "electrofit.helper.setup_finalize_scratch": "electrofit.scratch.manager",
-    "electrofit.helper.plotting": "electrofit.plotting.helpers",
+    # removed: old plotting helpers (now electrofit.viz.helpers)
     "electrofit.helper.set_logging": "electrofit.logging",
     "electrofit.helper.eqFEP": "electrofit_fep.core.eqfep",
     "electrofit.helper.neqFEP": "electrofit_fep.core.neqfep",
     "electrofit.execution.update_mol2": "electrofit.io.mol2",
     "electrofit.execution.edit_resp": "electrofit.io.resp",
     "electrofit.execution.write_symmetry": "electrofit.core.symmetry",
-    "electrofit.execution.create_equiv_groups": "electrofit.core.equiv_groups",
+    "electrofit.execution.create_equiv_groups": "electrofit.domain.symmetry.equiv_groups",
     "electrofit.execution.run_eqFEP": "electrofit_fep.workflows.run_eqfep",
     "electrofit.execution.run_neqFEP": "electrofit_fep.workflows.run_neqfep",
     "electrofit.execution.run_FEP_old": "electrofit_fep.workflows.run_fep_old",
@@ -78,11 +77,11 @@ RENAMES = {
 
 # 2) Handle `from helper import X, Y as Z` and `from electrofit.helper import ...`
 HELPER_MEMBER_MAP = {
-    "curlyBrace": "electrofit.utils_curly_brace",
+    # removed: curlyBrace legacy symbol
     "config_parser": "electrofit.config_parser",
     "file_manipulation": "electrofit.io.files",
     "setup_finalize_scratch": "electrofit.scratch.manager",
-    "plotting": "electrofit.plotting.helpers",
+    # removed: plotting legacy symbol
     "set_logging": "electrofit.logging",
     "eqFEP": "electrofit_fep.core.eqfep",
     "neqFEP": "electrofit_fep.core.neqfep",

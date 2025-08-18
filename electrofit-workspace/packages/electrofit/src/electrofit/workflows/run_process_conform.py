@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 
 from electrofit.config.loader import load_config, dump_config
+# Legacy path; actual logic resides in electrofit.domain.charges.process_conformer
 from electrofit.core.process_conform import process_conform
 from electrofit.io.files import find_file_with_extension, strip_extension
 from electrofit.infra.logging import setup_logging
@@ -42,7 +43,7 @@ def main_conform_processing():
         molecule_name = None
 
     cfg = load_config(project_root, context_dir=run_dir, molecule_name=molecule_name)
-    dump_config(cfg)
+    dump_config(cfg, log_fn=logging.info)
     proj_cfg = cfg.project
 
     # Define file and molecule name
