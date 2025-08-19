@@ -1,7 +1,15 @@
-"""Step0: Copy input molecule folders (data/input/*) into process/* as working copies.
+"""(Deprecated) Step0 legacy entrypoint.
 
-Usage: electrofit step0 --project <path> [--log-console]
+Moved to :mod:`electrofit.pipeline.steps.step0`. This wrapper remains for one
+transition release and will be removed. Use the new module for imports.
 """
+from __future__ import annotations
+import warnings
+warnings.warn(
+    "Importing 'electrofit.workflows.step0_setup' is deprecated; use 'electrofit.pipeline.steps.step0' instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 from pathlib import Path
 import os
 import argparse

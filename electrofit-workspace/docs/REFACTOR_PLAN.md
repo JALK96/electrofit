@@ -142,7 +142,7 @@ Design Notes für Zerlegung (Vorab):
 | 2 | domain symmetry | done (write_symmetry + equiv_groups + CLI) |
 | 2 | domain charges | partial (process_conformer extrahiert, weitere Zerlegung offen) |
 | 2 | domain prep | partial (process_initial extrahiert, RESP-Symmetrie jetzt shared) |
-| 3 | pipeline/steps Struktur | open |
+| 3 | pipeline/steps Struktur | in-progress (step0-4 migrated) |
 | 3 | api facade | open |
 | 4 | remove legacy aliases | open |
 | 4 | hide merge_into_snapshot | partial (intern markiert) |

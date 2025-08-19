@@ -12,7 +12,7 @@ STEP_MODULES = {
     "step1": "electrofit.workflows.step1_initial_processing",
     "step2": "electrofit.workflows.step2_setup_sim_dir",
     "step3": "electrofit.workflows.step3_start_sim",
-    "step4": "electrofit.workflows.step4_extract_conforms",
+    "step4": "electrofit.pipeline.steps.step4",
     "step5": "electrofit.workflows.step5_process_conforms",
     "step6": "electrofit.workflows.step6_extract_average_charges",
     "step7": "electrofit.workflows.step7_setup_final_sim",
@@ -28,7 +28,7 @@ def _run_module(module: str, project: Path, config: Path | None, rest: list[str]
     try:
         # Only pass --project; DO NOT pass --config to legacy modules
         sys.argv = [module, "--project", str(project)] + rest
-        if module == "electrofit.workflows.step4_extract_conforms":
+        if module in {"electrofit.workflows.step4_extract_conforms", "electrofit.pipeline.steps.step4"}:
             # Import normally so multiprocessing can pickle top-level functions
             mod = importlib.import_module(module)
             if hasattr(mod, "main"):

@@ -1,4 +1,10 @@
-"""Step2: Create run_gmx_simulation directories per molecule.
+"""(Deprecated) Step2 legacy entrypoint.
+
+Moved to :mod:`electrofit.pipeline.steps.step2`. Use the new pipeline module.
+
+Original docstring:
+
+Step2: Create run_gmx_simulation directories per molecule.
 
 Copies GROMACS input files from *.acpype subdirectories of run_gau_create_gmx_in/, propagates electrofit.toml snapshot,
 copies MDP templates and builds a run.json manifest for Step3.
@@ -15,6 +21,12 @@ import json
 import logging
 from pathlib import Path
 
+import warnings
+warnings.warn(
+    "Importing 'electrofit.workflows.step2_setup_sim_dir' is deprecated; use 'electrofit.pipeline.steps.step2' instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 from electrofit.infra.config_snapshot import compose_snapshot, CONFIG_ARG_HELP
 from electrofit.infra.logging import setup_logging, log_run_header, reset_logging
 
