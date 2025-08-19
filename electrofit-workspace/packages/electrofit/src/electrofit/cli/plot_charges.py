@@ -11,7 +11,8 @@ import sys
 from pathlib import Path
 from typing import Optional, Any
 
-from electrofit.io.files import load_symmetry_groups
+
+from electrofit.io.symmetry import load_symmetry_groups
 from electrofit.viz.helpers import (
     plot_charges_by_atom,
     plot_charges_by_symmetry,

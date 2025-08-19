@@ -25,6 +25,10 @@ def test_step2_builds_run_dir(tmp_path, shim_bin, monkeypatch):
     assert any(p.name.endswith(("_GMX.gro","_GMX.itp",".top")) for p in run_dir.iterdir())
     # MDP copied/linked
     assert (run_dir/"MDP").is_dir()
-    # Header present in per-molecule log
+    # Header present in per-molecule log (timestamped format accepted)
     plog = (run_dir/"process.log").read_text().splitlines()
-    assert any(line.startswith("electrofit ") and "step=step2" in line for line in plog), "Missing header line in process.log"
+    import re
+    pattern = re.compile(r"^\d{4}-\d{2}-\d{2} .* - INFO - electrofit .*\| step=step2 ")
+    if not any(pattern.search(line) for line in plog):
+        # fallback legacy (no timestamp prefix)
+        assert any("electrofit " in line and "step=step2" in line for line in plog), "Missing header line (timestamped or legacy) in process.log"

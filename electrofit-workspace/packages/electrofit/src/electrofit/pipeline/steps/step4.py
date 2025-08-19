@@ -281,7 +281,7 @@ def main():  # pragma: no cover
     print(summary)
 
     reset_logging()
-    setup_logging(str(project_root / "step.log"), also_console=True)
+    setup_logging(str(project_root / "step.log"), also_console=True, suppress_initial_message=True)
     try:
         log_run_header("step4")
     except Exception:

@@ -47,7 +47,7 @@ def main():  # pragma: no cover
         return
     mol_dirs = [p for p in process_dir.iterdir() if p.is_dir()]
     multi_mol = len(mol_dirs) > 1
-    setup_logging(str(project_path / "step.log"), also_console=args.log_console)
+    setup_logging(str(project_path / "step.log"), also_console=args.log_console, suppress_initial_message=True)
     log_run_header("step2")
     prepared = 0
     for mol_dir in mol_dirs:

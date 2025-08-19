@@ -142,7 +142,7 @@ Design Notes für Zerlegung (Vorab):
 | 2 | domain symmetry | done (write_symmetry + equiv_groups + CLI) |
 | 2 | domain charges | partial (process_conformer extrahiert, weitere Zerlegung offen) |
 | 2 | domain prep | partial (process_initial extrahiert, RESP-Symmetrie jetzt shared) |
-| 3 | pipeline/steps Struktur | in-progress (step0-4 migrated) |
+| 3 | pipeline/steps Struktur | in-progress (step0-5 migrated) |
 | 3 | api facade | open |
 | 4 | remove legacy aliases | open |
 | 4 | hide merge_into_snapshot | partial (intern markiert) |
@@ -162,10 +162,13 @@ Dieses Dokument wird bei jeder abgeschlossenen Umsetzungs-Phase aktualisiert. Bi
 - Tests nach jeder Migrationsetappe ausgeführt (alle grün; nur externe DeprecationWarnings von SWIG-Typen).
 - Deprecation Shim für `core.process_conform` vereinheitlicht (einmalige Warnung, `__all__` Export nur `process_conform`).
 
-## Nächste kurzfristige Low-Risk Schritte (Update 2025-08-17, nach Prep & Charges Shim-Warnungen)
-1. Konsolidierte RESP-Symmetrie Utility extrahieren (verhindert Divergenz; Kandidat: `domain/symmetry/resp_constraints.py`).
-2. Feingranulare Aufteilung `process_conformer` (Gaussian Phase, RESP Phase) zur Vorbereitung Adapter-Layer.
-3. Services-Skelett: `services/config_service.py` (Snapshot Laden) & `services/conformer_sampling.py` (späterer Sampling-API Einstieg).
-4. Deprecation-Zeitplan dokumentieren (Entfernung Shims earliest nach 2 Minor Releases) + README Abschnitt „Migration“. 
-5. Cleanup verwaiste Alt-Workflows sobald Pipeline/Steps eingeführt.
+## Nächste kurzfristige Low-Risk Schritte (Update 2025-08-19, nach Migration Step5 Orchestrator)
+
+1. Feingranulare Aufteilung `process_conformer` (Gaussian Phase, RESP Phase) zur Vorbereitung Adapter-Layer.
+2. Services-Skelett: `services/config_service.py` & `services/conformer_sampling.py` (Sampling bereits teilweise extrahiert, API-Fassade fehlt).
+3. Deprecation-Zeitplan dokumentieren (Entfernung Shims earliest nach 2 Minor Releases) + README Abschnitt „Migration“.
+4. Cleanup verwaiste Alt-Workflows (Entfernung step5_* Altcode nach Stabilisierung /2 Releases).
+5. Migration Steps 6–8 analog (Durchschnittsladungen, final setup, final sim) mit Domain-Extraktion.
+6. Einführung ENV-Schalter für erweiterte Diagnostik (ELECTROFIT_DISABLE_ADV_DIAG) – implementiert für Step5; ggf. globalisieren.
+7. Feingranulare Zerlegung `process_conformer` (Stufen: prepare_inputs, generate_esp, prepare_resp, write_symmetry_doc) inkl. Timing-Decorator; Transitional-Helper entfernt.
 

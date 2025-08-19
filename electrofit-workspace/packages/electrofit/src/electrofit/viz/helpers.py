@@ -7,10 +7,13 @@ liegenden Funktionen. Importiere künftig direkt über ``electrofit.viz`` bzw.
 
 import os
 import re
+import logging
 import matplotlib.pyplot as plt
 import numpy as np
 
 from .curly_brace import draw_curly_brace
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "plot_charges_by_atom",
@@ -75,6 +78,20 @@ def plot_charges_by_atom(atoms_dict1, initial_charges_dict, base_dir, atoms_dict
             showmedians=False,
             showextrema=True,
         )
+
+    # Early guard: skip plotting if any dataset contains only empty charge series
+    if not atom_names or any(len(c) == 0 for c in charges_data1):
+        logger.warning(
+            "Skipping violin plot (plot_charges_by_atom): empty charge series encountered."
+        )
+        # Still write average charges file for downstream expectations
+        charges_name = (
+            "average_charges.chg"
+            if atoms_dict2 is None
+            else "average_charges_comparison.chg"
+        )
+        _write_avg_charges(base_dir, charges_name, avg_charges1, None)
+        return
 
     def set_violin_colors(vp, alpha_value):
         for i, body in enumerate(vp["bodies"]):
@@ -648,6 +665,19 @@ def plot_charges_by_symmetry(
         charges_data2 = None
         avg_charges2 = None
         avg_sum2 = None
+
+    # Guard against empty data (avoid matplotlib reductions on empty arrays)
+    if (not atom_names) or any(len(c) == 0 for c in charges_data1):
+        logger.warning(
+            "Skipping violin plot (plot_charges_by_symmetry): empty charge series encountered."
+        )
+        charges_name = (
+            "average_charges.chg"
+            if atoms_dict2 is None
+            else "average_charges_comparison.chg"
+        )
+        _write_avg_charges(base_dir, charges_name, avg_charges1, avg_charges2)
+        return
 
     # Create atom-to-color mapping
     atom_to_color = create_atom_color_mapping(atom_names, symmetry_groups)

@@ -8,16 +8,15 @@ import logging
 from pathlib import Path
 
 STEP_MODULES = {
-    "step0": "electrofit.workflows.step0_setup",
-    "step1": "electrofit.workflows.step1_initial_processing",
-    "step2": "electrofit.workflows.step2_setup_sim_dir",
-    "step3": "electrofit.workflows.step3_start_sim",
+    "step0": "electrofit.pipeline.steps.step0",
+    "step1": "electrofit.pipeline.steps.step1",
+    "step2": "electrofit.pipeline.steps.step2",
+    "step3": "electrofit.pipeline.steps.step3",
     "step4": "electrofit.pipeline.steps.step4",
-    "step5": "electrofit.workflows.step5_process_conforms",
-    "step6": "electrofit.workflows.step6_extract_average_charges",
-    "step7": "electrofit.workflows.step7_setup_final_sim",
-    "step8": "electrofit.workflows.step8_start_final_sim",
-    "pis":   "electrofit.workflows.run_process_initial_structure",  # legacy alias
+    "step5": "electrofit.pipeline.steps.step5",
+    "step6": "electrofit.pipeline.steps.step6",
+    "step7": "electrofit.pipeline.steps.step7",
+    "step8": "electrofit.pipeline.steps.step8",
 }
 
 def _run_module(module: str, project: Path, config: Path | None, rest: list[str]):
@@ -57,12 +56,15 @@ def main():
     sub = p.add_subparsers(dest="cmd", required=True)
 
     DESCRIPTIONS = {
-        'step0': 'Initial project setup: copy input molecule folders from data/input -> process (one directory per molecule).',
-        'step1': 'Initial structure processing (Gaussian/Antechamber preparation) for all run_gau_create_gmx_in directories.',
-        'step2': 'Create run_gmx_simulation directories, copy GMX files & MDP templates, write run.json manifest.',
-        'step3': 'Launch GROMACS production setup (box, ions, topology) per molecule based on run.json.',
-        'step4': 'Extract conformers from simulation trajectories (sampling: linear|random|maxmin) into extracted_conforms/.',
-        'step5': 'Process extracted conformers (Gaussian/RESP pipeline) with batching & parallelisation options.',
+        'step0': 'Project scaffold: copy each molecule folder from data/input/ -> process/<mol>/ (idempotent).',
+        'step1': 'Initial molecule preparation: run BCC or OPT Gaussian+RESP pipeline once per molecule (produces <mol>.acpype).',
+        'step2': 'Simulation setup: create run_gmx_simulation folders, stage GMX topology + MDP templates, build run.json manifest.',
+        'step3': 'Production MD (GROMACS): build box, solvate, ions, EM/NVT/NPT, production trajectory per molecule.',
+        'step4': 'Conformer extraction: sample frames from trajectories into extracted_conforms/ (linear|random|maxmin strategies).',
+        'step5': 'Conformer charge pipeline: Gaussian/RESP per conformer (parallelisable) producing ensemble RESP charges.',
+        'step6': 'Charge aggregation: compute ensemble averages, optional symmetry/group averaging, update MOL2 & acpype (experimental --remove-outlier).',
+        'step7': 'Placeholder / downstream analysis stage (reserved – implementation pending).',
+        'step8': 'Placeholder / export or reporting stage (reserved – implementation pending).',
     }
     def add_cmd(name: str):
         sp = sub.add_parser(name, help=DESCRIPTIONS.get(name,''), description=DESCRIPTIONS.get(name,''))

@@ -158,6 +158,79 @@ Migrationsstrategie (Kurz):
 
 Siehe `docs/REFACTOR_PLAN.md` für detaillierten Status & weitere Phasen.
 
+## Diagnostic Histograms & Outlier Filtering (Step 6)
+
+Optional diagnostic visuals and IQR-based outlier removal for charge ensembles.
+
+Enable via flags (independent / combinable):
+
+```
+electrofit step6 --project <proj> \
+	--plot-histograms \
+	--remove-outlier \
+	--hist-combine-groups \
+	--hist-bins 30 \
+	--outlier-iqr-factor 1.5
+```
+
+Artifacts (within `process/<mol>/results/`):
+
+| File | Description |
+|------|-------------|
+| hist.pdf | Per-atom distributions before filtering |
+| hist_no_outlier.pdf | Overlay before vs after outlier removal |
+| hist_adjusted.pdf | After applying group/symmetry average (or cleaned reweighted) |
+| hist_groups.pdf | Group-combined distributions (symmetry groups merged) |
+| hist_summary.json | Structured report (removed counts, per_atom_outliers, indices, IQR factor) |
+| hist_manifest.json | Machine-readable status for each optional histogram (expected/created/reason) |
+| cleaned_adjusted_charges.json | Filtered charges per atom |
+| cleaned_adjusted_group_average_charges* | Group-averaged filtered charges |
+
+Outlier criterion (per atom column): value < Q1 - f*IQR or > Q3 + f*IQR (factor f = `--outlier-iqr-factor`, default 1.5). A conformer is discarded if any atom is an outlier (union mask) – conservative pruning to remove multi-atom anomalies.
+
+Sequence (if all enabled):
+1. hist.pdf (raw)
+2. hist_no_outlier.pdf (after removal)
+3. hist_adjusted.pdf (after group averaging / reweight)
+4. hist_groups.pdf (aggregated symmetry groups)
+
+Design rationale:
+* Zero-impact unless flags are passed.
+* JSON summary supports automated regression thresholds.
+* Separation of diagnostics from core pipeline ensures reproducibility.
+
+Planned extensions: z-score alternative, adaptive IQR, persistent whitelist of conformers.
+
+### Histogram Manifest (`hist_manifest.json`)
+
+Because some histogram artefacts are *conditional* (e.g. `hist_adjusted.pdf` only makes sense once group averaging or adjusted means are applied), the pipeline writes a manifest capturing — per logical histogram stage — whether it was expected and whether it was actually created.
+
+Schema (per key):
+
+```jsonc
+{
+	"initial": { "expected": true,  "created": true,  "path": "hist.pdf",              "reason": null },
+	"after_outlier": { "expected": true,  "created": true,  "path": "hist_no_outlier.pdf", "reason": null },
+	"adjusted": { "expected": true,  "created": false, "path": null, "reason": "no groups" },
+	"group_combined": { "expected": false, "created": false, "path": null, "reason": "hist_combine_groups flag not set" }
+}
+```
+
+Interpretation rules:
+* `expected=false` means the user did not request (via flags) or preconditions were deliberately not met (e.g. symmetry disabled) — missing artefact is **not** an error.
+* `expected=true` & `created=true` implies a file at `path` exists.
+* `expected=true` & `created=false` signals a soft failure or structural reason; `reason` provides diagnostics (e.g. `no non-empty series`, `error: <msg>`, `no groups`). Tests may choose to fail in CI if such cases become frequent.
+* Stable contract: new histogram types may be appended (additive change) — consumers should ignore unknown keys for forward compatibility.
+
+Rationale: Avoid brittle test expectations for artefacts that depend on small synthetic datasets or rare branches while still surfacing why something was skipped. This pattern is preferable to writing placeholder PDFs that convey no information.
+
+Testing Guidance:
+* Unit tests assert required base artefacts (`hist.pdf`, `hist_no_outlier.pdf`) exist when requested.
+* Conditional artefacts (`hist_adjusted.pdf`, `hist_groups.pdf`) are validated through the manifest (`expected -> created`).
+* When adding new histogram stages, update the manifest keys and extend tests only if the new stage should always be produced under current flags.
+
+Backward Compatibility: Legacy scripts looking only for `hist.pdf` keep working; the manifest is an additive enhancement.
+
 ## Testing
 
 Unit tests include sampling selection determinism and basic functional checks. Shortened MDP templates keep test runtime low.

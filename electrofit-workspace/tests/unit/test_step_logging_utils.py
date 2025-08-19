@@ -17,7 +17,8 @@ def test_log_relevant_config_order_and_values(caplog):
     summary = log_relevant_config('stepX', obj, ['m','n'])
     assert summary == {'m':1,'n':2}
     # Ensure order preserved (m before n) in log text
-    log_line = next((r.message for r in caplog.records if '[stepX][cfg]' in r.message), '')
-    first_idx = log_line.find('m=')
-    second_idx = log_line.find('n=')
-    assert first_idx != -1 and second_idx != -1 and first_idx < second_idx
+    # New format: header + separate lines per field 'name : value'
+    field_lines = [r.message for r in caplog.records if r.message.startswith('[stepX][cfg] ') and ' : ' in r.message]
+    names_in_order = [ln.split('] ',1)[1].split(' :',1)[0] for ln in field_lines]
+    # Ensure sequence preserves requested order m before n
+    assert names_in_order[:2] == ['m','n'], f"Unexpected field order: {names_in_order}"

@@ -11,15 +11,14 @@ import subprocess
 import matplotlib.pyplot as plt  # type: ignore
 import pandas as pd  # type: ignore
 from electrofit.cli.run_commands import run_command
-from electrofit.io.files import (
-	include_ff,
+from electrofit.io.ff import (
+    include_ff,
 	include_ions,
 	include_tip3p,
 	remove_defaults_section_lines,
 	replace_posres_in_file,
-	strip_extension,
 )
-# Unified logging import (legacy electrofit.logging deprecated)
+from electrofit.io.files import strip_extension
 from electrofit.infra.logging import setup_logging
 from electrofit.cli.safe_run import ensure_finalized
 from electrofit.infra.scratch_manager import setup_scratch_directory
