@@ -55,7 +55,9 @@ def _extract_for_molecule(
     cfg = load_config(project_root, context_dir=sim_dir, molecule_name=mol_proc_dir.name)
     proj = cfg.project
     molecule_name = proj.molecule_name or mol_proc_dir.name
-    residue_name = proj.residue_name or "LIG"
+    residue_name = getattr(proj, 'residue_name', None) or "LIG"
+    logging.info(f"[step4][{mol_proc_dir.name}] using residue_name={residue_name}")
+    print(f"[step4][debug] residue_name={residue_name}")  # surfaced to stdout for integration test diagnostics
     adjust_sym = getattr(proj, "adjust_symmetry", False)
     protocol = getattr(proj, "protocol", "bcc")
 
@@ -134,8 +136,10 @@ def _extract_for_molecule(
         logging.debug("[step4] residue inventory logging failed", exc_info=True)
     ipl = raw_traj.top.select(f"resname {residue_name}")
     if len(ipl) == 0:
-        logging.error(f"[step4][{mol_proc_dir.name}] residue '{residue_name}' not found in trajectory topology; abort extraction.")
-        return False, f"residue '{residue_name}' not in topology"
+        # Propagate clear skip reason that tests assert; keep legacy phrasing substring for compatibility
+        msg = f"residue '{residue_name}' not in topology"
+        logging.error(f"[step4][{mol_proc_dir.name}] {msg}; abort extraction.")
+        return False, msg
     traj = raw_traj.atom_slice(ipl)
     if traj.n_atoms == 0:
         logging.warning(f"[step4][{mol_proc_dir.name}] zero atoms after selection; skipping")

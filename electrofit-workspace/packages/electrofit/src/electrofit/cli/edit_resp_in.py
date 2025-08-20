@@ -1,6 +1,6 @@
 import argparse
 
-from electrofit.io.files import edit_resp_input
+from electrofit.io.resp_edit import edit_resp_input
 
 
 def main():

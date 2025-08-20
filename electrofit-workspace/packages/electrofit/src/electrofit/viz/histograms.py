@@ -18,8 +18,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
 
-import matplotlib.pyplot as plt
 import numpy as np
+try:  # Attempt matplotlib import; degrade gracefully if binary deps missing
+    import matplotlib.pyplot as plt  # type: ignore
+except Exception:  # pragma: no cover
+    plt = None  # type: ignore
+    import logging as _logging
+    _logging.warning("[viz.histograms] matplotlib unavailable; plot_atom_histograms will no-op")
 
 __all__ = [
     "plot_atom_histograms",
@@ -91,6 +96,16 @@ def plot_atom_histograms(
         Maximum columns per row (layout adapts automatically).
     """
     if not specs:
+        return
+    if plt is None:  # degraded environment: skip plotting but create sentinel file
+        out = Path(outfile)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        # Append .skip to full filename (hist.pdf.skip) to avoid clobbering potential future real file
+        sentinel = out.parent / (out.name + ".skip")
+        try:
+            sentinel.write_text("matplotlib unavailable: histogram skipped\n")
+        except Exception:  # pragma: no cover - non critical
+            pass
         return
     n = len(specs)
     ncols = min(ncols, n)

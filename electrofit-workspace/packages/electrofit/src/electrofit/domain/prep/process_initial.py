@@ -25,7 +25,7 @@ from electrofit.io.files import find_file_with_extension
 from electrofit.io.mol2_ops import mol2_to_pdb_and_back, update_mol2_charges
 from electrofit.domain.symmetry.write_symmetry import write_symmetry
 from electrofit.domain.symmetry.resp_constraints import apply_and_optionally_modify, RespSymmetryConfig
-from electrofit.io.resp import edit_resp_input
+from electrofit.io.resp_edit import edit_resp_input
 from electrofit.infra.decisions import build_initial_decision
 
 

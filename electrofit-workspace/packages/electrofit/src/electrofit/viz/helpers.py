@@ -8,7 +8,12 @@ liegenden Funktionen. Importiere künftig direkt über ``electrofit.viz`` bzw.
 import os
 import re
 import logging
-import matplotlib.pyplot as plt
+try:  # Attempt to import matplotlib; allow tests without system libstdc++ match to proceed
+    import matplotlib.pyplot as plt
+except Exception:  # pragma: no cover
+    plt = None  # type: ignore
+    import logging as _logging
+    _logging.warning("[viz] matplotlib unavailable; plot functions will no-op or raise late if invoked")
 import numpy as np
 
 from .curly_brace import draw_curly_brace

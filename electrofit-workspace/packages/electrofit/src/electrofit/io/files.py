@@ -1,10 +1,76 @@
 
 import os
 import re
+import shutil
+
 import glob
 import logging
+import warnings
 import numpy as np
 
+from electrofit.io.mol2_ops import parse_charges_from_mol2
+
+# Transitional re-exports (kept for backward compatibility in tests)
+try:  # pragma: no cover - defensive
+    from .ff import remove_defaults_section_lines  # noqa: F401
+except Exception:  # pragma: no cover
+    warnings.warn("remove_defaults_section_lines not available (ff module import failure)", RuntimeWarning)
+
+try:  # pragma: no cover
+    from .mol2_ops import (
+        mol2_to_pdb_and_back,
+        pdb_to_mol2,
+        mol2_to_pdb_with_bonds,
+        parse_mol2,
+    )  # noqa: F401
+except Exception:  # pragma: no cover
+    warnings.warn("mol2_ops partial import failure; parsing helpers not available", RuntimeWarning)
+
+
+def copy_and_rename_folders(source: str, destination: str, nested_folder: str = "run_gau_create_gmx_in") -> None:
+    """
+    Copy folders from the source directory to the destination with an additional nested folder.
+    Rename .mol2 files within each folder according to a binary-to-IP mapping.
+    
+    Parameters:
+    - source (str): Path to the source directory.
+    - destination (str): Path to the destination directory.
+    - nested_folder (str): Name of the intermediate folder to nest files (default is "run_gau_create_gmx_in").
+    """
+
+    # Ensure the source directory exists
+    if not os.path.isdir(source):
+        print(f"Source directory '{source}' does not exist.")
+        return
+
+    # Create the destination directory if it does not exist
+    os.makedirs(destination, exist_ok=True)
+
+    # Walk through each folder in the source directory
+    for folder_name in os.listdir(source):
+        folder_path = os.path.join(source, folder_name)
+
+        # Only process directories
+        if os.path.isdir(folder_path):
+
+            # Define the new nested path in the destination
+            nested_dest_path = os.path.join(destination, folder_name, nested_folder)
+
+            # Create the nested directory structure
+            os.makedirs(nested_dest_path, exist_ok=True)
+
+            # Copy all files from the source folder to the nested destination folder
+            for item in os.listdir(folder_path):
+                item_source_path = os.path.join(folder_path, item)
+                item_dest_path = os.path.join(nested_dest_path, item)
+
+                # Copy file or directory
+                if os.path.isfile(item_source_path):
+                    shutil.copy2(item_source_path, item_dest_path)
+                elif os.path.isdir(item_source_path):
+                    shutil.copytree(item_source_path, item_dest_path, dirs_exist_ok=True)
+
+            print(f"Copied '{folder_path}' to '{nested_dest_path}'")
 
 def replace_charge_in_ac_file(file_path, new_charge_float, cwd=None):
     """
@@ -199,5 +265,3 @@ def strip_extension(file_name):
 
     print(f"Molecule name: {name}")
     return name
-
-

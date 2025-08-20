@@ -1,6 +1,6 @@
 # Elektrofit Refactor & Architektur Leitfaden
 
-Stand: 2025-08-17 (aktualisiert nach Domain‑Prep & Charges Shims Deprecation Warnings + RESP-Symmetrie Deduplikation)
+Stand: 2025-08-19 (aktualisiert nach IO-Modularisierung, Step6 Paritäts-Fix + Outlier-Feature (EXPERIMENTELL), Net-Charge Normalisierung)
 
 Dieses Dokument dient als lebende Referenz für die laufende Struktur‑Konsolidierung und Architektur‑Verbesserungen. Ziel: Klare Schichten, minimale Kopplung, eindeutige Verantwortlichkeiten, konsistente Namensgebung und wartbare Public API.
 
@@ -67,7 +67,7 @@ electrofit/
 - [ ] Bereinige veraltete Einträge in `rewrite_imports.py` (alte Pfade `electrofit.plotting.helpers`).
 
 ### Phase 2 – Domain-Isolation
-Zwischenstand aktualisiert: `equiv_groups` und `write_symmetry` vollständig in `domain.symmetry`; `process_conformer` und `process_initial` domänisiert; Legacy-Shims vorhanden mit DeprecationWarning & Forwarding für Tests.
+Zwischenstand aktualisiert: `equiv_groups` und `write_symmetry` vollständig in `domain.symmetry`; `process_conformer` und `process_initial` domänisiert; Legacy-Shims vorhanden mit DeprecationWarning & Forwarding für Tests. Step6 Aggregationslogik bereinigt (acpype Parität in allen Pfaden, experimenteller Outlier-IQR Filter + Net Charge Normalisierung) – Vorbereitung auf spätere Auslagerung Plotting.
 
 - [x] Verschiebe `core/equiv_groups.py` → `domain/symmetry/equiv_groups.py` (Funktions-API `generate_equivalence_groups`).
 - [x] CLI Wrapper `electrofit-create-equiv-groups` hinzugefügt.
@@ -86,6 +86,7 @@ Design Notes für Zerlegung (Vorab):
 - [ ] `pipeline/steps/stepX.py` einführen; vorhandene `stepX_*.py` umbenennen / verschieben.
 - [ ] Öffentlicher Einstieg: `electrofit.api` definiert stabile Funktionen (z.B. `run_step(step:int, project:Path, config:Path|None)`).
 - [ ] Interne Module prefix `_`; unveröffentlichte Objekte entfernen aus `__all__`.
+- [ ] AggregationResult Dataclass für Step6 (ersetzt implizite Rückgabewerte) + Plot-Service entkoppelt.
 
 ### Phase 4 – Bereinigung & Deprecation
 - [ ] Entferne Legacy-Dateien / Aliase (`run_process_*`).
@@ -94,6 +95,8 @@ Design Notes für Zerlegung (Vorab):
 - [ ] Dokumentiere neue Modulkarte in README / docs/architecture.md.
 - [ ] Entferne Deprecation-Shim (`plotting` → `viz`).
 - [ ] Entferne verbliebene Alt-Import-Rewrites.
+- [ ] Entferne Re-Exports der Legacy binary_mapping Helfer; ersetze durch direkte Nutzung oder entferne Bedarf.
+- [ ] DeprecationWarnings für verbleibende Übergangsfunktionen in `io/files.py` aufnehmen (Zeitstempel + Entferndatum).
 
 ### Phase 5 – Optional Enhancements
 - [ ] Optionales Extra: `pip install electrofit[viz]` für plotting.
@@ -142,12 +145,17 @@ Design Notes für Zerlegung (Vorab):
 | 2 | domain symmetry | done (write_symmetry + equiv_groups + CLI) |
 | 2 | domain charges | partial (process_conformer extrahiert, weitere Zerlegung offen) |
 | 2 | domain prep | partial (process_initial extrahiert, RESP-Symmetrie jetzt shared) |
-| 3 | pipeline/steps Struktur | in-progress (step0-5 migrated) |
+| 2 | step6 aggregation parity + experimental outlier & net charge normalization | done |
+| 2 | io modularisierung (ff, mol2_ops, equiv, resp_edit, legacy) | done |
+| 3 | pipeline/steps Struktur | in-progress (step0-6 migrated) |
 | 3 | api facade | open |
+| 3 | step6 AggregationResult + Plot-Service Entkopplung | open |
 | 4 | remove legacy aliases | open |
 | 4 | hide merge_into_snapshot | partial (intern markiert) |
 | 4 | Entferne plotting Shim | in-progress (Dateisystem-Cleanup: leeres 'plotting/' Verzeichnis + Bytecode entfernen) |
 | 4 | Entferne alte Import-Rewrites | partial (Hauptmapping bereinigt) |
+| 4 | Entferne binary_mapping Re-Exports | open |
+| 4 | DeprecationWarnings io/files Übergangsfunktionen | open |
 
 (Beim Fortschritt jeweils "open | in-progress | done" einsetzen.)
 

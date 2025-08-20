@@ -8,14 +8,11 @@ Planned removal: after confirming no external workflows depend on them.
 """
 from __future__ import annotations
 
-from pathlib import Path
 import os
-import shutil
 import logging
 
 __all__ = [
     'binary_to_ip',
-    'copy_and_rename_folders',
     'rename_mol2_binary',
 ]
 
@@ -33,32 +30,6 @@ binary_to_ip = {
     "101111": "IP47",
     "111101": "IP61",
 }
-
-
-def copy_and_rename_folders(source: str, destination: str, nested_folder: str = "run_gau_create_gmx_in") -> None:
-    """Copy directories (historical step0 helper) and create nested folder.
-
-    No longer used in the modern code path; kept for legacy compatibility.
-    """
-    if not os.path.isdir(source):  # pragma: no cover - defensive legacy path
-        logging.warning("[legacy.binary_mapping] source missing: %s", source)
-        return
-    os.makedirs(destination, exist_ok=True)
-    for folder_name in os.listdir(source):
-        folder_path = os.path.join(source, folder_name)
-        if not os.path.isdir(folder_path):
-            continue
-        nested_dest_path = os.path.join(destination, folder_name, nested_folder)
-        os.makedirs(nested_dest_path, exist_ok=True)
-        for item in os.listdir(folder_path):
-            src_item = os.path.join(folder_path, item)
-            dst_item = os.path.join(nested_dest_path, item)
-            if os.path.isfile(src_item):
-                shutil.copy2(src_item, dst_item)
-            elif os.path.isdir(src_item):
-                shutil.copytree(src_item, dst_item, dirs_exist_ok=True)
-        logging.info("[legacy.binary_mapping] Copied '%s' -> '%s'", folder_path, nested_dest_path)
-
 
 def rename_mol2_binary(base_dir: str, binary: str) -> None:
     """Rename a *.mol2 inside ``run_gau_create_gmx_in`` folder using the binary mapping.

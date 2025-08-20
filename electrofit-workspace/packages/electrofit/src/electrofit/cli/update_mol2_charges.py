@@ -2,42 +2,7 @@ import os
 import sys
 import logging
 
-from electrofit.io.mol2_ops import update_mol2_charges
-
-# Delay heavy/native import until actually needed (for crash isolation)
-try:
-    from openmol import tripos_mol2 as mol2  # type: ignore
-except Exception as _imp_err:  # pragma: no cover - diagnostic path
-    mol2 = None  # will trigger fallback/explicit error when used
-    logging.warning("Deferred openmol import failed at module import: %s", _imp_err)
-
-
-class Mol2ChargeError(Exception):
-    """Domain-specific exception for MOL2 charge update failures."""
-
-
-def read_charges(chg_file_path):
-    """
-    Reads charges from a .chg file and returns a list of floats.
-    Assumes charges are separated by spaces and may span multiple lines.
-    """
-    charges = []
-    try:
-        with open(chg_file_path, "r") as file:
-            for line in file:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    line_charges = [float(charge) for charge in line.split()]
-                except ValueError as ve:
-                    raise Mol2ChargeError(
-                        f"Non-numeric value in charges file '{chg_file_path}': {ve}"
-                    ) from ve
-                charges.extend(line_charges)
-    except FileNotFoundError as fnf:
-        raise Mol2ChargeError(f"Charges file '{chg_file_path}' not found") from fnf
-    return charges
+from electrofit.io.mol2_ops import update_mol2_charges, Mol2ChargeError
 
 def main():
     # Check if the correct number of arguments is provided

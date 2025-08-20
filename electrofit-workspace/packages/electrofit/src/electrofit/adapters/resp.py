@@ -45,7 +45,7 @@ def apply_symmetry(scratch_dir: str, adjust_sym: bool, ignore_sym: bool) -> str:
 	from electrofit.domain.symmetry.resp_constraints import apply_and_optionally_modify, RespSymmetryConfig
 	from electrofit.cli.run_commands import run_python
 	from electrofit.io.files import find_file_with_extension
-	from electrofit.io.resp import edit_resp_input
+	from electrofit.io.resp_edit import edit_resp_input
 	from electrofit.domain.symmetry.write_symmetry import write_symmetry
 	return apply_and_optionally_modify(
 		run_python,

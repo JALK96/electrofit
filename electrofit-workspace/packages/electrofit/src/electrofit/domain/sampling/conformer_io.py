@@ -8,7 +8,7 @@ from __future__ import annotations
 from pathlib import Path
 import shutil
 import logging
-from electrofit.io.files import mol2_to_pdb_with_bonds
+from electrofit.io.mol2_ops import mol2_to_pdb_with_bonds
 
 __all__ = ["prepare_conformer_directory"]
 

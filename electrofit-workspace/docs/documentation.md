@@ -9,19 +9,22 @@ Elektrostatische Ladungsableitung (Gaussian/ESP/RESP oder BCC) und GROMACS‑Sim
 
 Hauptpipeline (vereinheitlicht über `electrofit pipeline steps`):
 
-| Step | Zweck (Kurz) | Ergebnis-Artefakte |
-|------|--------------|--------------------|
-| 0 | Kopie Eingabe-Moleküle nach `process/` | Arbeitsverzeichnisse |
-| 1 | Initiale Vorbereitung (Gaussian Input, Antechamber/RESP oder BCC) | `run_gau_create_gmx_in/` + Snapshot |
-| 2 | Vorbereitung Simulationslauf (Topologie + MDP) | `run_gmx_simulation/` + `run.json` |
-| 3 | Erzeugung Produktions-Inputs (solvatisiert, Ionisierung etc.) | GROMACS Input-Dateien |
-| 4 | Trajektorien-Sampling → Konformations-Extraktion | `extracted_conforms/` |
-| 5 | Per-Konformer Gaussian/ESP/RESP oder BCC (parallelisiert) | RESP/BCC Resultate, Symmetrie-Dokumente |
-| 6 | Aggregation & Mittelung der Ensemble-Ladungen | `results/` (avg MOL2, Histogramm-Manifest) |
-| 7 | Finaler Simulations-Setup | `run_final_gmx_simulation/` |
-| 8 | Start finaler Produktion | Laufende Simulation |
+
+| Step | Zweck (Kurz) | Ergebnis-Artefakte | Hinweise |
+|------|--------------|--------------------|----------|
+| 0 | Kopie Eingabe-Moleküle nach `process/` | Arbeitsverzeichnisse | stabil |
+| 1 | Initiale Vorbereitung (Gaussian Input, Antechamber/RESP oder BCC) | `run_gau_create_gmx_in/` + Snapshot | stabil |
+| 2 | Vorbereitung Simulationslauf (Topologie + MDP) | `run_gmx_simulation/` + `run.json` | stabil |
+| 3 | Erzeugung Produktions-Inputs (solvatisiert, Ionisierung etc.) | GROMACS Input-Dateien | stabil |
+| 4 | Trajektorien-Sampling → Konformations-Extraktion | `extracted_conforms/` | stabil |
+| 5 | Per-Konformer Gaussian/ESP/RESP oder BCC (parallelisiert) | RESP/BCC Resultate, Symmetrie-Dokumente | refaktorisiert |
+| 6 | Aggregation & Mittelung der Ensemble-Ladungen | `results/` (avg MOL2, Histogramm-Manifest) | Outlier-Filter EXPERIMENTELL |
+| 7 | Finaler Simulations-Setup | `run_final_gmx_simulation/` | geplant |
+| 8 | Start finaler Produktion | Laufende Simulation | geplant |
+
 
 ---
+
 ## 2. Schichten & Verantwortlichkeiten
 
 | Layer | Rolle | Reinheit / Seiteneffekte | Hauptmodule |
@@ -39,6 +42,7 @@ Hauptpipeline (vereinheitlicht über `electrofit pipeline steps`):
 Architektur-Ziel: Domain ↔ Adapter Schnitt klar; IO-Helfer modularisieren (kein „God Module“). Pipeline‑Steps bleiben dünn und rufen Domain/APIs auf.
 
 ---
+
 ## 3. Zentrale Konzepte
 
 1. Snapshot Layering: `compose_snapshot` vereinigt (Projekt Defaults → Molekül Input → Prozess-Kontext → Upstream Snapshot → Optionale Override). Ergebnis ist deterministisch und auditierbar.
@@ -48,6 +52,7 @@ Architektur-Ziel: Domain ↔ Adapter Schnitt klar; IO-Helfer modularisieren (kei
 5. Symmetriebehandlung: Generierung äquivalenter Atomgruppen, optionales Anpassen von RESP Eingaben, Gruppendurchschnitt in Aggregation.
 
 ---
+
 ## 4. Modul- & Funktionsindex (Kurzzusammenfassung)
 
 Nur wichtige / öffentliche oder stark genutzte Funktionen; Hilfsfunktionen im Code näher dokumentieren (In-Code Docstrings ausbaubar).
@@ -78,7 +83,14 @@ Nur wichtige / öffentliche oder stark genutzte Funktionen; Hilfsfunktionen im C
 
 ### io
 
-- `files.py` (zu groß): Enthält u.a. RESP Editierlogik (`edit_resp_input`), Ladungsextraktion, Formatkonvertierungen, Äquivalenzgruppen‑Persistenz, Forcefield-Einschlüsse. → Aufsplitten (siehe Roadmap) in: `resp_io.py`, `charge_parse.py`, `ff_io.py`, `equiv_io.py`, `convert.py`.
+Modularisiert (Aufspaltung des früheren God-Moduls `files.py`).
+
+- `ff.py` – Forcefield / Topologie Includes & POSRES Handling.
+- `mol2_ops.py` – MOL2↔PDB Konvertierungen & Parsing (inkl. Ladungsextraktion).
+- `equiv.py` – Erzeugung & Persistenz von Äquivalenzgruppen.
+- `resp_edit.py` – Modifikation von RESP Input bzgl. Symmetrie.
+- `files.py` – Übergangscontainer: generische File/Path Utilities (Deprecation geplant, keine parsing Logik mehr hinzufügen!).
+- `legacy/binary_mapping.py` – Isolierte Legacy-Hilfen (nur temporär re-exportiert).
 - `mol2.update_mol2_charges` – Validiertes Umschreiben von MOL2 Partial Charges.
 
 ### viz
@@ -95,6 +107,7 @@ Nur wichtige / öffentliche oder stark genutzte Funktionen; Hilfsfunktionen im C
 - Enthalten ältere direkte Pfade (z.B. `workflows.step5_isolate_runner`). Ziel: Ersetzen durch Domain + Pipeline; CLI nur als dünne Shell.
 
 ---
+
 ## 5. Aktuelle Schwachstellen & Risiken
 
 | Thema | Beobachtung | Risiko | Priorität |
@@ -108,6 +121,7 @@ Nur wichtige / öffentliche oder stark genutzte Funktionen; Hilfsfunktionen im C
 | GROMACS Adapter monolithisch | Erschwert alternative Backends / Unit Tests | Erweiterungshemmnis | Mittel |
 
 ---
+
 ## 6. Refactor Roadmap (Phasen)
 
 ### Phase 1 (Schnelle Verbesserungen)
@@ -182,7 +196,7 @@ Nur wichtige / öffentliche oder stark genutzte Funktionen; Hilfsfunktionen im C
 
 ## 11. Kurz-Fazit
 
-Die aktuelle Struktur ist funktional und modularisiert viele ehemals monolithische Bereiche. Größter Hebel für Wartbarkeit liegt in Aufspaltung von `io/files.py`, Entfernung der Legacy-Workflows und klarerer Adapter-Schnittstellen. Die eingeführte Histogramm-Manifest-Strategie ist ein gutes Muster für reproduzierbare, testbare Artefakte und sollte auf weitere Diagnoseausgaben erweitert werden.
+Die aktuelle Struktur ist funktional und modularisiert viele ehemals monolithische Bereiche. Aufspaltung von `io/files.py` abgeschlossen; weitere Schritte: Deprecation verbleibender Re-Exports, Entfernung Legacy-Workflows, Feingranularisierung GROMACS Adapter. Histogramm-Manifest ist Muster für reproduzierbare Diagnostik; Outlier-Filter (EXPERIMENTELL) + Net Charge Normalisierung hinzugefügt.
 
 ---
 
@@ -195,4 +209,16 @@ Die aktuelle Struktur ist funktional und modularisiert viele ehemals monolithisc
 5. (PR 5) Public API Draft + Stabilitäts-Hinweis.
 
 ---
-*Stand: Automatisch generiert (Audit Session). Bitte bei größeren Strukturänderungen synchron halten.*
+
+## 13. Experimentelle Features
+
+| Feature | Beschreibung | Aktivierung | Stabilität |
+|---------|--------------|-------------|------------|
+| Step6 Outlier Removal | IQR-basierter Ladungs-Outlier Filter vor Gruppenmittelung; schreibt bereinigte Artefakte (`cleaned_adjusted_charges.json`). | Konfig `remove_outlier = true` | EXPERIMENTELL (Algorithmus & Dateinamen können sich ändern) |
+| Net Charge Normalization | Normalisiert nach Outlier-Entfernung Summenladung auf Sollwert (proportional, Fallback gleichmäßig). | Implizit bei aktivem Outlier-Filter | Stabil (intern optimierbar) |
+
+Für produktive Runs: Outlier-Filter nur nach Sichtung Histogramme aktivieren.
+
+---
+
+*Stand: Automatisch generiert (Audit Session, aktualisiert nach IO-Modularisierung & Step6 Paritäts-Verbesserungen). Bitte bei Strukturänderungen synchron halten.*
