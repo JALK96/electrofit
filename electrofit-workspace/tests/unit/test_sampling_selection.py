@@ -6,7 +6,7 @@ import mdtraj as md
 # Ensure package import path
 sys.path.append(str(pathlib.Path(__file__).resolve().parents[2] / 'packages' / 'electrofit' / 'src'))
 
-from electrofit.workflows.step4_extract_conforms import _select_indices  # type: ignore  # noqa: E402
+from electrofit.domain.sampling import _select_indices  # type: ignore  # noqa: E402
 
 
 def _make_linear_traj(n_frames=10, n_atoms=3):

@@ -37,12 +37,7 @@ def process_initial_structure(molecule_name, mol2_file, base_scratch_dir, additi
         )
         _DEPRECATION_WARNED = True
     # Prepare scratch inputs (legacy behaviour retains additional_input inclusion).
-    # IMPORTANT: Normalize residue BEFORE copying into scratch so the copied file already has the correct residue tag.
-    from electrofit.domain.prep.process_initial import normalize_residue_roundtrip  # local import to avoid cycle
-    try:
-        normalize_residue_roundtrip(mol2_file, residue_name)
-    except Exception as e:  # pragma: no cover
-        logging.warning("[prep-shim] residue normalization failed pre-scratch: %s", e)
+    # Residue normalization now handled inside domain.prep.process_initial; keep removed here to avoid duplicate work.
     input_files = [mol2_file] + list(additional_input)
     scratch_dir, original_dir = setup_scratch_directory(input_files, base_scratch_dir)
     cfg = InitialPrepConfig(

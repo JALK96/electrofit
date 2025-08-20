@@ -17,7 +17,10 @@ import logging
 from pathlib import Path
 from contextlib import contextmanager
 
-from electrofit.workflows.run_process_initial_structure import main as _legacy_run_initial
+from electrofit.workflows.run_process_initial_structure import main as _legacy_run_initial  # legacy fallback
+from electrofit.domain.prep.process_initial import InitialPrepConfig, process_initial
+from electrofit.config.loader import load_config, dump_config
+from electrofit.io.files import find_file_with_extension
 from electrofit.infra.config_snapshot import compose_snapshot, CONFIG_ARG_HELP
 from electrofit.infra.logging import setup_logging, log_run_header, reset_logging
 
@@ -56,18 +59,112 @@ def _run_one_dir(run_dir: str, project_root: str, override_cfg: str | None, mult
     log_run_header("step1")
     molecule_input = Path(project_root) / "data" / "input" / mol / "electrofit.toml"
     project_defaults = Path(project_root) / "electrofit.toml"
+    process_defaults = Path(project_root) / "process" / mol / "electrofit.toml"
     compose_snapshot(
         Path(run_dir),
         Path(project_root),
         mol,
         multi_molecule=multi_mol,
         log_fn=logging.info,
+        process_cfg=process_defaults,
         molecule_input=molecule_input,
         project_defaults=project_defaults,
         extra_override=Path(override_cfg) if override_cfg else None,
     )
     with _pushd(run_dir):
-        _legacy_run_initial()
+        # Feature flag: allow disabling new direct domain path for quick rollback
+        if os.environ.get("ELECTROFIT_STEP1_LEGACY") == "1":
+            logging.warning("[step1][legacy] using deprecated workflow runner")
+            _legacy_run_initial()
+            return
+        # --- New direct domain integration path ---
+        run_dir_abs = os.getcwd()
+        run_cfg_path = os.path.join(run_dir_abs, "electrofit.toml")
+        cfg = load_config(project_root, config_path=run_cfg_path if os.path.isfile(run_cfg_path) else None)
+        dump_config(cfg, log_fn=logging.info)
+        base_scratch_dir = (
+            getattr(cfg.paths, "base_scratch_dir", None)
+            or os.environ.get("ELECTROFIT_SCRATCH_DIR")
+            or "/tmp/electrofit_scratch"
+        )
+        mol2_from_name = None
+        if cfg.project.molecule_name:
+            cand = os.path.join(run_dir_abs, f"{cfg.project.molecule_name}.mol2")
+            if os.path.isfile(cand):
+                mol2_from_name = cand
+        mol2_file = mol2_from_name or find_file_with_extension("mol2")
+        if not mol2_file:
+            logging.info("[step1][skip] no mol2 file detected in run directory; nothing to process")
+            return
+        molecule_name = os.path.splitext(os.path.basename(mol2_file))[0]
+        additional_input: list[str] = []
+        if cfg.project.adjust_symmetry:
+            try:
+                json_file = find_file_with_extension("json")
+                if json_file:
+                    additional_input.append(json_file)
+            except Exception:  # pragma: no cover
+                logging.debug("[step1] json detection failed", exc_info=True)
+        residue_name = cfg.project.residue_name or molecule_name[:3].upper()
+        net_charge = cfg.project.charge if cfg.project.charge is not None else 0
+        atom_type = cfg.project.atom_type or "gaff2"
+        protocol = cfg.project.protocol or "bcc"
+        # Setup scratch (reuse legacy scratch manager)
+        from electrofit.infra.scratch_manager import setup_scratch_directory
+        input_files = [os.path.basename(mol2_file)] + list(additional_input)
+        scratch_dir, original_dir = setup_scratch_directory(input_files, base_scratch_dir)
+        # Ensure mol2 is present inside scratch root (legacy behaviour — scratch manager copies)
+        cfg_obj = InitialPrepConfig(
+            molecule_name=molecule_name,
+            mol2_file=os.path.basename(mol2_file),
+            net_charge=net_charge,
+            residue_name=residue_name,
+            atom_type=atom_type,
+            adjust_sym=cfg.project.adjust_symmetry,
+            ignore_sym=cfg.project.ignore_symmetry,
+            protocol=protocol,
+        )
+        # Use same ensure_finalized context to keep identical side effects
+        from electrofit.cli.safe_run import ensure_finalized
+        try:
+            with ensure_finalized(original_dir=original_dir, scratch_dir=scratch_dir, input_files=input_files):
+                result = process_initial(cfg_obj, scratch_dir, original_dir, input_files)
+        except Exception:
+            logging.error("[step1] error during initial processing", exc_info=True)
+            raise
+        # Emit manifest json (relative paths only; avoid embedding transient scratch paths)
+        try:
+            import json
+            manifest_path = os.path.join(run_dir_abs, "initial_manifest.json")
+            def _rel(p: str | None):
+                return os.path.basename(p) if p else None
+            # After finalize, artifacts were copied back (potentially with *_copyN). Re-scan to pick actual names.
+            gro_name = None; itp_name = None; top_name = None; posre_names: list[str] = []
+            for fname in os.listdir(run_dir_abs):
+                if fname.endswith('_GMX.gro'):
+                    gro_name = fname
+                elif fname.endswith('_GMX.itp'):
+                    itp_name = fname
+                elif fname.endswith('_GMX.top'):
+                    top_name = fname
+                elif fname.startswith('posre_') and fname.endswith('.itp'):
+                    posre_names.append(fname)
+            data = {
+                'protocol': result.protocol,
+                'residue_name': result.residue_name,
+                'charges_source': result.charges_source,
+                'mol2_final': cfg_obj.mol2_file,  # modified input now in place under this name
+                'acpype_dir': _rel(result.acpype_dir),
+                'gmx_gro': gro_name,
+                'gmx_itp': itp_name,
+                'gmx_top': top_name,
+                'posre_itps': sorted(posre_names),
+            }
+            with open(manifest_path, 'w') as fh:
+                json.dump(data, fh, indent=2)
+            logging.info("[step1] wrote initial_manifest.json")
+        except Exception:  # pragma: no cover
+            logging.debug("[step1] manifest emission failed", exc_info=True)
 
 def main():  # pragma: no cover
     parser = argparse.ArgumentParser(

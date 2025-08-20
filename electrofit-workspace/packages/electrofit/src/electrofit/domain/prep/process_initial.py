@@ -31,6 +31,10 @@ from electrofit.infra.decisions import build_initial_decision
 
 @dataclass(slots=True)
 class InitialPrepConfig:
+    """Configuration for the initial preparation step.
+
+    NOTE: This is *input* configuration, not the result. See :class:`InitialResult`.
+    """
     molecule_name: str
     mol2_file: str
     net_charge: int
@@ -39,6 +43,25 @@ class InitialPrepConfig:
     adjust_sym: bool = False
     ignore_sym: bool = False
     protocol: str = "bcc"  # or 'opt'
+
+
+@dataclass(slots=True)
+class InitialResult:
+    """Structured outcome of the initial preparation.
+
+    This avoids forcing downstream code (or tests) to re-discover artifact paths
+    via globbing. For backwards compatibility existing callers can ignore the
+    return value; a future refactor will thread this object through the pipeline.
+    """
+    protocol: str
+    residue_name: str
+    charges_source: str  # 'bcc' or 'resp'
+    mol2_final: str  # path inside scratch_dir
+    acpype_dir: str | None
+    gmx_gro: str | None
+    gmx_itp: str | None
+    gmx_top: str | None
+    posre_itps: list[str]
 
 
 def normalize_residue_roundtrip(mol2_file: str, residue_name: str):
@@ -108,14 +131,23 @@ def normalize_residue_roundtrip(mol2_file: str, residue_name: str):
 # RESP symmetry handling unified via domain.symmetry.resp_constraints.apply_and_optionally_modify
 
 
-def process_initial(cfg: InitialPrepConfig, scratch_dir: str, original_dir: str, input_files: list[str], run_acpype=_run_acpype_real):
+def process_initial(cfg: InitialPrepConfig, scratch_dir: str, original_dir: str, input_files: list[str], run_acpype=_run_acpype_real) -> InitialResult:
     # Ensure residue name normalization (legacy behaviour) before any downstream tool consumption.
     # Previously this happened in the legacy shim unconditionally; during refactor it was only kept there.
     # Re-introduce here so new callers using domain API directly still obtain consistent residue naming.
+    # Ensure both scratch copy and (optionally) original are normalized so downstream
+    # ACPYPE/GROMACS topology carries the intended residue tag. Previously normalization
+    # happened pre-scratch in the legacy shim; after refactor it ran only on the original
+    # file, leaving the scratch copy stale. We now normalize the scratch file explicitly
+    # (and original as best-effort) to restore prior guarantees.
     try:
-        normalize_residue_roundtrip(cfg.mol2_file, cfg.residue_name)
+        scratch_mol2 = os.path.join(scratch_dir, cfg.mol2_file)
+        if os.path.isfile(scratch_mol2):
+            normalize_residue_roundtrip(scratch_mol2, cfg.residue_name)
+        else:
+            logging.debug("[prep] scratch mol2 missing for normalization: %s", scratch_mol2)
     except Exception as e:  # pragma: no cover - defensive logging only
-        logging.warning("[prep] Residue renaming roundtrip skipped after error: %s", e)
+        logging.warning("[prep] Residue renaming roundtrip (scratch only) skipped after error: %s", e)
     # Decision logging (before branching)
     try:
         dec = build_initial_decision(cfg.protocol, cfg.adjust_sym, cfg.ignore_sym)
@@ -155,23 +187,68 @@ def process_initial(cfg: InitialPrepConfig, scratch_dir: str, original_dir: str,
         mol2_resp = f"{cfg.molecule_name}_resp.mol2"
         run_python(update_mol2_charges, cfg.mol2_file, resp_chg2, mol2_resp, cwd=scratch_dir)
         run_acpype(mol2_resp, cfg.net_charge, scratch_dir, cfg.atom_type, charges="user")
-        _expose_acpype_outputs(mol2_resp, scratch_dir)
+        acpype_map = _expose_acpype_outputs(mol2_resp, scratch_dir)
+        mol2_final = os.path.join(scratch_dir, mol2_resp)
+        charges_source = "resp"
     else:  # bcc
         run_acpype(cfg.mol2_file, cfg.net_charge, scratch_dir, cfg.atom_type, charges="bcc")
-        _expose_acpype_outputs(cfg.mol2_file, scratch_dir)
+        acpype_map = _expose_acpype_outputs(cfg.mol2_file, scratch_dir)
+        mol2_final = os.path.join(scratch_dir, os.path.basename(cfg.mol2_file))
+        charges_source = "bcc"
     logging.info("Initial structure processing complete (%s)", cfg.molecule_name)
+    return InitialResult(
+        protocol=cfg.protocol,
+        residue_name=cfg.residue_name,
+        charges_source=charges_source,
+        mol2_final=mol2_final,
+        acpype_dir=acpype_map.get('acpype_dir'),
+        gmx_gro=acpype_map.get('gro'),
+        gmx_itp=acpype_map.get('itp'),
+        gmx_top=acpype_map.get('top'),
+        posre_itps=acpype_map.get('posre', []),
+    )
 
 
-def _expose_acpype_outputs(mol2_path: str, scratch_dir: str):
+def _expose_acpype_outputs(mol2_path: str, scratch_dir: str) -> dict[str, object]:
+    """Copy a subset of ACPYPE outputs into the scratch root for convenience.
+
+    Returns a mapping with discovered primary GMX artifact paths for structured
+    consumption by callers. Missing artifacts simply produce None entries.
+    """
     base_name = os.path.splitext(os.path.basename(mol2_path))[0]
     acpype_dir = os.path.join(scratch_dir, f"{base_name}.acpype")
-    if os.path.isdir(acpype_dir):
-        for fname in os.listdir(acpype_dir):
-            if fname.endswith(("_GMX.gro","_GMX.itp","_GMX.top")) or (fname.startswith("posre_") and fname.endswith(".itp")):
-                src = os.path.join(acpype_dir, fname)
-                dst = os.path.join(scratch_dir, fname)
-                if not os.path.exists(dst):
-                    try:
-                        subprocess.run(['cp', src, dst], check=True)
-                    except Exception:
-                        pass
+    result: dict[str, object] = {
+        'acpype_dir': acpype_dir if os.path.isdir(acpype_dir) else None,
+        'gro': None,
+        'itp': None,
+        'top': None,
+        'posre': [],
+    }
+    if not os.path.isdir(acpype_dir):
+        return result
+    for fname in os.listdir(acpype_dir):
+        copy_needed = False
+        key = None
+        if fname.endswith("_GMX.gro"):
+            key = 'gro'; copy_needed = True
+        elif fname.endswith("_GMX.itp"):
+            key = 'itp'; copy_needed = True
+        elif fname.endswith("_GMX.top"):
+            key = 'top'; copy_needed = True
+        elif fname.startswith("posre_") and fname.endswith(".itp"):
+            key = 'posre'; copy_needed = True
+        if not copy_needed:
+            continue
+        src = os.path.join(acpype_dir, fname)
+        dst = os.path.join(scratch_dir, fname)
+        if not os.path.exists(dst):
+            try:  # pragma: no cover - defensive copy
+                subprocess.run(['cp', src, dst], check=True)
+            except Exception:  # pragma: no cover
+                logging.debug("[acpype][expose] copy failed for %s", src, exc_info=True)
+                continue
+        if key == 'posre':
+            result['posre'].append(dst)
+        else:
+            result[key] = dst
+    return result
