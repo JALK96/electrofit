@@ -1,7 +1,6 @@
 """Domain logic for Step6: aggregation of RESP ensemble charges and symmetry/group averaging.
 
-Extracted from legacy ``workflows.step6_extract_average_charges`` so that the
-pipeline step orchestrator becomes thin & testable.
+Kept separate so the pipeline step remains a thin orchestrator (legacy workflows layer removed).
 """
 from __future__ import annotations
 
@@ -190,8 +189,10 @@ def process_molecule_average_charges(
                     )
                 )
             if specs:
-                plot_atom_histograms(specs, results_dir / "hist.pdf", "Charge Distribution Before Filtering", bins=hist_bins)
-                _mark("initial", True, True, "hist.pdf")
+                target = results_dir / "hist.pdf"
+                plot_atom_histograms(specs, target, "Charge Distribution Before Filtering", bins=hist_bins)
+                created = target.is_file()
+                _mark("initial", created, True, "hist.pdf" if created else None, None if created else "not created")
             else:
                 logging.info("[step6][hist] no non-empty charge series for initial histogram")
                 _mark("initial", False, True, None, "no non-empty series")
@@ -234,13 +235,15 @@ def process_molecule_average_charges(
                     )
                     for col in df.columns
                 ]
+                target2 = results_dir / "hist_no_outlier.pdf"
                 plot_atom_histograms(
                     specs_no,
-                    results_dir / "hist_no_outlier.pdf",
+                    target2,
                     "Charge Distribution After Outlier Removal",
                     bins=hist_bins,
                 )
-                _mark("after_outlier", True, True, "hist_no_outlier.pdf")
+                created2 = target2.is_file()
+                _mark("after_outlier", created2, True, "hist_no_outlier.pdf" if created2 else None, None if created2 else "not created")
             # reconstruct cleaned_dict structure
             cleaned_dict = {}
             for atom in df_clean.columns:

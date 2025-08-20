@@ -1,6 +1,6 @@
 """Pipeline Step 8: Launch final production GROMACS simulations.
 
-Thin orchestrator replacing legacy ``workflows.step8_start_final_sim``.
+Orchestrator (legacy workflows layer removed).
 """
 from __future__ import annotations
 

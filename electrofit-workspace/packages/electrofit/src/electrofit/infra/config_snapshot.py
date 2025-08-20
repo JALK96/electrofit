@@ -4,9 +4,6 @@ Public entry:
     compose_snapshot(...) -> Path|None
     CONFIG_ARG_HELP (Reuse in CLI help strings)
 
-Legacy import path (electrofit.workflows.snapshot) still provides a shim with
-DeprecationWarning for one release cycle.
-
 2025-08 (behaviour change): Reruns now *always* re-seed the snapshot from the
 highest-precedence available *source* (upstream > molecule_input > process_cfg >
 project_defaults) instead of preserving an existing local snapshot file as

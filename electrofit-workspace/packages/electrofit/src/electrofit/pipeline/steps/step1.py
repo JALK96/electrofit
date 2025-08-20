@@ -1,12 +1,11 @@
 """Pipeline Step 1: Initial molecule processing orchestration.
 
 Discovers run directories (``run_gau_create_gmx_in`` / future alias) under
-``process/`` and executes the initial structure preparation logic in each by
-invoking the legacy implementation (still hosted in
-``electrofit.workflows.run_process_initial_structure``) while layering config
-snapshots.
+``process/`` and executes the initial structure preparation logic directly via
+the domain layer (``electrofit.domain.prep.process_initial``) while layering
+config snapshots. Legacy workflow fallback removed.
 
-Responsibility: *only* orchestrate discovery, per-run logging setup, snapshot
+Responsibility: orchestrate discovery, per-run logging setup, snapshot
 composition, and delegate the actual processing.
 """
 from __future__ import annotations
@@ -17,7 +16,6 @@ import logging
 from pathlib import Path
 from contextlib import contextmanager
 
-from electrofit.workflows.run_process_initial_structure import main as _legacy_run_initial  # legacy fallback
 from electrofit.domain.prep.process_initial import InitialPrepConfig, process_initial
 from electrofit.config.loader import load_config, dump_config
 from electrofit.io.files import find_file_with_extension
@@ -72,12 +70,7 @@ def _run_one_dir(run_dir: str, project_root: str, override_cfg: str | None, mult
         extra_override=Path(override_cfg) if override_cfg else None,
     )
     with _pushd(run_dir):
-        # Feature flag: allow disabling new direct domain path for quick rollback
-        if os.environ.get("ELECTROFIT_STEP1_LEGACY") == "1":
-            logging.warning("[step1][legacy] using deprecated workflow runner")
-            _legacy_run_initial()
-            return
-        # --- New direct domain integration path ---
+    # Direct domain integration path
         run_dir_abs = os.getcwd()
         run_cfg_path = os.path.join(run_dir_abs, "electrofit.toml")
         cfg = load_config(project_root, config_path=run_cfg_path if os.path.isfile(run_cfg_path) else None)

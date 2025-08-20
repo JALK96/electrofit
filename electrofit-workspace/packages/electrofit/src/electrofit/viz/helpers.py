@@ -8,12 +8,7 @@ liegenden Funktionen. Importiere künftig direkt über ``electrofit.viz`` bzw.
 import os
 import re
 import logging
-try:  # Attempt to import matplotlib; allow tests without system libstdc++ match to proceed
-    import matplotlib.pyplot as plt
-except Exception:  # pragma: no cover
-    plt = None  # type: ignore
-    import logging as _logging
-    _logging.warning("[viz] matplotlib unavailable; plot functions will no-op or raise late if invoked")
+import matplotlib.pyplot as plt  # Hard dependency: removed lazy/skip logic
 import numpy as np
 
 from .curly_brace import draw_curly_brace
@@ -31,6 +26,9 @@ __all__ = [
 ELEMENT_RE = re.compile(r"^([A-Z][a-z]?)(\d*)")
 
 
+## Removed _import_matplotlib: we now require matplotlib at runtime. Any ImportError should surface.
+
+
 def _write_avg_charges(base_dir: str, filename: str, avg1, avg2=None) -> None:
     """Hilfsfunktion (Task 1) zum Schreiben der durchschnittlichen Ladungen."""
     path = os.path.join(base_dir, filename)
@@ -44,11 +42,19 @@ def _write_avg_charges(base_dir: str, filename: str, avg1, avg2=None) -> None:
 
 
 def plot_charges_by_atom(atoms_dict1, initial_charges_dict, base_dir, atoms_dict2=None):
-    """Plot charge distributions (Dataset 1 vs optional Dataset 2)."""
+    """Plot charge distributions (Dataset 1 vs optional Dataset 2) – best effort.
+
+    Fällt der Matplotlib Import, werden nur Durchschnittsladungen persistiert.
+    """
+    # Hard import already executed at module import; if unavailable this function will not run.
     atom_names = list(atoms_dict1.keys())
     charges_data1 = [atoms_dict1[atom]["charges"] for atom in atom_names]
     avg_charges1 = [atoms_dict1[atom]["average_charge"] for atom in atom_names]
-    init_charges = [initial_charges_dict[atom]["charges"] for atom in atom_names]
+    # Initial charges dict holds per-conformer charge lists; for the scatter we want a single scalar.
+    # Verwende den Mittelwert der initialen Serie (Legacy-Parität: einzelne Werte pro Atom).
+    def _mean(lst):
+        return sum(lst) / len(lst) if lst else 0.0
+    init_charges = [_mean(initial_charges_dict[atom]["charges"]) for atom in atom_names]
     avg_sum1 = sum(avg_charges1)
 
     if atoms_dict2 is not None:
@@ -124,15 +130,7 @@ def plot_charges_by_atom(atoms_dict1, initial_charges_dict, base_dir, atoms_dict
     if charges_data2 is not None:
         set_violin_colors(vp2, 0.2)
 
-    ax.scatter(
-        positions1,
-        init_charges,
-        color="black",
-        marker="o",
-        label="Initial Charge",
-        zorder=5,
-        s=5,
-    )
+    ax.scatter(positions1, init_charges, color="black", marker="o", label="Initial Charge", zorder=5, s=5)
     ax.set_xticks(positions)
     ax.set_xticklabels(atom_names, rotation=90)
     ax.set_xlabel("Atom Names")
@@ -365,8 +363,9 @@ def plot_charges_by_atom_sym(
     if H7_label:
         color_map[H7_label] = "dimgrey"
 
+    # Hard import path (no graceful degradation)
+
     # Plotting
-    # 1) Set global font sizes:
     fig, ax = plt.subplots(figsize=(8, 6))
 
     positions = np.arange(len(atom_names))
@@ -687,7 +686,8 @@ def plot_charges_by_symmetry(
     # Create atom-to-color mapping
     atom_to_color = create_atom_color_mapping(atom_names, symmetry_groups)
 
-    # Plotting
+    # Hard import path (no graceful degradation)
+
     fig, ax = plt.subplots(figsize=(8, 6))
 
     positions = np.arange(len(atom_names))

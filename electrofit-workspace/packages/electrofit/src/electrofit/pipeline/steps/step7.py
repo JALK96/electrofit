@@ -1,6 +1,6 @@
 """Pipeline Step 7: Prepare final GROMACS production simulation directories.
 
-Thin orchestrator replacing legacy ``workflows.step7_setup_final_sim``.
+Orchestrator (legacy workflows layer removed).
 """
 from __future__ import annotations
 

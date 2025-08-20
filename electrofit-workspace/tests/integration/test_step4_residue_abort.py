@@ -41,7 +41,7 @@ def test_step4_aborts_on_bad_residue(tmp_path):
     """))
 
     # Run step4 with sample=1
-    cmd = [sys.executable, "-m", "electrofit.workflows.step4_extract_conforms", "--project", str(proj_dir), "--sample", "1", "--clean", "--no-progress"]
+    cmd = [sys.executable, "-m", "electrofit.pipeline.steps.step4", "--project", str(proj_dir), "--sample", "1", "--clean", "--no-progress"]
     code, out = _run(cmd, cwd=proj_dir)
     # We expect step4 to complete overall (code 0)
     assert code == 0, out

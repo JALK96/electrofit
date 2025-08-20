@@ -1,6 +1,6 @@
 """Pipeline Step 5: Gaussian/RESP processing of extracted conformers.
 
-Thin orchestrator replacing legacy ``workflows.step5_process_conforms``.
+Orchestrator for conformer batch processing (legacy *workflows* package removed).
 
 Responsibilities:
   * Discover conformer directories.
@@ -83,7 +83,7 @@ def run_step5(
                             import subprocess, json  # noqa: F401
                             cmd = [
                                 os.environ.get("PYTHON", "python"),
-                                "-m","electrofit.workflows.step5_isolate_runner",  # legacy runner retained
+                                "-m","electrofit.pipeline.steps._step5_isolate_runner",  # pipeline isolate runner
                                 "--conf", str(conf_dir),
                                 "--project", str(project),
                             ]

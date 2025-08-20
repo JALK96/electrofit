@@ -9,6 +9,12 @@ from electrofit.viz.hist_manifest import load_hist_manifest, validate_hist_manif
 
 @pytest.mark.integration
 def test_step6_generates_hist_outputs(tmp_path: Path):
+    # Skip if matplotlib truly unavailable at import time (binary deps missing in CI container),
+    # since production code now requires it hard; this preserves test suite portability.
+    try:  # pragma: no cover
+        import matplotlib  # noqa: F401
+    except Exception:
+        pytest.skip("matplotlib not importable in test environment")
     """Run a minimal synthetic project through step6 with histogram+outlier flags
     and assert expected diagnostic artefacts are created.
 
@@ -50,26 +56,21 @@ def test_step6_generates_hist_outputs(tmp_path: Path):
     env = os.environ.copy()
     env["ELECTROFIT_PROJECT_PATH"] = str(project)
     # We call through CLI to exercise argparse & flag wiring
-    subprocess.run([
+    proc = subprocess.run([
         "python", "-m", "electrofit.cli.app", "step6", "--project", str(project),
         "--plot-histograms", "--remove-outlier", "--hist-combine-groups", "--hist-bins", "10"
-    ], check=True, env=env)
+    ], env=env, capture_output=True, text=True)
+    if proc.returncode != 0:
+        stderr = proc.stderr or ""
+        if "matplotlib" in stderr or "CXXABI" in stderr:
+            pytest.skip("matplotlib runtime import failed in subprocess: " + stderr.splitlines()[-1])
+        else:
+            raise AssertionError(f"step6 subprocess failed: rc={proc.returncode}\nSTDERR:\n{stderr}\nSTDOUT:\n{proc.stdout}")
 
     results_dir = project / "process" / "MOLX" / "results"
-    # Assert: base histograms (initial + after removal) must exist. In environments
-    # where matplotlib binary dependencies are missing we degrade gracefully by
-    # emitting a *.skip sentinel instead (see viz.histograms). In that case we
-    # skip this test rather than failing the suite on infrastructure details.
+    # Assert: base histograms (initial + after removal) must exist (hard dependency on matplotlib).
     hist_pdf = results_dir / "hist.pdf"
     hist_no_outlier_pdf = results_dir / "hist_no_outlier.pdf"
-    if not hist_pdf.is_file():
-        sentinel = Path(str(hist_pdf) + ".skip") if (Path(str(hist_pdf) + ".skip").is_file()) else hist_pdf.parent / (hist_pdf.name + ".skip")
-        if sentinel.is_file():
-            pytest.skip("matplotlib unavailable; histogram generation skipped")
-    if not hist_no_outlier_pdf.is_file():
-        sentinel2 = Path(str(hist_no_outlier_pdf) + ".skip") if (Path(str(hist_no_outlier_pdf) + ".skip").is_file()) else hist_no_outlier_pdf.parent / (hist_no_outlier_pdf.name + ".skip")
-        if sentinel2.is_file():
-            pytest.skip("matplotlib unavailable; histogram generation skipped (no_outlier)")
     assert hist_pdf.is_file(), "hist.pdf missing"
     assert hist_no_outlier_pdf.is_file(), "hist_no_outlier.pdf missing"
     # Manifest records which optional plots were expected/created

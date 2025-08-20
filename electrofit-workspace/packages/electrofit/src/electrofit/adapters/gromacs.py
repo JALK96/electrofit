@@ -7,14 +7,8 @@ from __future__ import annotations
 import logging
 import os
 import subprocess
-
-try:  # Lazy/optional matplotlib usage to avoid hard dependency during headless test collection
-	import matplotlib.pyplot as plt  # type: ignore
-except Exception:  # pragma: no cover
-	plt = None  # type: ignore
-	import logging as _logging
-	_logging.debug("[gromacs] matplotlib not available (ok for non-plot paths)")
-import pandas as pd  # type: ignore
+import matplotlib.pyplot as plt  
+import pandas as pd 
 from electrofit.cli.run_commands import run_command
 from electrofit.io.ff import (
     include_ff,

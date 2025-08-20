@@ -1,6 +1,6 @@
 """Pipeline Step 6: Aggregate RESP ensemble charges & prepare averaged MOL2.
 
-Thin orchestrator replacing legacy ``workflows.step6_extract_average_charges``.
+Orchestrator (legacy workflows layer removed).
 """
 from __future__ import annotations
 
@@ -8,7 +8,6 @@ import argparse
 import logging
 import os
 from pathlib import Path
-
 from electrofit.domain.aggregation.average_charges import process_molecule_average_charges
 from electrofit.infra.logging import setup_logging, reset_logging
 from electrofit.infra.config_snapshot import CONFIG_ARG_HELP

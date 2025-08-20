@@ -24,18 +24,10 @@ def _run_module(module: str, project: Path, config: Path | None, rest: list[str]
     os.environ["ELECTROFIT_PROJECT_PATH"] = str(project)
 
     prev_argv = sys.argv
+    # Only pass --project; keep additional arguments
+    sys.argv = [module, "--project", str(project)] + rest
     try:
-        # Only pass --project; DO NOT pass --config to legacy modules
-        sys.argv = [module, "--project", str(project)] + rest
-        if module in {"electrofit.workflows.step4_extract_conforms", "electrofit.pipeline.steps.step4"}:
-            # Import normally so multiprocessing can pickle top-level functions
-            mod = importlib.import_module(module)
-            if hasattr(mod, "main"):
-                mod.main()
-            else:
-                raise RuntimeError(f"Module {module} has no main()")
-        else:
-            runpy.run_module(module, run_name="__main__")
+        runpy.run_module(module, run_name="__main__")
     finally:
         sys.argv = prev_argv
 

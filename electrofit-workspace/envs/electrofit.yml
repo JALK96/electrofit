@@ -16,6 +16,8 @@ dependencies:
   - pandas
   - matplotlib
   - acpype
+  - libstdcxx-ng
+  - libgcc-ng
 
 
   # ---- CLI & workflow ----

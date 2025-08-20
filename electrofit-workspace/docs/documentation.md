@@ -3,6 +3,7 @@
 Diese Datei bietet einen vollständigen Überblick über Aufbau, Datenflüsse, wichtige Module/Funktionen sowie eine priorisierte Roadmap für die verbleibende REFAKTORIERUNG. Ziel: Vereinheitlichung der neuen Domänenschichten gegenüber Legacy-Workflows, Reduktion von Duplikation und Vorbereitung auf eine stabile öffentliche API.
 
 ---
+ 
 ## 1. Zweck & Gesamtprozess
 
 Elektrostatische Ladungsableitung (Gaussian/ESP/RESP oder BCC) und GROMACS‑Simulationsvorbereitung in reproduzierbaren, schrittweisen Pipeline‑Stages (Step0–Step8) mit konfigurationsgetriebenen „Snapshots“ (`electrofit.toml`) pro Arbeitsverzeichnis.
@@ -37,7 +38,7 @@ Hauptpipeline (vereinheitlicht über `electrofit pipeline steps`):
 | viz | Diagnostische Plots + Manifestvalidierung | Seiteneffekt (Dateiannahmen) | `viz/histograms.py`, `viz/hist_manifest.py` |
 | pipeline.steps | Dünne Orchestratoren (CLI-Fokus) | Imperativ | `pipeline/steps/step*.py` |
 | cli | Legacy / Kommandos / Flags | Imperativ | `cli/*` |
-| workflows (legacy) | Altpfad vor Domänenextraktion | zu deprecaten | `workflows/*` |
+| workflows (removed) | Ehemalige Legacy-Orchestrierung | entfernt | (ImportError) |
 
 Architektur-Ziel: Domain ↔ Adapter Schnitt klar; IO-Helfer modularisieren (kein „God Module“). Pipeline‑Steps bleiben dünn und rufen Domain/APIs auf.
 
@@ -102,9 +103,9 @@ Modularisiert (Aufspaltung des früheren God-Moduls `files.py`).
 
 - Schritt-orientierte schlanke Orchestratoren (`step0`…`step8`). Halten sich an Muster: Verzeichnisse entdecken → Snapshot layern → Domain-Funktion aufrufen → Konsolenstatus.
 
-### cli / workflows (Legacy)
+### cli (aktuell)
 
-- Enthalten ältere direkte Pfade (z.B. `workflows.step5_isolate_runner`). Ziel: Ersetzen durch Domain + Pipeline; CLI nur als dünne Shell.
+CLI bleibt dünne Shell um `pipeline.steps`. Legacy `workflows.*` wurde vollständig entfernt (harte Migration; ImportError mit Hinweis auf neue Pfade).
 
 ---
 
@@ -133,19 +134,18 @@ Modularisiert (Aufspaltung des früheren God-Moduls `files.py`).
 
 ### Phase 2 (Strukturelle Konsolidierung)
 
-1. Migration aller verbleibenden `workflows/*` Nutzer auf `pipeline.steps` + Domain. Markiere Workflows als `DeprecationWarning`; danach Entfernen.
-2. Auslagerung Plot-Erzeugung aus `average_charges.process_molecule_average_charges` in Service (`viz.service.histograms.generate(...)`), Domain-Funktion gibt nur Sammel-Objekte zurück.
-3. Zerlegung `adapters.gromacs.set_up_production` in kleinere klare Schritte (Box Anlegung, Solvatation, Ionen, Minimierung, Equilibration, Produktion). Einführung eines Kommandosequenz-Descriptors (Liste von `GmxStage` dataclasses) zur besseren Testbarkeit (Trockenlauf).
+1. Auslagerung Plot-Erzeugung aus `average_charges.process_molecule_average_charges` in Service (`viz.service.histograms.generate(...)`), Domain-Funktion gibt nur Sammel-Objekte zurück.
+2. Zerlegung `adapters.gromacs.set_up_production` in kleinere klare Schritte (Box Anlegung, Solvatation, Ionen, Minimierung, Equilibration, Produktion). Einführung eines Kommandosequenz-Descriptors (Liste von `GmxStage` dataclasses) zur besseren Testbarkeit (Trockenlauf).
 
 ### Phase 3 (API Verfestigung & Erweiterbarkeit)
 
-1. Einheitliches Fehler & Logging Model: Exceptions mit Kontext (Custom `ElectrofitError` Hierarchie) + strukturiertes Logging (JSON Linie optional per Flag).
-2. Public API Oberfläche definieren (`electrofit.api`): stabile Funktionen für Skriptintegration (z.B. `run_step5(project: Path, **opts)`).
-3. Konfigurationsschema validieren (z.B. optionale pydantic-Schicht oder lightweight Validator) vor Snapshot Persistenz; klare Fehlermeldungen.
+1. Einheitliches Fehler & Logging Model: Exceptions mit Kontext (`ElectrofitError` Hierarchie) + optional strukturiertes JSON Logging.
+2. Public API Oberfläche (`electrofit.api`): stabile Funktionen für Skriptintegration (z.B. `run_step5(project: Path, **opts)`).
+3. Konfigurationsschema validieren (lightweight Validator) vor Snapshot Persistenz; klare Fehlermeldungen.
 
 ### Phase 4 (Qualität & Zukunftssicherheit)
 
-1. Parallelisierung vereinheitlichen: Zentraler Executor/Worker Abstraktionslayer (Progress / Error Aggregation) anstatt ad-hoc `ProcessPoolExecutor`.
+1. Parallelisierung vereinheitlichen: Zentraler Executor/Worker Layer (Progress / Error Aggregation) statt ad-hoc `ProcessPoolExecutor`.
 2. Caching-Strategie standardisieren (Gaussian Cache, RESP Intermediates) → einheitliches `cache/` Layout + Prüfsummen.
 3. Optional: Plugin-System (Entry Points) für alternative Ladungs-Methoden (AM1-BCC Varianten, XTB, etc.).
 
@@ -153,12 +153,12 @@ Modularisiert (Aufspaltung des früheren God-Moduls `files.py`).
 
 ## 7. Migrations-/Deprecation-Strategie
 
-| Schritt | Maßnahme | Zeitfenster |
-|---------|----------|-------------|
-| A | `workflows/*` mit Warnung versehen | sofort (Phase 1) |
-| B | Nach Abschluss Phase 2 Entfernung Workflows | nach 2 Minor Releases |
-| C | Dokumentierte Public API `electrofit.api` | Ende Phase 3 |
-| D | Versionierung SemVer strikt anwenden | ab API Definition |
+| Schritt | Maßnahme | Status |
+|---------|----------|--------|
+| A | Workflows entfernt (ImportError) | erledigt |
+| B | Öffentliche API definieren (`electrofit.api`) | offen |
+| C | Konsistentes Fehlermodell & Validator | geplant |
+| D | SemVer strikt ab API Freeze | geplant |
 
 ---
 
@@ -204,9 +204,9 @@ Die aktuelle Struktur ist funktional und modularisiert viele ehemals monolithisc
 
 1. (PR 1) Aufspaltung `io/files.py` (mechanisch) + Update Imports + Tests.
 2. (PR 2) Adapter-Subprozess-Wrapper + Entfernen direkter `cli.run_commands` Aufrufe aus Domain.
-3. (PR 3) Deprecation Warnings für `workflows/*` + README Hinweis.
-4. (PR 4) `average_charges` entkoppeln: Plot-Service auslagern; Funktion gibt strukturiertes `AggregationResult` zurück.
-5. (PR 5) Public API Draft + Stabilitäts-Hinweis.
+3. (PR 3) `average_charges` entkoppeln: Plot-Service auslagern; Funktion gibt strukturiertes `AggregationResult` zurück.
+4. (PR 4) Public API Draft + Stabilitäts-Hinweis (Einführung `electrofit.api`).
+5. (PR 5) Fehler-/Logging-Hierarchie + Validator Einbindung.
 
 ---
 

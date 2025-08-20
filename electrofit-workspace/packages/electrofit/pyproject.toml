@@ -6,19 +6,15 @@ build-backend = "hatchling.build"
 name = "electrofit"
 version = "0.1.0"
 requires-python = ">=3.12,<3.13"
+
+# Keep only *pure Python* deps not covered in conda env
 dependencies = [
-  "app",
-  "matplotlib",
-  "mdtraj",
-  "numpy",
-  "openbabel-wheel",
+  "app",          
+  "typer",        # CLI
+  "tqdm",         # progress bars
+  "tomli_w",      # writing TOML
+  'tomli>=2.0.1; python_version < "3.11"',  # backport for old py
   "openmol",
-  "pandas",
-  "typer",
-  'tomli>=2.0.1; python_version < "3.11"',
-  "acpype",
-  "tqdm",
-  "tomli_w",
 ]
 
 [project.scripts]

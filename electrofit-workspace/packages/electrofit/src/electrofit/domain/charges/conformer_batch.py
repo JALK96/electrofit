@@ -1,11 +1,7 @@
 """Domain helpers for batch processing of conformer directories (Step5).
 
-This module extracts the discovery + per‑conformer processing logic from the
-previous ``workflows.step5_*`` modules so the new orchestrator
-``pipeline.steps.step5`` can remain thin. The legacy public symbol name
-``process_one`` is intentionally preserved via a shim in
-``workflows.step5_worker`` for backwards compatibility with any external
-scripts/tests that still import it.
+Contains discovery + per‑conformer processing logic so ``pipeline.steps.step5`` stays thin.
+Legacy workflows package has been removed; no shims retained here.
 
 Responsibilities:
   * Discover conformer directories (heuristic: directories containing a PDB).
