@@ -4,7 +4,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field, is_dataclass, fields
 from pathlib import Path
 import typing as t
-import os
 
 try:
     import tomllib  # py>=3.11

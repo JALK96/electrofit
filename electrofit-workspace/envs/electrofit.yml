@@ -19,6 +19,7 @@ dependencies:
   - libstdcxx-ng
   - libgcc-ng
   - gromacs
+  - pytest
 
 
   # ---- CLI & workflow ----
@@ -26,7 +27,7 @@ dependencies:
   - snakemake-minimal>=8    # Snakemake engine (lighter than full 'snakemake')
   - mamba                   # speeds up any conda actions Snakemake may do
 
-  # (optional but handy if you rely on them in scripts)
+  # (future, not yet used in electrofit)
   # - rsync
   # - openssh
 

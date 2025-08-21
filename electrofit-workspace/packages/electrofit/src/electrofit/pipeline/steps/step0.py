@@ -44,7 +44,8 @@ def main():  # pragma: no cover (CLI orchestration)
         nested = dst / mol / "run_gau_create_gmx_in"
         lock_path = dst / f".{mol}.step0.lock"
         # Einfacher Lock um gleichzeitiges Schreiben in dasselbe Molekül zu verhindern.
-        import errno, time
+        import errno
+        import time
         fd = None
         try:
             try:

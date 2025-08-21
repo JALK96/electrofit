@@ -9,7 +9,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Optional, Any
+from typing import Any
 
 
 from electrofit.io.symmetry import load_symmetry_groups
@@ -79,9 +79,7 @@ def main(argv: list[str] | None = None) -> int:
             pdf_path = Path(base_dir) / name
             if pdf_path.exists():
                 try:
-                    import matplotlib.pyplot as plt
                     from matplotlib.backends.backend_agg import FigureCanvasAgg  # noqa: F401 (ensures backend)
-                    import pathlib
                     # Re-load figure is non-trivial; simplest is to advise user to regenerate with format directly.
                     # Placeholder: could integrate saving alternate format in viz helpers.
                 except Exception:

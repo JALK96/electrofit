@@ -38,7 +38,6 @@ It is idempotent and safe to call multiple times.
 from __future__ import annotations
 
 import atexit
-import logging
 import signal
 import sys
 import threading

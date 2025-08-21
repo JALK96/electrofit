@@ -12,7 +12,6 @@ from electrofit.domain.aggregation.average_charges import process_molecule_avera
 from electrofit.infra.logging import setup_logging, reset_logging, log_run_header, enable_header_dedup
 from electrofit.infra.config_snapshot import CONFIG_ARG_HELP
 from electrofit.pipeline.molecule_filter import filter_paths_for_molecule
-from electrofit.config.loader import load_config
 
 __all__ = ["main", "run_step6"]
 
@@ -65,7 +64,8 @@ def run_step6(
     summary = f"[step6] Completed {done}/{len(mol_dirs)} molecules."
     print(summary)
     try:
-        reset_logging(); setup_logging(str(project / "step.log"), also_console=True, suppress_initial_message=True)
+        reset_logging()
+        setup_logging(str(project / "step.log"), also_console=True, suppress_initial_message=True)
         logging.info(summary)
     except Exception:
         pass
@@ -88,7 +88,8 @@ def main(argv: list[str] | None = None):  # pragma: no cover
     # Global Header vor Ausführung (nur einmal)
     try:
         enable_header_dedup(True)
-        setup_logging(str(project_root / "step.log"), also_console=True, suppress_initial_message=True); log_run_header("step6")
+        setup_logging(str(project_root / "step.log"), also_console=True, suppress_initial_message=True)
+        log_run_header("step6")
     except Exception:
         pass
     rc = run_step6(

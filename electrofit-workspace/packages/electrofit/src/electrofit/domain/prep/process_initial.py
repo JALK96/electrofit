@@ -180,9 +180,13 @@ def process_initial(cfg: InitialPrepConfig, scratch_dir: str, original_dir: str,
             )
         # choose possibly modified file
         respin1_mod = os.path.join(scratch_dir, "ANTECHAMBER_RESP1_MOD.IN") if cfg.adjust_sym else respin1
-        resp_output1 = f"{cfg.molecule_name}-resp1.out"; resp_pch1 = f"{cfg.molecule_name}-resp1.pch"; resp_chg1 = f"{cfg.molecule_name}-resp1.chg"
+        resp_output1 = f"{cfg.molecule_name}-resp1.out"
+        resp_pch1 = f"{cfg.molecule_name}-resp1.pch"
+        resp_chg1 = f"{cfg.molecule_name}-resp1.chg"
         run_resp(respin1_mod, esp_file, resp_output1, resp_pch1, resp_chg1, scratch_dir)
-        resp_output2 = f"{cfg.molecule_name}-resp2.out"; resp_pch2 = f"{cfg.molecule_name}-resp2.pch"; resp_chg2 = f"{cfg.molecule_name}-resp2.chg"
+        resp_output2 = f"{cfg.molecule_name}-resp2.out"
+        resp_pch2 = f"{cfg.molecule_name}-resp2.pch"
+        resp_chg2 = f"{cfg.molecule_name}-resp2.chg"
         run_resp(respin2, esp_file, resp_output2, resp_pch2, resp_chg2, scratch_dir, resp_chg1)
         mol2_resp = f"{cfg.molecule_name}_resp.mol2"
         run_python(update_mol2_charges, cfg.mol2_file, resp_chg2, mol2_resp, cwd=scratch_dir)
@@ -230,13 +234,17 @@ def _expose_acpype_outputs(mol2_path: str, scratch_dir: str) -> dict[str, object
         copy_needed = False
         key = None
         if fname.endswith("_GMX.gro"):
-            key = 'gro'; copy_needed = True
+            key = 'gro'
+            copy_needed = True
         elif fname.endswith("_GMX.itp"):
-            key = 'itp'; copy_needed = True
+            key = 'itp'
+            copy_needed = True
         elif fname.endswith("_GMX.top"):
-            key = 'top'; copy_needed = True
+            key = 'top'
+            copy_needed = True
         elif fname.startswith("posre_") and fname.endswith(".itp"):
-            key = 'posre'; copy_needed = True
+            key = 'posre'
+            copy_needed = True
         if not copy_needed:
             continue
         src = os.path.join(acpype_dir, fname)

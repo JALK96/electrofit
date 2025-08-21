@@ -11,7 +11,6 @@ from pathlib import Path
 import logging
 
 from electrofit.domain.final_sim import iter_final_sim_dirs, launch_final_sim_run
-from electrofit.config.loader import load_config
 from electrofit.infra.logging import (
     setup_logging,
     reset_logging,

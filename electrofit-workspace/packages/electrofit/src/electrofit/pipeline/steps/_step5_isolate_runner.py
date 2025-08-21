@@ -16,7 +16,9 @@ Exit code: 0 on success, 1 on failure (mirrors ok flag).
 """
 from __future__ import annotations
 
-import argparse, json, sys
+import argparse
+import json
+import sys
 from pathlib import Path
 
 from electrofit.domain.charges.conformer_batch import process_conformer_dir

@@ -5,7 +5,6 @@ Wraps `electrofit.domain.symmetry.write_symmetry`.
 from __future__ import annotations
 import argparse
 import sys
-from pathlib import Path
 from electrofit.domain.symmetry import write_symmetry
 
 

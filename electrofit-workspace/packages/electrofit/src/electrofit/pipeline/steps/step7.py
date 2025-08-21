@@ -14,7 +14,6 @@ from electrofit.domain.final_sim import prepare_final_sim_directory
 from electrofit.infra.logging import setup_logging, reset_logging, log_run_header, enable_header_dedup
 from electrofit.infra.config_snapshot import CONFIG_ARG_HELP
 from electrofit.pipeline.molecule_filter import filter_paths_for_molecule
-from electrofit.config.loader import load_config
 
 __all__ = ["main", "run_step7"]
 
@@ -49,7 +48,8 @@ def run_step7(project: Path, override_cfg: Path | None, only_molecule: str | Non
     summary = f"[step7] Prepared final sim dirs for {done}/{len(mol_dirs)} molecules."
     print(summary)
     try:
-        reset_logging(); setup_logging(str(project / "step.log"), also_console=True, suppress_initial_message=True)
+        reset_logging()
+        setup_logging(str(project / "step.log"), also_console=True, suppress_initial_message=True)
         logging.info(summary)
     except Exception:
         pass
@@ -67,7 +67,8 @@ def main(argv: list[str] | None = None):  # pragma: no cover
     # Global Header vor Ausführung
     try:
         enable_header_dedup(True)
-        setup_logging(str(project_root / "step.log"), also_console=True, suppress_initial_message=True); log_run_header("step7")
+        setup_logging(str(project_root / "step.log"), also_console=True, suppress_initial_message=True)
+        log_run_header("step7")
     except Exception:
         pass
     rc = run_step7(project_root, override_cfg, getattr(args, 'molecule', None))

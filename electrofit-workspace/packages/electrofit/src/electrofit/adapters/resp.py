@@ -11,8 +11,8 @@ Minimal surface (initial):
 Later: unify with prep vs conformer pipelines, expose structured results / timings.
 """
 from __future__ import annotations
-import os, logging, time
-from dataclasses import dataclass
+import os
+import time
 from .results import RespStageResult
 
 __all__ = [
@@ -59,9 +59,13 @@ def apply_symmetry(scratch_dir: str, adjust_sym: bool, ignore_sym: bool) -> str:
 def run_two_stage(name: str, esp_file: str, resp1: str, resp2: str, cwd: str) -> str:
 	from electrofit.cli.run_commands import run_resp, run_python
 	from electrofit.io.mol2_ops import update_mol2_charges
-	resp_output1 = f"{name}-resp1.out"; resp_pch1 = f"{name}-resp1.pch"; resp_chg1 = f"{name}-resp1.chg"
+	resp_output1 = f"{name}-resp1.out"
+	resp_pch1 = f"{name}-resp1.pch"
+	resp_chg1 = f"{name}-resp1.chg"
 	run_resp(resp1, esp_file, resp_output1, resp_pch1, resp_chg1, cwd)
-	resp_output2 = f"{name}-resp2.out"; resp_pch2 = f"{name}-resp2.pch"; resp_chg2 = f"{name}-resp2.chg"
+	resp_output2 = f"{name}-resp2.out"
+	resp_pch2 = f"{name}-resp2.pch"
+	resp_chg2 = f"{name}-resp2.chg"
 	run_resp(resp2, esp_file, resp_output2, resp_pch2, resp_chg2, cwd, resp_chg1)
 	mol2_resp = f"{name}_resp.mol2"
 	run_python(update_mol2_charges, f"{name}.mol2", resp_chg2, mol2_resp, cwd=cwd)

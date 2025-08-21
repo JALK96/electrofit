@@ -11,7 +11,7 @@ import fnmatch
 import json
 import logging
 import os
-from typing import Tuple, Dict, List
+from typing import Tuple, Dict
 
 from electrofit.io.mol2_ops import update_mol2_charges, parse_charges_from_mol2
 from electrofit.io.symmetry import load_symmetry_groups

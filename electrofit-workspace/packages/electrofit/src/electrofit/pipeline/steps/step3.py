@@ -5,7 +5,10 @@ loads per-run config, and invokes the GROMACS adapter to generate production inp
 """
 
 from __future__ import annotations
-import argparse, json, os, logging
+import argparse
+import json
+import os
+import logging
 from pathlib import Path
 from electrofit.config.loader import load_config, dump_config
 from electrofit.adapters.gromacs import set_up_production

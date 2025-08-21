@@ -67,7 +67,11 @@ def _init_advanced_diagnostics():  # pragma: no cover - diagnostic path
         _ADV_DIAG_INITIALISED = True
         return
     try:
-        import sys as _sys_d, faulthandler as _fh_d, signal as _sig_d, atexit as _ax_d, gc as _gc_d
+        import sys as _sys_d
+        import faulthandler as _fh_d
+        import signal as _sig_d
+        import atexit as _ax_d
+        import gc as _gc_d
         try:
             _fh_d.enable(file=_sys_d.stderr)
         except Exception:
@@ -126,7 +130,8 @@ def process_conformer_dir(
         os.chdir(conf_dir)
         _init_advanced_diagnostics()
         # Monkeypatch sys/os exit for diagnostics (kept verbatim)
-        import sys as _sys, os as _os  # local
+        import sys as _sys
+        import os as _os  # local
         _orig_sys_exit = _sys.exit
         _orig_os_exit = _os._exit
 
@@ -233,7 +238,8 @@ def process_conformer_dir(
         return (rel_str, False, str(e))
     finally:
         try:  # restore monkeypatches
-            import sys as _sys, os as _os
+            import sys as _sys
+            import os as _os
             if '_orig_sys_exit' in locals():
                 _sys.exit = _orig_sys_exit  # type: ignore
             if '_orig_os_exit' in locals():

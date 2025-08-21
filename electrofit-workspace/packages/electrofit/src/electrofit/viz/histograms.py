@@ -17,7 +17,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
-import logging as _logging
 
 import numpy as np
 import matplotlib.pyplot as plt  # Hard dependency – removal of .skip sentinel logic

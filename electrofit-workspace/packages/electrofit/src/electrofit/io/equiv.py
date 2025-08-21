@@ -1,4 +1,5 @@
 import json
+import sys
 
 def build_connections(atoms, bonds):
     """

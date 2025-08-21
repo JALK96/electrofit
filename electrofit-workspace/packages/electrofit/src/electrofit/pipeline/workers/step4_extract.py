@@ -17,10 +17,7 @@ from electrofit.infra.step_logging import log_relevant_config
 from electrofit.infra.decisions import build_sampling_decision
 from electrofit.domain.sampling import select_frame_indices, prepare_conformer_directory
 
-try:  # Python 3.11+
-    import tomllib as _toml  # type: ignore
-except ModuleNotFoundError:  # pragma: no cover
-    import tomli as _toml  # type: ignore
+# (Removed optional tomllib import; unused in current logic.)
 
 
 def _extract_for_molecule(

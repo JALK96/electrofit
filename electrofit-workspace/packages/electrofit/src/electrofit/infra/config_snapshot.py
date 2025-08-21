@@ -68,10 +68,14 @@ def compose_snapshot(
         project_defaults
     """
     sources: list[Path] = []
-    if upstream: sources.append(upstream)
-    if molecule_input: sources.append(molecule_input)
-    if process_cfg: sources.append(process_cfg)
-    if project_defaults: sources.append(project_defaults)
+    if upstream:
+        sources.append(upstream)
+    if molecule_input:
+        sources.append(molecule_input)
+    if process_cfg:
+        sources.append(process_cfg)
+    if project_defaults:
+        sources.append(project_defaults)
     snap = _seed_snapshot(run_dir, sources)
     if not snap or not snap.is_file():
         return None

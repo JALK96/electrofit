@@ -25,7 +25,8 @@ RENAMES = {
     "helper.neqFEP": "electrofit_fep.core.neqfep",
     "execution.update_mol2": "electrofit.io.mol2",
     "execution.edit_resp": "electrofit.io.resp",
-    "execution.write_symmetry": "electrofit.core.symmetry",
+    # symmetry shim removed; point directly to domain implementation
+    "execution.write_symmetry": "electrofit.domain.symmetry.write_symmetry",
     "execution.create_equiv_groups": "electrofit.domain.symmetry.equiv_groups",
     "execution.run_eqFEP": "electrofit_fep.workflows.run_eqfep",
     "execution.run_neqFEP": "electrofit_fep.workflows.run_neqfep",
@@ -53,7 +54,8 @@ RENAMES = {
     "electrofit.helper.neqFEP": "electrofit_fep.core.neqfep",
     "electrofit.execution.update_mol2": "electrofit.io.mol2",
     "electrofit.execution.edit_resp": "electrofit.io.resp",
-    "electrofit.execution.write_symmetry": "electrofit.core.symmetry",
+    # symmetry shim removed; point directly to domain implementation
+    "electrofit.execution.write_symmetry": "electrofit.domain.symmetry.write_symmetry",
     "electrofit.execution.create_equiv_groups": "electrofit.domain.symmetry.equiv_groups",
     "electrofit.execution.run_eqFEP": "electrofit_fep.workflows.run_eqfep",
     "electrofit.execution.run_neqFEP": "electrofit_fep.workflows.run_neqfep",

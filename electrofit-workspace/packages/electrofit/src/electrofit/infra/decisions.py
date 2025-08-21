@@ -75,14 +75,19 @@ class DecisionModel:
                         for k, v in rows:
                             key = (k[:45] + '...') if len(k) > 48 else k
                             logging.info(f"[{step}][decisions] {key.ljust(k_width)} : {v}")
-                    emit_header('base'); emit_rows(base_section)
-                    emit_header('symmetry'); emit_rows(sym_section)
+                    emit_header('base')
+                    emit_rows(base_section)
+                    emit_header('symmetry')
+                    emit_rows(sym_section)
                     if extra_section:
-                        emit_header('extra'); emit_rows(extra_section)
+                        emit_header('extra')
+                        emit_rows(extra_section)
                     if notes_section:
-                        emit_header('notes'); emit_rows(notes_section)
+                        emit_header('notes')
+                        emit_rows(notes_section)
                     if warnings_section:
-                        emit_header('warnings'); emit_rows(warnings_section)
+                        emit_header('warnings')
+                        emit_rows(warnings_section)
             except Exception:
                 logging.debug(f"[{step}][decisions] pretty table logging failed", exc_info=True)
         for w in self.warnings:

@@ -6,7 +6,12 @@ for Step 3. Pure orchestration: filesystem scanning, snapshot composition,
 logging setup per molecule.
 """
 from __future__ import annotations
-import argparse, fnmatch, os, shutil, json, logging
+import argparse
+import fnmatch
+import os
+import shutil
+import json
+import logging
 from pathlib import Path
 from electrofit.infra.config_snapshot import compose_snapshot, CONFIG_ARG_HELP
 from electrofit.infra.logging import setup_logging, log_run_header, reset_logging, enable_header_dedup
@@ -22,7 +27,8 @@ def _write_manifest(dest_dir: Path, files: dict[str,str], mdp_subdir: str = "MDP
     if gro:
         base = os.path.splitext(os.path.basename(gro))[0]
         molecule = base[:-4] if base.endswith("_GMX") else base
-    def _bn(v): return os.path.basename(v) if isinstance(v,str) and v else ""
+    def _bn(v):
+        return os.path.basename(v) if isinstance(v, str) and v else ""
     manifest = {
         "molecule": molecule or "unknown",
         "gro": _bn(files.get("gro")),
@@ -65,7 +71,9 @@ def main():  # pragma: no cover
         dest_dir = mol_dir / "run_gmx_simulation"
         dest_dir.mkdir(exist_ok=True)
         logging.info("[step2] Preparing %s -> %s", mol_dir.name, dest_dir)
-        reset_logging(); setup_logging(str(dest_dir / "process.log"), also_console=False); log_run_header("step2")
+        reset_logging()
+        setup_logging(str(dest_dir / "process.log"), also_console=False)
+        log_run_header("step2")
         upstream_snap = run_gau_dir / "electrofit.toml"
         molecule_input = project_path / "data" / "input" / mol_dir.name / "electrofit.toml"
         process_cfg = mol_dir / "electrofit.toml"
@@ -75,9 +83,12 @@ def main():  # pragma: no cover
                          project_defaults=project_defaults, extra_override=Path(args.config) if args.config else None)
         acpype_dir = None
         for sub in run_gau_dir.iterdir():
-            if sub.is_dir() and sub.name.endswith(".acpype"): acpype_dir = sub; break
+            if sub.is_dir() and sub.name.endswith(".acpype"):
+                acpype_dir = sub
+                break
         if not acpype_dir:
-            logging.warning("[step2][skip] %s: no .acpype dir", mol_dir.name); continue
+            logging.warning("[step2][skip] %s: no .acpype dir", mol_dir.name)
+            continue
         for pattern in _FILE_PATTERNS:
             for fn in os.listdir(acpype_dir):
                 if fnmatch.fnmatch(fn, pattern):
@@ -85,36 +96,50 @@ def main():  # pragma: no cover
                     logging.info("[step2] Copied %s -> %s", fn, dest_dir)
         md_dest = dest_dir / "MDP"
         if mdp_source_dir.is_dir():
-            if md_dest.exists(): shutil.rmtree(md_dest)
+            if md_dest.exists():
+                shutil.rmtree(md_dest)
             shutil.copytree(mdp_source_dir, md_dest)
             logging.info("[step2] Copied MDP -> %s", md_dest)
         else:
             logging.warning("[step2][warn] no MDP source %s", mdp_source_dir)
-        selected = {"gro":None,"itp":None,"top":None,"posres":None}
+        selected = {"gro": None, "itp": None, "top": None, "posres": None}
         for name in os.listdir(dest_dir):
-            if name.endswith("GMX.gro"): selected["gro"] = str(dest_dir / name)
-            elif name.endswith("GMX.itp") and not name.startswith("posre_"): selected["itp"] = str(dest_dir / name)
-            elif name.endswith(".top"): selected["top"] = str(dest_dir / name)
-            elif name.startswith("posre_") and name.endswith(".itp"): selected["posres"] = str(dest_dir / name)
+            if name.endswith("GMX.gro"):
+                selected["gro"] = str(dest_dir / name)
+            elif name.endswith("GMX.itp") and not name.startswith("posre_"):
+                selected["itp"] = str(dest_dir / name)
+            elif name.endswith(".top"):
+                selected["top"] = str(dest_dir / name)
+            elif name.startswith("posre_") and name.endswith(".itp"):
+                selected["posres"] = str(dest_dir / name)
         if not selected["gro"]:
             for name in os.listdir(dest_dir):
-                if name.endswith(".gro"): selected["gro"] = str(dest_dir / name); break
+                if name.endswith(".gro"):
+                    selected["gro"] = str(dest_dir / name)
+                    break
         if not selected["itp"]:
             for name in os.listdir(dest_dir):
-                if name.endswith(".itp") and not name.startswith("posre_"): selected["itp"] = str(dest_dir / name); break
+                if name.endswith(".itp") and not name.startswith("posre_"):
+                    selected["itp"] = str(dest_dir / name)
+                    break
         if not selected["top"]:
             for name in os.listdir(dest_dir):
-                if name.endswith(".top"): selected["top"] = str(dest_dir / name); break
+                if name.endswith(".top"):
+                    selected["top"] = str(dest_dir / name)
+                    break
         if not selected["posres"]:
             for name in os.listdir(dest_dir):
-                if name.startswith("posre_") and name.endswith(".itp"): selected["posres"] = str(dest_dir / name); break
+                if name.startswith("posre_") and name.endswith(".itp"):
+                    selected["posres"] = str(dest_dir / name)
+                    break
         _write_manifest(dest_dir, selected)
         prepared += 1
         reset_logging()
     summary = f"[step2] Prepared simulation dirs for {prepared}/{len(mol_dirs)} molecules."
     print(summary)
     try:
-        reset_logging(); setup_logging(str(project_path / "step.log"), also_console=args.log_console, suppress_initial_message=True)
+        reset_logging()
+        setup_logging(str(project_path / "step.log"), also_console=args.log_console, suppress_initial_message=True)
         logging.info(summary)
     except Exception:
         pass

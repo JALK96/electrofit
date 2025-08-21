@@ -63,8 +63,7 @@ def validate_hist_manifest(manifest: Dict[str, Any]) -> None:
         for bf in REQUIRED_BOOLEAN_FIELDS:
             if not isinstance(entry[bf], bool):
                 raise HistManifestError(f"Entry '{key}.{bf}' must be bool, got {type(entry[bf]).__name__}")
-        extraneous = set(entry.keys()) - REQUIRED_BOOLEAN_FIELDS - OPTIONAL_FIELDS
-        # extraneous keys allowed silently; they may appear in future evolution
+    # extraneous keys allowed silently; they may appear in future evolution
         # Validate types of optional fields if present
         if "path" in entry and entry["path"] is not None and not isinstance(entry["path"], str):
             raise HistManifestError(f"Entry '{key}.path' must be string or null")

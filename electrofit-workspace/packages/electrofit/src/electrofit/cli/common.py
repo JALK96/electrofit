@@ -1,6 +1,7 @@
 """Common CLI helpers for electrofit steps."""
 from __future__ import annotations
-import argparse, os
+import argparse
+import os
 
 def add_standard_flags(ap: argparse.ArgumentParser, project: bool = True, config: bool = True, log_console: bool = True):
     if project:

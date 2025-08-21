@@ -135,7 +135,10 @@ def _run_one_dir(run_dir: str, project_root: str, override_cfg: str | None, mult
             def _rel(p: str | None):
                 return os.path.basename(p) if p else None
             # After finalize, artifacts were copied back (potentially with *_copyN). Re-scan to pick actual names.
-            gro_name = None; itp_name = None; top_name = None; posre_names: list[str] = []
+            gro_name = None
+            itp_name = None
+            top_name = None
+            posre_names: list[str] = []
             for fname in os.listdir(run_dir_abs):
                 if fname.endswith('_GMX.gro'):
                     gro_name = fname
@@ -202,7 +205,8 @@ def main():  # pragma: no cover
             ran += 1
         # Zusammenfassung im globalen Log festhalten
         try:
-            reset_logging(); setup_logging(str(Path(project_root)/"step.log"), also_console=args.log_console, suppress_initial_message=True)
+            reset_logging()
+            setup_logging(str(Path(project_root) / "step.log"), also_console=args.log_console, suppress_initial_message=True)
             logging.info("[step1] Completed %d run directory(ies).", ran)
         except Exception:
             pass
@@ -210,7 +214,8 @@ def main():  # pragma: no cover
     run_dir = os.getcwd()
     _run_one_dir(run_dir, project_root, args.config, multi_mol)
     try:
-        reset_logging(); setup_logging(str(Path(project_root)/"step.log"), also_console=args.log_console, suppress_initial_message=True)
+        reset_logging()
+        setup_logging(str(Path(project_root) / "step.log"), also_console=args.log_console, suppress_initial_message=True)
         logging.info("[step1] Completed 1 run directory (fallback current working directory).")
     except Exception:
         pass

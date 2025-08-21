@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import logging
 import os
-import subprocess
 import matplotlib.pyplot as plt  
 import pandas as pd 
 from electrofit.cli.run_commands import run_command

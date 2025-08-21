@@ -29,7 +29,6 @@ from electrofit.domain.charges.conformer_batch import (
 from electrofit.infra.config_snapshot import CONFIG_ARG_HELP
 from electrofit.infra.logging import setup_logging, reset_logging, log_run_header, enable_header_dedup
 from electrofit.pipeline.molecule_filter import molecule_component
-from electrofit.config.loader import load_config
 
 __all__ = ["main", "run_step5"]
 
@@ -89,7 +88,8 @@ def run_step5(
                         rel = conf_dir.relative_to(project)
                         print(f"[step5][debug-call] starting process_one({rel})", flush=True)
                         if isolate_conformer:
-                            import subprocess, json  # noqa: F401
+                            import subprocess
+                            import json  # noqa: F401
                             cmd = [
                                 os.environ.get("PYTHON", "python"),
                                 "-m","electrofit.pipeline.steps._step5_isolate_runner",  # pipeline isolate runner
@@ -335,7 +335,8 @@ def main(argv: list[str] | None = None):  # pragma: no cover - CLI exercised in 
     print(f"[step5][debug-end] rc={rc}", flush=True)
     # Summary Logging
     try:
-        reset_logging(); setup_logging(str(project / "step.log"), also_console=True, suppress_initial_message=True)
+        reset_logging()
+        setup_logging(str(project / "step.log"), also_console=True, suppress_initial_message=True)
         logging.info(f"[step5] Exit code {rc}; 0 = success")
     except Exception:
         pass

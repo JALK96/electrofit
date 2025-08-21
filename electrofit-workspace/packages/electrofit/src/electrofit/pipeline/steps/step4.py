@@ -13,12 +13,15 @@ move into a dedicated service module in a future refactor to further reduce
 side‑effects at import time.
 """
 from __future__ import annotations
-import argparse, os, shutil, multiprocessing, logging
+import argparse
+import os
+import shutil
+import multiprocessing
+import logging
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
-from typing import List, Tuple
 
-import mdtraj as md  # noqa: F401
+import mdtraj as md  # noqa: F401  (imported for side-effects: topology/trajectory readers registration)
 from tqdm import tqdm
 
 try:  # Python 3.11+
@@ -29,8 +32,8 @@ except ModuleNotFoundError:  # pragma: no cover
 from electrofit.infra.config_snapshot import CONFIG_ARG_HELP
 from electrofit.infra.logging import setup_logging, reset_logging, log_run_header
 from electrofit.pipeline.workers.step4_extract import _extract_for_molecule  # type: ignore
-from electrofit.config.loader import load_config
 from electrofit.pipeline.molecule_filter import filter_paths_for_molecule
+from electrofit.pipeline.workers.step4_worker import worker as _worker  # type: ignore
 
 """Multiprocessing note: executed via runpy -> cannot rely on __main__ pickling.
 
@@ -41,7 +44,7 @@ stable import path for pickle. This keeps this orchestrator file focused and
 minimises side effects at import time.
 """
 
-from electrofit.pipeline.workers.step4_worker import worker as _worker  # type: ignore
+ 
 
 
 __all__ = ["main"]
