@@ -39,7 +39,7 @@ class HPCSection:
     enabled: bool = False         # safer default
     host: str = "qcm04"
     username: str | None = None
-    conda_env: str = "AmberTools23"
+    conda_env: str = "electrofit"
     shell_init: str = "~/.bashrc"
     use_screen: bool = True
     screen_name_prefix: str = "ef"
@@ -75,6 +75,7 @@ class SimulationSection:
     # Canonical location for forcefield selection (folder name with .ff)
     forcefield: str = "amber14sb.ff"
 
+
 @dataclass
 class Config:
     project_root: Path
@@ -83,6 +84,7 @@ class Config:
     hpc: HPCSection = field(default_factory=HPCSection)
     gmx: GMXSection = field(default_factory=GMXSection)
     simulation: SimulationSection = field(default_factory=SimulationSection)
+    # screen section removed
 
 # -----------------
 # Helpers

@@ -50,7 +50,6 @@ def set_up_production(
 	anion="CL",
 	d="1.2",
 	conc="0.15",
-	exit_screen=True,
 	ff="amber14sb.ff",
 	*,
 	threads: int | None = None,
@@ -163,7 +162,7 @@ def set_up_production(
 		if prod_conf.startswith("npt"):
 			logging.info("[prod] Using NPT output (%s, %s) for production start", prod_conf, prod_cpt)
 		else:
-			logging.info("[prod] NPT outputs missing -> falling back to NVT (%s, %s)", prod_conf, prod_cpt)
+			logging.warning("[prod] NPT outputs missing -> falling back to NVT (%s, %s)", prod_conf, prod_cpt)
 		
 		run_command(
 			f"gmx grompp -f {mdp_dirname}/Production.mdp -c {prod_conf} -t {prod_cpt} -p {m_gro_name}.top -o md.tpr",
@@ -187,7 +186,3 @@ def set_up_production(
 			cwd=scratch_dir,
 		)
 		plot_svg("gyrate.xvg")
-
-	if exit_screen:
-		os.chdir(original_dir)
-		subprocess.run(["screen", "-S", molecule_name, "-X", "quit"])

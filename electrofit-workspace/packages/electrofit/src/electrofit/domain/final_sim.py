@@ -131,7 +131,6 @@ def launch_final_sim_run(
             anion=ions.anion,
             d=str(box.edge_nm),
             conc=str(ions.concentration),
-            exit_screen=True,
             ff=ff,
             threads=runtime.threads,
             pin=runtime.pin,

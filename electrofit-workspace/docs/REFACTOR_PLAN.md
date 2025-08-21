@@ -168,7 +168,7 @@ Dieses Dokument wird bei jeder abgeschlossenen Umsetzungs-Phase aktualisiert. Bi
 - Dependency-Inventar Tool (`tools/dependency_inventory.py`) hinzugefügt: erzeugt `dependency_graph.json` & `dependency_report.md` (AST-basierte Importanalyse) – unterstützt sichere Refactors.
 - Timestamps des Inventars auf `datetime.now(timezone.utc)` (TZ-aware) umgestellt.
 - Tests nach jeder Migrationsetappe ausgeführt (alle grün; nur externe DeprecationWarnings von SWIG-Typen).
-- Deprecation Shim für `core.process_conform` vereinheitlicht (einmalige Warnung, `__all__` Export nur `process_conform`).
+// Removed legacy `core.process_conform` shim (fully deleted; domain API only).
 
 ## Nächste kurzfristige Low-Risk Schritte (Update 2025-08-19, nach Migration Step5 Orchestrator)
 

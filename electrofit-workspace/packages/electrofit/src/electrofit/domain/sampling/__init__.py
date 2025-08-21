@@ -9,3 +9,6 @@ pipeline step modules thin and side‑effect free on import.
 """
 from .frames import select_frame_indices  # noqa: F401
 from .conformer_io import prepare_conformer_directory  # noqa: F401
+
+# Backwards compatibility alias for legacy tests expecting internal name.
+_select_indices = select_frame_indices  # noqa: F401

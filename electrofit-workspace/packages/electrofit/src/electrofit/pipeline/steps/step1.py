@@ -73,7 +73,7 @@ def _run_one_dir(run_dir: str, project_root: str, override_cfg: str | None, mult
         extra_override=Path(override_cfg) if override_cfg else None,
     )
     with _pushd(run_dir):
-    # Direct domain integration path
+        # Direct domain integration path
         run_dir_abs = os.getcwd()
         run_cfg_path = os.path.join(run_dir_abs, "electrofit.toml")
         cfg = load_config(project_root, config_path=run_cfg_path if os.path.isfile(run_cfg_path) else None)
@@ -161,6 +161,7 @@ def _run_one_dir(run_dir: str, project_root: str, override_cfg: str | None, mult
             logging.info("[step1] wrote initial_manifest.json")
         except Exception:  # pragma: no cover
             logging.debug("[step1] manifest emission failed", exc_info=True)
+    # Screen termination logic removed.
 
 def main():  # pragma: no cover
     parser = argparse.ArgumentParser(

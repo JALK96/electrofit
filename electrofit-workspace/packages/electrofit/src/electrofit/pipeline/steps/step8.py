@@ -11,7 +11,13 @@ from pathlib import Path
 import logging
 
 from electrofit.domain.final_sim import iter_final_sim_dirs, launch_final_sim_run
-from electrofit.infra.logging import setup_logging, reset_logging, log_run_header, enable_header_dedup
+from electrofit.config.loader import load_config
+from electrofit.infra.logging import (
+    setup_logging,
+    reset_logging,
+    log_run_header,
+    enable_header_dedup,
+)
 from electrofit.infra.config_snapshot import CONFIG_ARG_HELP
 from electrofit.pipeline.molecule_filter import filter_paths_for_molecule
 
@@ -38,6 +44,12 @@ def run_step8(project: Path, override_cfg: Path | None, log_console: bool, only_
         setup_logging(str(run_dir / "process.log"), also_console=False)
         log_run_header("step8")
         ok, msg = launch_final_sim_run(run_dir, project, multi_mol, override_cfg)
+        # Load configuration in the context of this run directory to decide about screen termination.
+        try:
+            cfg_run = load_config(project, context_dir=run_dir, molecule_name=run_dir.parent.name)
+        except Exception:
+            cfg_run = None
+    # Screen termination logic removed.
         if ok:
             ran += 1
     summary = f"[step8] Completed {ran} final simulation run(s)."
@@ -53,11 +65,11 @@ def main(argv: list[str] | None = None):  # pragma: no cover
     ap.add_argument("--project", required=False, default=os.environ.get("ELECTROFIT_PROJECT_PATH", os.getcwd()))
     ap.add_argument("--config", help=CONFIG_ARG_HELP)
     ap.add_argument("--log-console", action="store_true", help="Also echo logs to console")
-    ap.add_argument("--molecule", help="Run only this molecule name")
+    ap.add_argument("--molecule", help="Only run the specified molecule name", required=False)
     args = ap.parse_args(argv)
     project_root = Path(args.project).resolve()
     override_cfg = Path(args.config).resolve() if getattr(args, "config", None) else None
-    rc = run_step8(project_root, override_cfg, args.log_console, getattr(args, 'molecule', None))
+    rc = run_step8(project_root, override_cfg, args.log_console, getattr(args, "molecule", None))
     raise SystemExit(rc)
 
 

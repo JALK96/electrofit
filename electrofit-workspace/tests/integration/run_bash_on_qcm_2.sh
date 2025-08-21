@@ -77,8 +77,16 @@ execute_ssh_command() {
 # -----------------------------
 
 SSH_COMMAND="cd \"$SCRIPT_DIR\" && \
-source ~/.bashrc && \
-screen -dmS \"$SCREEN_SESSION\" bash -c \"conda activate $CONDA_ENV; bash '$BASH_SCRIPT'; exec bash\""
+screen -dmS \"$SCREEN_SESSION\" bash -lc '
+  source \"$HOME/miniconda3/etc/profile.d/conda.sh\";
+  conda activate $CONDA_ENV;
+  echo \"[INFO] Using python: \$(which python)\";
+  echo \"[INFO] electrofit path test:\";
+  python -c \"import electrofit, sys; print(\\\"electrofit from:\\\", electrofit.__file__, \\\"python:\\\", sys.executable)\";
+  bash \"$BASH_SCRIPT\";
+  # after the script finishes, just exit
+  exit
+'"
 
 log "Built SSH Command: $SSH_COMMAND"
 

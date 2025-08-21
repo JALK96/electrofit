@@ -146,9 +146,7 @@ def main():  # pragma: no cover
             logging.error("[step3][abort] %s", e)
             print(f"[step3][abort] {e}")
             continue
-
         logging.info(f"[step3] Starting GROMACS production for {molecule} in {run_dir}")
-        # Change working directory to the run directory so set_up_production finds inputs.
         prev = os.getcwd()
         try:
             os.chdir(run_dir)
@@ -162,12 +160,12 @@ def main():  # pragma: no cover
                 anion=anion,
                 d=str(d),
                 conc=str(conc),
-                exit_screen=True,
                 ff=ff,
                 threads=threads,
                 pin=pin,
             )
             ran += 1
+            # Screen termination logic removed.
         finally:
             os.chdir(prev)
     summary = (

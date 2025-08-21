@@ -61,6 +61,34 @@ def enable_header_dedup(enable: bool = True) -> None:
             _header_cache.clear()
 
 
+class ResilientWatchedFileHandler(WatchedFileHandler):
+    """WatchedFileHandler that auto-recovers if the log file (or its directory)
+    was deleted between tests / runs.
+
+    pytest's TemporaryDirectory cleanup deletes the directory *after* the test
+    while the handler stays registered on the root logger. Subsequent log
+    records would raise FileNotFoundError inside ``emit``. We intercept that,
+    recreate the parent directory, and retry exactly once. Remaining failures
+    are swallowed (logging must never break the pipeline).
+    """
+
+    def emit(self, record):  # type: ignore[override]
+        try:  # first attempt (normal path)
+            super().emit(record)
+            return
+        except FileNotFoundError:
+            try:
+                parent = Path(getattr(self, "baseFilename", ".")).parent
+                parent.mkdir(parents=True, exist_ok=True)
+            except Exception:
+                pass
+            try:  # retry once after recreation
+                super().emit(record)
+            except Exception:
+                # Final suppression – avoid cascading errors in tests
+                pass
+
+
 def setup_logging(log_path, also_console: bool = True, suppress_initial_message: bool = False) -> None:
     """Configure root logger for the current execution context.
 
@@ -98,6 +126,10 @@ def setup_logging(log_path, also_console: bool = True, suppress_initial_message:
         if isinstance(h, logging.FileHandler):
             try:
                 existing_path = Path(getattr(h, "baseFilename", ""))
+                # If the directory vanished, treat as stale regardless of same path
+                if not existing_path.parent.exists():
+                    to_remove.append(h)
+                    continue
                 if existing_path.resolve() == path:
                     existing_same = True
                 else:
@@ -125,8 +157,13 @@ def setup_logging(log_path, also_console: bool = True, suppress_initial_message:
             except Exception:
                 pass
     if not existing_same:
+        # Ensure parent directory exists (temporary dirs in tests may be removed/recreated)
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+        except Exception as e:  # pragma: no cover - defensive
+            logging.warning("Could not ensure parent directory exists for %s: %s", path, e)
         fmt = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-        fh = WatchedFileHandler(path, mode="a", encoding="utf-8", delay=False)
+        fh = ResilientWatchedFileHandler(path, mode="a", encoding="utf-8", delay=False)
         fh.setLevel(root.level)
         fh.setFormatter(fmt)
         root.addHandler(fh)
@@ -157,6 +194,11 @@ def log_run_header(step_name: str):
         parts.append(f"git={commit}")
     header = " | ".join(parts)
     logger = logging.getLogger()
+    # Late-binding env switch: allow enabling via env var *after* module import
+    # (tests may set ELECTROFIT_DEDUP_HEADERS after another import already loaded us).
+    global _dedup_headers_enabled
+    if not _dedup_headers_enabled and str(os.getenv("ELECTROFIT_DEDUP_HEADERS", "0")).lower() in {"1", "true", "yes", "on"}:
+        _dedup_headers_enabled = True
     if _dedup_headers_enabled:
         with _header_lock:
             if header in _header_cache:

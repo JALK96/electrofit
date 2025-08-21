@@ -33,7 +33,7 @@ _DEPRECATION_WARNED = False
 
 
 def process_conform(molecule_name: str, pdb_file: str, base_scratch_dir: str, net_charge: int, residue_name: str,
-                    adjust_sym: bool = False, ignore_sym: bool = False, exit_screen: bool = True, protocol: str = "bcc"):
+                    adjust_sym: bool = False, ignore_sym: bool = False, protocol: str = "bcc"):
     """Legacy entrypoint delegating to domain layer (deprecated).
 
     Parameters mirror historical signature; new code should construct a
@@ -83,17 +83,6 @@ def process_conform(molecule_name: str, pdb_file: str, base_scratch_dir: str, ne
                 process_conformer(cfg, scratch_dir, original_dir, input_files, defer_finalize=False)
         else:
             process_conformer(cfg, scratch_dir, original_dir, input_files, defer_finalize=True)
-        if exit_screen:
-            try:
-                os.chdir(original_dir)
-            except Exception:  # pragma: no cover - defensive
-                pass
-            sty = os.environ.get("STY")
-            if sty:
-                try:
-                    subprocess.run(["screen", "-S", sty, "-X", "quit"], check=True)
-                except subprocess.CalledProcessError:  # pragma: no cover - environment dependent
-                    logging.warning("Failed to quit screen session %s", sty)
     except Exception as e:  # keep broad except for legacy parity
         logging.error("Error processing conform: %s", e)
         raise

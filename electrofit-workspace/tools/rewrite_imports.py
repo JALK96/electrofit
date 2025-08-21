@@ -33,8 +33,7 @@ RENAMES = {
     # treat analysis as a prefix
     "execution.analysis.": "electrofit_analysis.fep.",
     "main.gmx_simulation": "electrofit.adapters.gromacs",
-    "main.process_initial_structure": "electrofit.core.process_initial_structure",
-    "main.process_conform": "electrofit.core.process_conform",
+    # removed deprecated process_* shims
     "commands.run_commands": "electrofit.cli.run_commands",
     "main_executable.analysis.dihedral_density": "electrofit_analysis.structure.dihedral_density",
     "main_executable.analysis.h_bonds": "electrofit_analysis.structure.h_bonds",
@@ -62,8 +61,7 @@ RENAMES = {
     # prefix tree
     "electrofit.execution.analysis.": "electrofit_analysis.fep.",
     "electrofit.main.gmx_simulation": "electrofit.adapters.gromacs",
-    "electrofit.main.process_initial_structure": "electrofit.core.process_initial_structure",
-    "electrofit.main.process_conform": "electrofit.core.process_conform",
+    # removed deprecated process_* shims
     "electrofit.commands.run_commands": "electrofit.cli.run_commands",
     "electrofit.main_executable.analysis.dihedral_density": "electrofit_analysis.structure.dihedral_density",
     "electrofit.main_executable.analysis.h_bonds": "electrofit_analysis.structure.h_bonds",

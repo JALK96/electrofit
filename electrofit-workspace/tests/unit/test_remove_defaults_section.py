@@ -1,5 +1,5 @@
 import pathlib, shutil
-from electrofit.io.files import remove_defaults_section_lines
+from electrofit.io.ff import remove_defaults_section_lines
 
 FIX = pathlib.Path(__file__).parent / 'fixtures'
 

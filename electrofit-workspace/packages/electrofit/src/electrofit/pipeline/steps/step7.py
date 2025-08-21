@@ -14,6 +14,7 @@ from electrofit.domain.final_sim import prepare_final_sim_directory
 from electrofit.infra.logging import setup_logging, reset_logging, log_run_header, enable_header_dedup
 from electrofit.infra.config_snapshot import CONFIG_ARG_HELP
 from electrofit.pipeline.molecule_filter import filter_paths_for_molecule
+from electrofit.config.loader import load_config
 
 __all__ = ["main", "run_step7"]
 
@@ -44,6 +45,11 @@ def run_step7(project: Path, override_cfg: Path | None, only_molecule: str | Non
         print(f"{status} {mol_dir.name}: {msg}")
         if ok:
             done += 1
+            try:
+                cfg_run = load_config(project, context_dir=mol_dir, molecule_name=mol_dir.name)
+            except Exception:
+                cfg_run = None
+            # Screen termination logic removed.
     summary = f"[step7] Prepared final sim dirs for {done}/{len(mol_dirs)} molecules."
     print(summary)
     try:

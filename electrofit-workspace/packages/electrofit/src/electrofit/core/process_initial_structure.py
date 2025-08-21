@@ -27,7 +27,7 @@ _DEPRECATION_WARNED = False
 
 
 def process_initial_structure(molecule_name, mol2_file, base_scratch_dir, additional_input, net_charge, residue_name,
-                              adjust_sym=False, ignore_sym=False, atom_type="gaff2", exit_screen=False, protocol="bcc"):
+                              adjust_sym=False, ignore_sym=False, atom_type="gaff2", protocol="bcc"):
     global _DEPRECATION_WARNED
     if not _DEPRECATION_WARNED:  # only warn once per process
         warnings.warn(
