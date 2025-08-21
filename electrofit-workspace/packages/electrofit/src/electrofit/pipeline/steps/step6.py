@@ -62,12 +62,6 @@ def run_step6(
         print(f"{status} {mol_dir.name}: {msg}")
         if ok:
             done += 1
-            # Load config (results dir context may not matter; use mol_dir)
-            try:
-                cfg_run = load_config(project, context_dir=mol_dir, molecule_name=mol_dir.name)
-            except Exception:
-                cfg_run = None
-            # Screen termination logic removed.
     summary = f"[step6] Completed {done}/{len(mol_dirs)} molecules."
     print(summary)
     try:

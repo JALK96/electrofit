@@ -45,11 +45,7 @@ def run_step7(project: Path, override_cfg: Path | None, only_molecule: str | Non
         print(f"{status} {mol_dir.name}: {msg}")
         if ok:
             done += 1
-            try:
-                cfg_run = load_config(project, context_dir=mol_dir, molecule_name=mol_dir.name)
-            except Exception:
-                cfg_run = None
-            # Screen termination logic removed.
+
     summary = f"[step7] Prepared final sim dirs for {done}/{len(mol_dirs)} molecules."
     print(summary)
     try:

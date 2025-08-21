@@ -84,7 +84,7 @@ class Config:
     hpc: HPCSection = field(default_factory=HPCSection)
     gmx: GMXSection = field(default_factory=GMXSection)
     simulation: SimulationSection = field(default_factory=SimulationSection)
-    # screen section removed
+
 
 # -----------------
 # Helpers

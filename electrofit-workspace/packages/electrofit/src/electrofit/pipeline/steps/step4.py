@@ -134,12 +134,7 @@ def main():  # pragma: no cover
             results.append((sub.name, ok, msg, None))
             if ok:
                 extracted += 1
-                # Load config in context of extracted_conforms (or molecule dir) for screen decision
-                try:
-                    cfg_run = load_config(project_root, context_dir=sub, molecule_name=sub.name)
-                except Exception:
-                    cfg_run = None
-                # Screen termination logic removed.
+
     else:
         tasks = [
             (str(p), str(project_root), sample_count, method, seed, override_cfg, multi_mol, args.verbose)
@@ -155,11 +150,6 @@ def main():  # pragma: no cover
                 results.append((Path(name).name, ok, msg, err))
                 if ok:
                     extracted += 1
-                    try:
-                        cfg_run = load_config(project_root, context_dir=Path(name), molecule_name=Path(name).name)
-                    except Exception:
-                        cfg_run = None
-                    # Screen termination logic removed.
                 if pbar:
                     pbar.update(1)
         if pbar:

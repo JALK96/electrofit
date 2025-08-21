@@ -44,12 +44,6 @@ def run_step8(project: Path, override_cfg: Path | None, log_console: bool, only_
         setup_logging(str(run_dir / "process.log"), also_console=False)
         log_run_header("step8")
         ok, msg = launch_final_sim_run(run_dir, project, multi_mol, override_cfg)
-        # Load configuration in the context of this run directory to decide about screen termination.
-        try:
-            cfg_run = load_config(project, context_dir=run_dir, molecule_name=run_dir.parent.name)
-        except Exception:
-            cfg_run = None
-    # Screen termination logic removed.
         if ok:
             ran += 1
     summary = f"[step8] Completed {ran} final simulation run(s)."

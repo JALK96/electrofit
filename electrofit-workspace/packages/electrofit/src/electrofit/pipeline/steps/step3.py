@@ -165,7 +165,7 @@ def main():  # pragma: no cover
                 pin=pin,
             )
             ran += 1
-            # Screen termination logic removed.
+
         finally:
             os.chdir(prev)
     summary = (

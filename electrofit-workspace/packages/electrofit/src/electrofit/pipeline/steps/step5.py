@@ -140,13 +140,6 @@ def run_step5(
                         rel_s, ok, msg = result
                         if ok:
                             processed += 1
-                            # Load config in context of conformer dir's molecule root for screen decision
-                            try:
-                                mol_root = conf_dir.parent.parent  # process/<mol>/extracted_conforms/<conf>
-                                cfg_run = load_config(project, context_dir=mol_root, molecule_name=mol_root.name)
-                            except Exception:
-                                cfg_run = None
-                            # Screen termination logic removed.
                             if verbose:
                                 print(f"[step5][done] {rel_s}")
                         else:
@@ -209,16 +202,6 @@ def run_step5(
                             relr, ok, msg = result
                             if ok:
                                 processed += 1
-                                try:
-                                    mol_root = Path(relr).parts  # rel path string; fallback to conf_dir hierarchy
-                                    mol_dir = Path(future_map[fut]).parent.parent if Path(future_map[fut]).exists() else None
-                                    if mol_dir:
-                                        cfg_run = load_config(project, context_dir=mol_dir, molecule_name=mol_dir.name)
-                                    else:
-                                        cfg_run = None
-                                except Exception:
-                                    cfg_run = None
-                                # Screen termination logic removed.
                                 if verbose:
                                     print(f"[step5][done] {relr}")
                             else:

@@ -161,7 +161,7 @@ def _run_one_dir(run_dir: str, project_root: str, override_cfg: str | None, mult
             logging.info("[step1] wrote initial_manifest.json")
         except Exception:  # pragma: no cover
             logging.debug("[step1] manifest emission failed", exc_info=True)
-    # Screen termination logic removed.
+
 
 def main():  # pragma: no cover
     parser = argparse.ArgumentParser(
