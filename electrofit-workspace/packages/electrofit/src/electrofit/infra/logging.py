@@ -28,6 +28,7 @@ from __future__ import annotations
 import logging
 import os
 import subprocess
+from threading import RLock
 from logging.handlers import WatchedFileHandler
 from pathlib import Path
 
@@ -35,6 +36,29 @@ try:
     from electrofit import __version__ as _electrofit_version
 except Exception:  # pragma: no cover
     _electrofit_version = "unknown"
+
+# --- Header de-duplication state -------------------------------------------------
+# Optional suppression of identical header lines within a single logical logging
+# session. Enabled via environment variable ELECTROFIT_DEDUP_HEADERS=1 / true or
+# programmatically via enable_header_dedup(). Always defined irrespective of
+# version import success above.
+_header_cache: set[str] = set()
+_dedup_headers_enabled: bool = str(os.getenv("ELECTROFIT_DEDUP_HEADERS", "0")).lower() in {"1", "true", "yes", "on"}
+_header_lock = RLock()
+
+def enable_header_dedup(enable: bool = True) -> None:
+    """Enable/disable in-process header de-duplication.
+
+    When enabled, repeated emission of the exact same header line via
+    log_run_header() will be suppressed until the next reset_logging() call
+    (which clears the cache). This keeps global ``step.log`` concise when
+    orchestration code re-initialises logging for summaries.
+    """
+    global _dedup_headers_enabled
+    with _header_lock:
+        _dedup_headers_enabled = bool(enable)
+        if not enable:
+            _header_cache.clear()
 
 
 def setup_logging(log_path, also_console: bool = True, suppress_initial_message: bool = False) -> None:
@@ -133,6 +157,11 @@ def log_run_header(step_name: str):
         parts.append(f"git={commit}")
     header = " | ".join(parts)
     logger = logging.getLogger()
+    if _dedup_headers_enabled:
+        with _header_lock:
+            if header in _header_cache:
+                return
+            _header_cache.add(header)
     logger.info(header)
 
 
@@ -158,3 +187,7 @@ def reset_logging():
                 logger.removeHandler(handler)
                 handler.close()
             logger.filters = []
+    # Clearing header cache upon full reset allows headers to be emitted again
+    # for new log files (prevents accidental permanent suppression across steps).
+    with _header_lock:
+        _header_cache.clear()

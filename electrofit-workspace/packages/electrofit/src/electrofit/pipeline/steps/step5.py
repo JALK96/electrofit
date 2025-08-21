@@ -1,6 +1,6 @@
 """Pipeline Step 5: Gaussian/RESP processing of extracted conformers.
 
-Orchestrator for conformer batch processing (legacy *workflows* package removed).
+Thin orchestration layer for conformer batch processing.
 
 Responsibilities:
   * Discover conformer directories.
@@ -27,6 +27,8 @@ from electrofit.domain.charges.conformer_batch import (
     process_conformer_dir,
 )
 from electrofit.infra.config_snapshot import CONFIG_ARG_HELP
+from electrofit.infra.logging import setup_logging, reset_logging, log_run_header, enable_header_dedup
+from electrofit.pipeline.molecule_filter import molecule_component
 
 __all__ = ["main", "run_step5"]
 
@@ -50,11 +52,17 @@ def run_step5(
     no_parallel: bool = False,
     isolate_conformer: bool = False,
     config_override: Path | None = None,
+    only_molecule: str | None = None,
 ) -> int:
     logging.getLogger().setLevel(logging.DEBUG)
     logging.debug("[step5] Root log level set to DEBUG")
     try:
         conf_dirs = discover_conformer_dirs(project)
+        if only_molecule:
+            conf_dirs = [c for c in conf_dirs if molecule_component(c) == only_molecule]
+            if not conf_dirs:
+                print(f"[step5][warn] molecule '{only_molecule}' produced no conformer dirs.")
+                return 0
         if not conf_dirs:
             print("[step5] No conformer directories found.")
             return 0
@@ -294,9 +302,21 @@ def main(argv: list[str] | None = None):  # pragma: no cover - CLI exercised in 
         "--config",
         help=CONFIG_ARG_HELP,
     )
+    ap.add_argument(
+        "--molecule",
+        help="Restrict to conformers belonging to this molecule (name under process/)",
+    )
     args = ap.parse_args(argv)
     project = Path(args.project).resolve()
     config_override = Path(args.config).resolve() if getattr(args, "config", None) else None
+    # Global Header vor Ausführung
+    try:
+        enable_header_dedup(True)
+        setup_logging(str(project / "step.log"), also_console=True, suppress_initial_message=True)
+        log_run_header("step5")
+    except Exception:
+        pass
+
     rc = run_step5(
         project=project,
         batch_size=args.batch_size,
@@ -309,8 +329,15 @@ def main(argv: list[str] | None = None):  # pragma: no cover - CLI exercised in 
         no_parallel=args.no_parallel,
         isolate_conformer=args.isolate_conformer,
         config_override=config_override,
+        only_molecule=getattr(args, "molecule", None),
     )
     print(f"[step5][debug-end] rc={rc}", flush=True)
+    # Summary Logging
+    try:
+        reset_logging(); setup_logging(str(project / "step.log"), also_console=True, suppress_initial_message=True)
+        logging.info(f"[step5] Exit code {rc}; 0 = success")
+    except Exception:
+        pass
     raise SystemExit(rc)
 
 

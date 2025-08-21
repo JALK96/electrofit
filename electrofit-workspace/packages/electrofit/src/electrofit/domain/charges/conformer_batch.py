@@ -1,21 +1,17 @@
 """Domain helpers for batch processing of conformer directories (Step5).
 
-Contains discovery + per‑conformer processing logic so ``pipeline.steps.step5`` stays thin.
-Legacy workflows package has been removed; no shims retained here.
+Encapsulates discovery + per‑conformer processing so the step orchestrator
+remains minimal.
 
 Responsibilities:
-  * Discover conformer directories (heuristic: directories containing a PDB).
-  * Execute per‑conformer processing (config snapshot, logging, mock mode,
-    domain charge pipeline).
+    * Discover conformer directories (heuristic: directories containing a PDB).
+        * Execute per‑conformer processing (config snapshot, logging, mock mode,
+            Gaussian/RESP pipeline via domain ``process_conformer``).
 
 Notes:
-  * Heavy Gaussian/RESP work is delegated to the existing core shim
-    ``core.process_conform`` which already manages scratch setup and finalise
-    semantics. A future refactor can inline or adapt that to use
-    ``domain.charges.process_conformer`` directly once scratch handling is
-    extracted cleanly.
-  * Advanced diagnostic monkey‑patching from the legacy worker is retained but
-    guarded so it runs only once per process.
+        * Heavy Gaussian/RESP work now uses domain ``process_conformer``; scratch
+            lifecycle is managed inline here until a dedicated service is extracted.
+    * Advanced diagnostic monkey‑patching is retained but initialised only once.
 """
 from __future__ import annotations
 
@@ -26,7 +22,10 @@ import traceback
 from electrofit.config.loader import load_config, dump_config
 from electrofit.infra.config_snapshot import compose_snapshot
 from electrofit.infra.logging import log_run_header, reset_logging, setup_logging
-from electrofit.core.process_conform import process_conform  # legacy shim -> domain
+from electrofit.domain.charges.process_conformer import (
+    ConformerConfig as _ConformerConfig,
+    process_conformer as _process_conformer_impl,
+)
 from electrofit.io.files import find_file_with_extension, strip_extension
 
 __all__ = [
@@ -119,8 +118,8 @@ def process_conformer_dir(
     """Process a single conformer directory.
 
     Returns (relative_path, ok_flag, message).
-    This is a near‑lift of ``workflows.step5_worker.process_one`` with minor
-    cleanups and a direct call to ``core.process_conform`` for parity.
+    This is a near‑lift of the previous worker implementation with minor
+    cleanups and a direct call to the domain conformer pipeline.
     """
     prev = os.getcwd()
     try:
@@ -180,17 +179,42 @@ def process_conformer_dir(
             with open("executed.txt", "w") as f:
                 f.write(f"run{molecule_name}")
         else:
-            # Delegate heavy pipeline
-            process_conform(
+            # Direct domain conformer pipeline
+            base_scratch = cfg.paths.base_scratch_dir or "/tmp/electrofit_scratch"
+            from electrofit.infra.scratch_manager import setup_scratch_directory, finalize_scratch_directory
+            input_files = [pdb_file]
+            # For adjust_sym BCC we might have JSON symmetry file present; include if exists to mirror previous scratch copy set
+            if getattr(proj, "adjust_symmetry", False):
+                json_candidates = list(conf_dir.glob("*.json"))
+                if json_candidates:
+                    input_files.append(json_candidates[0].name)
+            scratch_dir, original_dir = setup_scratch_directory(input_files, base_scratch)
+            cfg_obj = _ConformerConfig(
                 molecule_name=molecule_name,
                 pdb_file=pdb_file,
-                base_scratch_dir=cfg.paths.base_scratch_dir or "/tmp/electrofit_scratch",
                 net_charge=proj.charge or 0,
                 residue_name=proj.residue_name or "LIG",
                 adjust_sym=getattr(proj, "adjust_symmetry", False),
-                protocol=proj.protocol or "bcc",
                 ignore_sym=getattr(proj, "ignore_symmetry", False),
+                protocol=proj.protocol or "bcc",
             )
+            try:
+                _process_conformer_impl(cfg_obj, scratch_dir, original_dir, input_files, defer_finalize=False)
+            finally:
+                # Always finalize to replicate previous behaviour (non-deferred)
+                try:
+                    from electrofit.infra.scratch_manager import finalize_scratch_directory
+                    finalize_scratch_directory(
+                        original_dir,
+                        scratch_dir,
+                        input_files,
+                        output_files=None,
+                        overwrite=True,
+                        remove_parent_if_empty=False,
+                        reason="conformer-batch",
+                    )
+                except Exception:  # pragma: no cover
+                    logging.debug("[step5] finalize scratch failed", exc_info=True)
         rel = conf_dir.relative_to(project_root)
         print(f"[worker-return] {rel} ok", flush=True)
         return (str(rel), True, "ok")

@@ -1,6 +1,8 @@
 """Domain logic for Step6: aggregation of RESP ensemble charges and symmetry/group averaging.
 
-Kept separate so the pipeline step remains a thin orchestrator (legacy workflows layer removed).
+Separated from the pipeline step so that orchestration code stays thin and
+testable; this module contains only deterministic transformation logic plus
+plotting side–effects.
 """
 from __future__ import annotations
 

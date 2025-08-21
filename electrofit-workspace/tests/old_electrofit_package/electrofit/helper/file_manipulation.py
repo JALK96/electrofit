@@ -376,7 +376,7 @@ def strip_extension(file_name):
     # Split the file name into the name and the extension
     name, extension = os.path.splitext(file_name)
 
-    print(f"Molecule name: {name}")
+    print(f"File name: {name}")
     return name
 
 def mol2_to_pdb_and_back(input_file, output_file, residue_name, cwd=None):

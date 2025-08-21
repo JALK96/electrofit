@@ -1,7 +1,8 @@
 #!/bin/bash
 
-PROJECT="tests/integration"
-CACHE="/home/johannal96/PhD.nobackup/electrofit/electrofit-workspace/tests/integration/cash"
+PROJECT="/home/johannal96/PhD.nobackup/electrofit/electrofit-workspace/tests/integration"
+CACHE="/home/johannal96/PhD.nobackup/electrofit/electrofit-workspace/tests/integration/cache"
+
 
 run_step() {
     echo ">>> Running: $*"
@@ -13,12 +14,12 @@ run_step() {
     echo "------------------------------------"
 }
 
-run_step electrofit step0 --project "$PROJECT"
-run_step electrofit step1 --project "$PROJECT"
-run_step electrofit step2 --project "$PROJECT"
-run_step electrofit step3 --project "$PROJECT"
-run_step electrofit step4 --project "$PROJECT" --sample 2
-run_step env ELECTROFIT_DEBUG_GAUSSIAN_CACHE="$CACHE" electrofit step5 --project "$PROJECT"
-run_step electrofit step6 --project "$PROJECT" --remove-outlier --plot-histograms
-run_step electrofit step7 --project "$PROJECT"
-run_step electrofit step8 --project "$PROJECT"
+run_step electrofit step0 --project "$PROJECT" 
+run_step electrofit step1 --project "$PROJECT" 
+run_step electrofit step2 --project "$PROJECT" 
+run_step electrofit step3 --project "$PROJECT" 
+run_step electrofit step4 --project "$PROJECT" --sample 2 
+run_step env ELECTROFIT_DEBUG_GAUSSIAN_CACHE="$CACHE" electrofit step5 --project "$PROJECT" 
+run_step electrofit step6 --project "$PROJECT" --remove-outlier --plot-histograms 
+run_step electrofit step7 --project "$PROJECT" 
+run_step electrofit step8 --project "$PROJECT" 

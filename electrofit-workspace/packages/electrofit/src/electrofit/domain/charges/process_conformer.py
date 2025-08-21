@@ -1,8 +1,7 @@
-"""Conformer charge computation orchestration (extracted from legacy core.process_conform).
+"""Conformer charge computation orchestration.
 
-Initial extraction: collapses duplicated logic branches (normal vs defer finalize) into a reusable
-`process_conformer` function plus supporting helpers. Further decomposition (Gaussian/RESP adapters)
-can follow in later commits.
+Structured stages (input prep -> Gaussian -> ESP -> RESP prep -> symmetry doc -> RESP fit -> finalize)
+with fine‑grained helpers to aid testing and profiling.
 """
 from __future__ import annotations
 

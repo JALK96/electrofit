@@ -9,8 +9,10 @@ import argparse, json, os, logging
 from pathlib import Path
 from electrofit.config.loader import load_config, dump_config
 from electrofit.adapters.gromacs import set_up_production
+from electrofit.io.ff import validate_forcefield
 from electrofit.infra.config_snapshot import compose_snapshot, CONFIG_ARG_HELP
-from electrofit.infra.logging import setup_logging, reset_logging, log_run_header
+from electrofit.infra.logging import setup_logging, reset_logging, log_run_header, enable_header_dedup
+from electrofit.pipeline.molecule_filter import filter_paths_for_molecule
 
 __all__ = ["main"]
 
@@ -33,6 +35,7 @@ def main():  # pragma: no cover
         "--project", default=os.environ.get("ELECTROFIT_PROJECT_PATH", os.getcwd())
     )
     ap.add_argument("--config", help=CONFIG_ARG_HELP)
+    ap.add_argument("--molecule", help="Only run for this molecule name")
     args = ap.parse_args()
     project_root = Path(args.project).resolve()
     process_root = project_root / "process"
@@ -41,7 +44,19 @@ def main():  # pragma: no cover
         and len([p for p in process_root.iterdir() if p.is_dir()]) > 1
     )
     ran = 0
-    for run_dir in _iter_run_dirs(project_root):
+    # Enable header de-duplication and emit initial global header (single header policy)
+    try:
+        enable_header_dedup(True)
+        setup_logging(str(project_root / "step.log"), also_console=True, suppress_initial_message=True)
+        log_run_header("step3")
+    except Exception:
+        pass
+    run_dirs_all = list(_iter_run_dirs(project_root))
+    run_dirs = filter_paths_for_molecule(run_dirs_all, args.molecule)
+    if args.molecule and not run_dirs:
+        print(f"[step3][warn] molecule '{args.molecule}' not found; nothing to do")
+        return
+    for run_dir in run_dirs:
         reset_logging()
         setup_logging(str(run_dir / "process.log"), also_console=False)
         try:
@@ -71,9 +86,10 @@ def main():  # pragma: no cover
         except Exception:
             logging.debug("[step3] dump per-run config failed", exc_info=True)
 
-        # Pull simulation knobs from run config (fallback to global defaults if absent)
+        # Pull simulation knobs from run config (fallback to defaults if absent)
         sim = getattr(cfg_run, "simulation", None)
-        ff       = getattr(sim, "forcefield", None)         or "amber14sb.ff"
+        ff_attr = getattr(sim, "forcefield", None)
+        ff       = ff_attr or "amber14sb.ff"
         box_type = getattr(sim, "box_type", None)           or "dodecahedron"
         d        = getattr(sim, "box_edge_distance", None)  or 1.2
         cation   = getattr(sim, "cation", None)             or "NA"
@@ -119,6 +135,18 @@ def main():  # pragma: no cover
             logging.info(msg)
             print(msg)
             continue
+        if ff_attr is None:
+            logging.warning(
+                "[step3][ff] No forcefield specified in config; falling back to default '%s'", ff
+            )
+        # Validate (raises if user explicitly set a non-existent ff; warns otherwise)
+        try:
+            validate_forcefield(ff, explicit=ff_attr is not None)
+        except FileNotFoundError as e:
+            logging.error("[step3][abort] %s", e)
+            print(f"[step3][abort] {e}")
+            continue
+
         logging.info(f"[step3] Starting GROMACS production for {molecule} in {run_dir}")
         # Change working directory to the run directory so set_up_production finds inputs.
         prev = os.getcwd()
@@ -150,10 +178,6 @@ def main():  # pragma: no cover
     print(summary)
     reset_logging()
     setup_logging(str(project_root / "step.log"), also_console=True, suppress_initial_message=True)
-    try:
-        log_run_header("step3")
-    except Exception:
-        logging.info("electrofit unknown | step=step3")
     logging.info(summary)
 
 

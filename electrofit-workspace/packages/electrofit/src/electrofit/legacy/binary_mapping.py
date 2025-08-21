@@ -1,10 +1,7 @@
 """Legacy helpers for historical binary->IP directory naming & mol2 renaming.
 
-These utilities were formerly located in ``electrofit.io.files`` but are
-unused by the current refactored pipeline. They are retained here temporarily
-for backwards compatibility / potential one-off migration scripts.
-
-Planned removal: after confirming no external workflows depend on them.
+Formerly in ``electrofit.io.files``; retained temporarily for potential
+one-off migration scripts. Planned removal once confirmed unused externally.
 """
 from __future__ import annotations
 

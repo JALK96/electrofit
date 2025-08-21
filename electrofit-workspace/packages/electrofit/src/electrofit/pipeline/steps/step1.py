@@ -20,7 +20,8 @@ from electrofit.domain.prep.process_initial import InitialPrepConfig, process_in
 from electrofit.config.loader import load_config, dump_config
 from electrofit.io.files import find_file_with_extension
 from electrofit.infra.config_snapshot import compose_snapshot, CONFIG_ARG_HELP
-from electrofit.infra.logging import setup_logging, log_run_header, reset_logging
+from electrofit.infra.logging import setup_logging, log_run_header, reset_logging, enable_header_dedup
+from electrofit.pipeline.molecule_filter import molecule_component
 
 __all__ = ["main"]
 
@@ -40,14 +41,16 @@ def _pushd(path: str | None):
         if path:
             os.chdir(prev)
 
-def _iter_run_dirs(project_root: str):
+def _iter_run_dirs(project_root: str, only_molecule: str | None = None):
     process_root = os.path.join(project_root, "process")
     if not os.path.isdir(process_root):
         return
     for root, dirs, _files in os.walk(process_root):
         for d in dirs:
             if d in _TARGET_RUN_DIRS:
-                yield os.path.join(root, d)
+                full = os.path.join(root, d)
+                if only_molecule is None or molecule_component(Path(full)) == only_molecule:
+                    yield full
 
 def _run_one_dir(run_dir: str, project_root: str, override_cfg: str | None, multi_mol: bool):
     os.environ["ELECTROFIT_PROJECT_PATH"] = project_root
@@ -102,11 +105,11 @@ def _run_one_dir(run_dir: str, project_root: str, override_cfg: str | None, mult
         net_charge = cfg.project.charge if cfg.project.charge is not None else 0
         atom_type = cfg.project.atom_type or "gaff2"
         protocol = cfg.project.protocol or "bcc"
-        # Setup scratch (reuse legacy scratch manager)
+    # Setup scratch (scratch manager)
         from electrofit.infra.scratch_manager import setup_scratch_directory
         input_files = [os.path.basename(mol2_file)] + list(additional_input)
         scratch_dir, original_dir = setup_scratch_directory(input_files, base_scratch_dir)
-        # Ensure mol2 is present inside scratch root (legacy behaviour — scratch manager copies)
+    # Ensure mol2 is present inside scratch root (scratch manager copies)
         cfg_obj = InitialPrepConfig(
             molecule_name=molecule_name,
             mol2_file=os.path.basename(mol2_file),
@@ -169,6 +172,7 @@ def main():  # pragma: no cover
     parser.add_argument("--project", default=os.environ.get("ELECTROFIT_PROJECT_PATH", os.getcwd()))
     parser.add_argument("--config", help=CONFIG_ARG_HELP)
     parser.add_argument("--log-console", action="store_true", help="Also echo logging to console")
+    parser.add_argument("--molecule", help="Process only this molecule name (directory under process/)")
     args = parser.parse_args()
 
     project_root = os.path.abspath(args.project)
@@ -178,13 +182,37 @@ def main():  # pragma: no cover
         mol_dirs = [p for p in process_root.iterdir() if p.is_dir()]
         multi_mol = len(mol_dirs) > 1
 
-    discovered = list(_iter_run_dirs(project_root))
+    # Global header (Projektweite step.log) – auch wenn keine Runs gefunden werden.
+    try:
+        enable_header_dedup(True)
+        setup_logging(str(Path(project_root) / "step.log"), also_console=args.log_console, suppress_initial_message=True)
+        log_run_header("step1")  # single header per step (dedup suppresses later repeats)
+    except Exception:
+        pass
+
+    discovered = list(_iter_run_dirs(project_root, only_molecule=args.molecule))
+    if args.molecule and not discovered:
+        print(f"[step1][warn] requested molecule '{args.molecule}' not found / no run dirs")
+        return
     if discovered:
+        ran = 0
         for run_dir in discovered:
             _run_one_dir(run_dir, project_root, args.config, multi_mol)
+            ran += 1
+        # Zusammenfassung im globalen Log festhalten
+        try:
+            reset_logging(); setup_logging(str(Path(project_root)/"step.log"), also_console=args.log_console, suppress_initial_message=True)
+            logging.info("[step1] Completed %d run directory(ies).", ran)
+        except Exception:
+            pass
         return
     run_dir = os.getcwd()
     _run_one_dir(run_dir, project_root, args.config, multi_mol)
+    try:
+        reset_logging(); setup_logging(str(Path(project_root)/"step.log"), also_console=args.log_console, suppress_initial_message=True)
+        logging.info("[step1] Completed 1 run directory (fallback current working directory).")
+    except Exception:
+        pass
 
 if __name__ == "__main__":  # pragma: no cover
     main()

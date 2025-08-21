@@ -104,12 +104,16 @@ def run_command(command, cwd=None):
 
         # Collecting output and logging in real-time
         output_lines = []
+        stderr_accum = []
         for stdout_line in iter(process.stdout.readline, ""):
-            logging.info(stdout_line.strip())
-            output_lines.append(stdout_line)
+            if stdout_line:
+                logging.info(stdout_line.strip())
+                output_lines.append(stdout_line)
         for stderr_line in iter(process.stderr.readline, ""):
-            logging.debug(stderr_line.strip())
-            output_lines.append(stderr_line)
+            if stderr_line:
+                logging.debug(stderr_line.strip())
+                output_lines.append(stderr_line)
+                stderr_accum.append(stderr_line)
 
         # Ensure process has finished and capture the return code
         process.stdout.close()
@@ -118,6 +122,13 @@ def run_command(command, cwd=None):
 
         # Handle exit status
         if return_code != 0:
+            stderr_text = ''.join(stderr_accum).strip() or None
+            logging.error(
+                "Command exited with code %s: %s%s",
+                return_code,
+                command,
+                f" | stderr: {stderr_text[:400]}" if stderr_text else "",
+            )
             raise subprocess.CalledProcessError(return_code, command)
 
         # After running the command, list files and directories in cwd

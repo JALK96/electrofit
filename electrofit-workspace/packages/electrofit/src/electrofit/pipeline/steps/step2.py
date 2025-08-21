@@ -9,7 +9,8 @@ from __future__ import annotations
 import argparse, fnmatch, os, shutil, json, logging
 from pathlib import Path
 from electrofit.infra.config_snapshot import compose_snapshot, CONFIG_ARG_HELP
-from electrofit.infra.logging import setup_logging, log_run_header, reset_logging
+from electrofit.infra.logging import setup_logging, log_run_header, reset_logging, enable_header_dedup
+from electrofit.pipeline.molecule_filter import filter_paths_for_molecule
 
 __all__ = ["main"]
 
@@ -38,6 +39,7 @@ def main():  # pragma: no cover
     ap.add_argument("--project", default=os.environ.get("ELECTROFIT_PROJECT_PATH", os.getcwd()))
     ap.add_argument("--config", help=CONFIG_ARG_HELP)
     ap.add_argument("--log-console", action="store_true", help="Also echo logs to console")
+    ap.add_argument("--molecule", help="Limit to single molecule (directory under process/)")
     args = ap.parse_args()
     project_path = Path(args.project).resolve()
     process_dir = project_path / "process"
@@ -45,10 +47,15 @@ def main():  # pragma: no cover
     if not process_dir.is_dir():
         print("[step2] No process directory.")
         return
-    mol_dirs = [p for p in process_dir.iterdir() if p.is_dir()]
+    mol_dirs_all = [p for p in process_dir.iterdir() if p.is_dir()]
+    mol_dirs = filter_paths_for_molecule(mol_dirs_all, args.molecule)
+    if args.molecule and not mol_dirs:
+        print(f"[step2][warn] molecule '{args.molecule}' not found; nothing to do")
+        return
     multi_mol = len(mol_dirs) > 1
+    enable_header_dedup(True)
     setup_logging(str(project_path / "step.log"), also_console=args.log_console, suppress_initial_message=True)
-    log_run_header("step2")
+    log_run_header("step2")  # single logical header; later calls suppressed
     prepared = 0
     for mol_dir in mol_dirs:
         run_gau_dir = mol_dir / "run_gau_create_gmx_in"
@@ -104,7 +111,13 @@ def main():  # pragma: no cover
         _write_manifest(dest_dir, selected)
         prepared += 1
         reset_logging()
-    print(f"[step2] Prepared simulation dirs for {prepared}/{len(mol_dirs)} molecules.")
+    summary = f"[step2] Prepared simulation dirs for {prepared}/{len(mol_dirs)} molecules."
+    print(summary)
+    try:
+        reset_logging(); setup_logging(str(project_path / "step.log"), also_console=args.log_console, suppress_initial_message=True)
+        logging.info(summary)
+    except Exception:
+        pass
 
 if __name__ == "__main__":  # pragma: no cover
     main()

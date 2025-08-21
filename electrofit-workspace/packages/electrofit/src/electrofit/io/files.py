@@ -5,27 +5,9 @@ import shutil
 
 import glob
 import logging
-import warnings
 import numpy as np
 
 from electrofit.io.mol2_ops import parse_charges_from_mol2
-
-# Transitional re-exports (kept for backward compatibility in tests)
-try:  # pragma: no cover - defensive
-    from .ff import remove_defaults_section_lines  # noqa: F401
-except Exception:  # pragma: no cover
-    warnings.warn("remove_defaults_section_lines not available (ff module import failure)", RuntimeWarning)
-
-try:  # pragma: no cover
-    from .mol2_ops import (
-        mol2_to_pdb_and_back,
-        pdb_to_mol2,
-        mol2_to_pdb_with_bonds,
-        parse_mol2,
-    )  # noqa: F401
-except Exception:  # pragma: no cover
-    warnings.warn("mol2_ops partial import failure; parsing helpers not available", RuntimeWarning)
-
 
 def copy_and_rename_folders(source: str, destination: str, nested_folder: str = "run_gau_create_gmx_in") -> None:
     """
@@ -263,5 +245,5 @@ def strip_extension(file_name):
     # Split the file name into the name and the extension
     name, extension = os.path.splitext(file_name)
 
-    print(f"Molecule name: {name}")
+    print(f"File name: {name}")
     return name

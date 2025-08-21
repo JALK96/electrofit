@@ -18,6 +18,7 @@ dependencies:
   - acpype
   - libstdcxx-ng
   - libgcc-ng
+  - gromacs
 
 
   # ---- CLI & workflow ----

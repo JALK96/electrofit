@@ -114,6 +114,19 @@ def set_up_production(
 		)
 		plot_svg("potential.xvg")
 
+		# Clamp thread count to available logical CPUs to reduce instability / segfault risk.
+		try:
+			import psutil  # optional dependency; if absent skip
+		except ImportError:
+			logical_cpus = os.cpu_count() or 1
+		else:
+			logical_cpus = psutil.cpu_count(logical=True) or (os.cpu_count() or 1)
+		if threads is not None and threads > logical_cpus:
+			logging.warning(
+				"Requested threads=%d exceeds logical CPUs=%d -> clamping", threads, logical_cpus
+			)
+			threads = logical_cpus
+
 		def _mdrun_flags():
 			flags: list[str] = []
 			if threads is not None:
@@ -143,8 +156,17 @@ def set_up_production(
 			cwd=scratch_dir,
 		)
 		plot_svg("pressure.xvg")
+
+		# Pick latest equilibrated state: prefer NPT if available, else NVT
+		prod_conf = "npt.gro" if os.path.isfile(os.path.join(scratch_dir, "npt.gro")) else "nvt.gro"
+		prod_cpt  = "npt.cpt" if prod_conf.startswith("npt") and os.path.isfile(os.path.join(scratch_dir, "npt.cpt")) else "nvt.cpt"
+		if prod_conf.startswith("npt"):
+			logging.info("[prod] Using NPT output (%s, %s) for production start", prod_conf, prod_cpt)
+		else:
+			logging.info("[prod] NPT outputs missing -> falling back to NVT (%s, %s)", prod_conf, prod_cpt)
+		
 		run_command(
-			f"gmx grompp -f {mdp_dirname}/Production.mdp -c nvt.gro -t nvt.cpt -p {m_gro_name}.top -o md.tpr",
+			f"gmx grompp -f {mdp_dirname}/Production.mdp -c {prod_conf} -t {prod_cpt} -p {m_gro_name}.top -o md.tpr",
 			cwd=scratch_dir,
 		)
 		run_command(f"gmx mdrun -deffnm md {_mdrun_flags()}", cwd=scratch_dir)
