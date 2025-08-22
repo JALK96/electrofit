@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 
 # Import necessary modules from the project
-from electrofit.config.legacy import ConfigParser
+from electrofit.config.loader import load_config
 from electrofit.io.files import (
     adjust_atom_names,
     extract_charges_from_subdirectories,
@@ -23,7 +23,7 @@ from electrofit.viz.helpers import (
 
 PROJECT_PATH = os.environ.get("ELECTROFIT_PROJECT_PATH", os.getcwd())
 project_path = PROJECT_PATH
-
+print(f"Using project path: {project_path}")
 
 def calculate_symmetric_group_averages(charges_dict, equivalent_groups):
     """
@@ -390,7 +390,8 @@ def plot_histograms(
     plt.close()
 
 
-process_dir = os.path.join(project_path, "process")
+
+project_path = "/home/johannal96/PhD.nobackup/electrofit/electrofit-workspace/tests/integration"
 process_dir = "/home/johannal96/PhD.nobackup/electrofit/electrofit-workspace/tests/integration/process"
 
 
@@ -438,39 +439,55 @@ for sub_dir in os.listdir(process_dir):
     plots_dir = os.path.join(results_dir, "plots")
     os.makedirs(plots_dir, exist_ok=True)
 
-    # Change to base directory containing configuration file (.ef)
-    os.chdir(base_dir)
-    config_file_path = os.path.join(base_dir, find_file_with_extension("ef"))
-    # Optionally copy it into the results directory
-    # shutil.copy2(config_file_path, results_dir)
+    # Load configuration from TOML using the new loader.
+    # Context directory is the molecule process folder (process/<mol>),
+    # project_root is the repo root (PROJECT_PATH).
+    cfg = load_config(project_root=project_path, context_dir=sub_dir_path)
 
-    # Define molecule parameters
-    config = ConfigParser(config_file_path)
-    molecule_name = config.MoleculeName
+    # Define molecule parameters from TOML (project section)
+    molecule_name = cfg.project.molecule_name or sub_dir
     print(f"Processing: {molecule_name}")
-    charge = config.Charge
+    charge = cfg.project.charge
     print(f"Charge set to: {charge}")
-    atom_type = config.AtomType
-    print(f"AtomType set to: {atom_type}")
-    adjust_sym = config.AdjustSymmetry
-    print("AdjustSymmetry set to:", adjust_sym)
-    ignore_sym = config.IgnoreSymmetry
-    print("IgnoreSymmetry set to:", ignore_sym)
-    calc_group_average = config.CalculateGroupAverage  # either True or False (bool)
-    print("CalculateGroupAverage set to:", calc_group_average)
+    atom_type = cfg.project.atom_type
+    print(f"Atom Type set to: {atom_type}")
+    adjust_sym = bool(cfg.project.adjust_symmetry)
+    print("Adjust Symmetry set to:", adjust_sym)
+    ignore_sym = bool(cfg.project.ignore_symmetry)
+    print("Ignore Symmetry set to:", ignore_sym)
+    calc_group_average = bool(cfg.project.calculate_group_average)
+    print("Calculate Group Average set to:", calc_group_average)
 
-    mol2_file_pattern = f"*{atom_type}.mol2"
-
-    # Find the mol2 source file path
+    # Determine the mol2 file to use
     mol2_source_file_path = None
-    for file_name in os.listdir(ac_dir):
-        if fnmatch.fnmatch(file_name, mol2_file_pattern):
-            mol2_source_file_path = os.path.join(ac_dir, file_name)
-            break  # Stop after finding the first matching file
+    ac_entries = os.listdir(ac_dir)
+    if atom_type:
+        mol2_file_pattern = f"*{atom_type}.mol2"
+        for file_name in ac_entries:
+            if fnmatch.fnmatch(file_name, mol2_file_pattern):
+                mol2_source_file_path = os.path.join(ac_dir, file_name)
+                break
+    # Fallback heuristics if atom_type not provided or not found
+    if mol2_source_file_path is None:
+        # Prefer AM1-BCC GAFF2 if present
+        for cand in ac_entries:
+            if cand.endswith("_bcc_gaff2.mol2"):
+                mol2_source_file_path = os.path.join(ac_dir, cand)
+                break
+    if mol2_source_file_path is None:
+        # Next prefer a file named exactly like the pattern base (e.g., IP_xxxxxx.mol2)
+        expected = f"{sub_dir}.mol2"
+        if expected in ac_entries:
+            mol2_source_file_path = os.path.join(ac_dir, expected)
+    if mol2_source_file_path is None:
+        # Finally take the first .mol2 file found
+        mol2s = [f for f in ac_entries if f.endswith(".mol2")]
+        if mol2s:
+            mol2_source_file_path = os.path.join(ac_dir, mol2s[0])
 
     if mol2_source_file_path is None:
         print(
-            f"No mol2 file matching pattern '{mol2_file_pattern}' found in '{ac_dir}'. Skipping."
+            f"No suitable .mol2 file found in '{ac_dir}'. Skipping."
         )
         continue
 

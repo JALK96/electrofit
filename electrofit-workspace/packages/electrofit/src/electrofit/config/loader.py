@@ -26,6 +26,7 @@ class ProjectSection:
     adjust_symmetry: bool = False
     ignore_symmetry: bool = False
     atom_type: str | None = None
+    calculate_group_average: bool = False 
 
 @dataclass
 class PathsSection:
