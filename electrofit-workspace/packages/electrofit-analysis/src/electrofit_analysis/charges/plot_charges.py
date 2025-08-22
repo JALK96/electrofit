@@ -12,9 +12,9 @@ from electrofit.io.files import (
     adjust_atom_names,
     extract_charges_from_subdirectories,
     find_file_with_extension,
-    load_symmetry_groups,
     parse_charges_from_mol2,
 )
+from electrofit.io.symmetry import load_symmetry_groups
 from electrofit.viz.helpers import (
     plot_charges_by_atom,
     plot_charges_by_atom_sym,

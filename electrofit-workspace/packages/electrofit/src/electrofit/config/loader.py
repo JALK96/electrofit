@@ -32,16 +32,7 @@ class PathsSection:
     mdp_dir: str = "data/MDP"
     base_scratch_dir: str | None = None
 
-# Optional HPC section kept for future remote support
-@dataclass
-class HPCSection:
-    enabled: bool = False         # safer default
-    host: str = "qcm04"
-    username: str | None = None
-    conda_env: str = "electrofit"
-    shell_init: str = "~/.bashrc"
-    use_screen: bool = True
-    screen_name_prefix: str = "ef"
+# (HPC section removed for now)
 
 # GROMACS runtime knobs (threads, pinning)
 @dataclass
@@ -80,7 +71,6 @@ class Config:
     project_root: Path
     project: ProjectSection = field(default_factory=ProjectSection)
     paths: PathsSection = field(default_factory=PathsSection)
-    hpc: HPCSection = field(default_factory=HPCSection)
     gmx: GMXSection = field(default_factory=GMXSection)
     simulation: SimulationSection = field(default_factory=SimulationSection)
 
@@ -252,7 +242,7 @@ def load_config(
         data["gmx"] = data.pop("gromacs")
 
     # Perform merges
-    for section_name in ("project", "paths", "hpc", "gmx", "simulation"):
+    for section_name in ("project", "paths", "gmx", "simulation"):
         payload = data.get(section_name, {})
         section = getattr(cfg, section_name)
         if isinstance(payload, dict):
