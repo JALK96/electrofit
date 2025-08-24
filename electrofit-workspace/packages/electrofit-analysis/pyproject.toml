@@ -7,18 +7,24 @@ name = "electrofit-analysis"
 version = "0.1.0"
 description = "Electrofit Analysis workflows"
 requires-python = ">=3.12,<3.13"
-dependencies = [
+
+# Keep runtime dependencies empty so pip doesn't try to install things Conda already manages.
+dependencies = []
+
+# Optional: allow users outside your Conda env to install everything via pip with `.[full]`
+[project.optional-dependencies]
+full = [
   "MDAnalysis",
   "alchemlyb",
   "joblib",
   "matplotlib",
   "numpy",
   "pandas",
-  "rdkit",
+  "rdkit-pypi",         # note: rdkit wheels are limited; prefer conda in practice
   "scikit-learn",
   "scipy",
   "seaborn",
-  "typer"
+  "typer",
 ]
 
 [project.scripts]

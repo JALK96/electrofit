@@ -1,4 +1,5 @@
 import math
+import argparse
 import os
 import re
 from itertools import combinations
@@ -12,9 +13,6 @@ from rdkit.Chem import rdDepictor
 from rdkit.Chem.Draw import rdMolDraw2D
 from electrofit.cli.run_commands import run_command
 from electrofit.io.files import find_file_with_extension
-
-PROJECT_PATH = os.environ.get("ELECTROFIT_PROJECT_PATH", os.getcwd())
-project_path = PROJECT_PATH
 
 sns.set_context("talk")
 
@@ -1013,399 +1011,422 @@ def parse_hbond_log_to_dataframe(file_path):
 
     return df
 
+def main(project_dir: str) -> None:
+    """Run hydrogen bond analysis for all molecules in the project's process directory.
 
-# Define the base process directory
-process_dir = os.path.join(project_path, "process")
+    Args:
+        project_dir: Path to the project root (must contain a 'process' subdirectory).
+    """
+    process_dir = os.path.join(project_dir, "process")
 
+    if not os.path.isdir(process_dir):
+        print(f"No 'process' directory found under: {project_dir}")
+        return
 
-# Loop through each subdirectory in the process directory
-for folder_name in os.listdir(process_dir):
-    folder_path = os.path.join(process_dir, folder_name)
+    # Loop through each subdirectory in the process directory
+    for folder_name in os.listdir(process_dir):
+        folder_path = os.path.join(process_dir, folder_name)
 
-    # Check if it's a directory
-    if os.path.isdir(folder_path):
-        # Define the 'run_final_gmx_simulation' directory within this folder
-        run_final_sim_dir = os.path.join(folder_path, "run_final_gmx_simulation")
-        run_gau_create_gmx_in_dir = os.path.join(folder_path, "run_gau_create_gmx_in")
+        # Check if it's a directory
+        if os.path.isdir(folder_path):
+            # Define the 'run_final_gmx_simulation' directory within this folder
+            run_final_sim_dir = os.path.join(folder_path, "run_final_gmx_simulation")
+            run_gau_create_gmx_in_dir = os.path.join(folder_path, "run_gau_create_gmx_in")
 
-        # Check if 'run_final_gmx_simulation' exists
-        if os.path.isdir(run_final_sim_dir):
-            # Define the destination directory 'analyze_final_sim' within the same working directory
-            dest_dir = os.path.join(folder_path, "analyze_final_sim")
-            dest_dir = os.path.join(dest_dir, "h_bonds")
-            os.makedirs(dest_dir, exist_ok=True)
-            os.chdir(dest_dir)
+            # Check if 'run_final_gmx_simulation' exists
+            if os.path.isdir(run_final_sim_dir):
+                # Define the destination directory 'analyze_final_sim' within the same working directory
+                dest_dir = os.path.join(folder_path, "analyze_final_sim")
+                dest_dir = os.path.join(dest_dir, "h_bonds")
+                os.makedirs(dest_dir, exist_ok=True)
+                os.chdir(dest_dir)
 
-            gro_file_path = os.path.join(run_final_sim_dir, "md.tpr")
-            xtc_file_path = os.path.join(run_final_sim_dir, "md_center.xtc")
+                gro_file_path = os.path.join(run_final_sim_dir, "md.tpr")
+                xtc_file_path = os.path.join(run_final_sim_dir, "md_center.xtc")
 
-            run_command(
-                f'echo "2\n2\n" | gmx hbond -s {gro_file_path} -f {xtc_file_path} -hbn intra_hb_idx.ndx -num intra_hb_num.xvg -dist intra_hb_dist.xvg -g intra_hb.log -hbm intra_hb_matrix.xpm',
-                cwd=dest_dir,
-            )
-            run_command(
-                f'echo "2\n5\n" | gmx hbond -s {gro_file_path} -f {xtc_file_path} -hbn inter_hb_idx.ndx -num inter_hb_num.xvg -dist inter_hb_dist.xvg -g inter_hb.log -hbm inter_hb_matrix.xpm',
-                cwd=dest_dir,
-            )
-
-            # ---- Plot inter ----
-            # Load the hb_num.xvg file
-            xvg_filename = "inter_hb_num.xvg"  # Replace with your actual .xvg file name
-            data = load_hb_num_xvg(xvg_filename)
-
-            # Check if data was loaded correctly
-            if data.size == 0:
-                raise ValueError(f"No data found in {xvg_filename}.")
-
-            # Extract columns
-            time = data[:, 0]  # Time in ps
-            time = time / 10**3
-            num_hbonds = data[:, 1]  # Number of Hydrogen Bonds (s0)
-            pairs_within_0_35_nm = (
-                data[:, 2] if data.shape[1] > 2 else None
-            )  # Pairs within 0.35 nm (s1)
-
-            # Plotting
-            plt.figure(figsize=(8, 6))
-            plt.plot(
-                time, num_hbonds, label="Hydrogen Bonds", color="darkblue", linewidth=2
-            )
-            if pairs_within_0_35_nm is not None:
-                plt.plot(
-                    time,
-                    pairs_within_0_35_nm,
-                    label="Pairs within 0.35 nm",
-                    color="darkred",
-                    linewidth=2,
+                run_command(
+                    f'echo "2\n2\n" | gmx hbond -s {gro_file_path} -f {xtc_file_path} -hbn intra_hb_idx.ndx -num intra_hb_num.xvg -dist intra_hb_dist.xvg -g intra_hb.log -hbm intra_hb_matrix.xpm',
+                    cwd=dest_dir,
+                )
+                run_command(
+                    f'echo "2\n5\n" | gmx hbond -s {gro_file_path} -f {xtc_file_path} -hbn inter_hb_idx.ndx -num inter_hb_num.xvg -dist inter_hb_dist.xvg -g inter_hb.log -hbm inter_hb_matrix.xpm',
+                    cwd=dest_dir,
                 )
 
-            plt.title("Hydrogen Bonds Over Time")
-            plt.xlabel("Time (ns)")
-            plt.ylabel("Number")
-            plt.legend()
-            plt.grid(False)
+                # ---- Plot inter ----
+                # Load the hb_num.xvg file
+                xvg_filename = "inter_hb_num.xvg"  # Replace with your actual .xvg file name
+                data = load_hb_num_xvg(xvg_filename)
 
-            # Save the plot as SVG
-            output_svg = "inter_hb_num_over_time.pdf"
-            plt.savefig(output_svg, format="pdf")
-            plt.close()
+                # Check if data was loaded correctly
+                if data.size == 0:
+                    raise ValueError(f"No data found in {xvg_filename}.")
 
-            print(f"Plot saved as {output_svg}")
+                # Extract columns
+                time = data[:, 0]  # Time in ps
+                time = time / 10**3
+                num_hbonds = data[:, 1]  # Number of Hydrogen Bonds (s0)
+                pairs_within_0_35_nm = (
+                    data[:, 2] if data.shape[1] > 2 else None
+                )  # Pairs within 0.35 nm (s1)
 
-            # Plot and save hb donor acceptor distance distribution:
-            plot_hb_dist_xvg("inter_hb_dist.xvg", plot_file_name="inter_hb_distriution")
-
-            # ------- work in progress
-
-            inter_log_file = "inter_hb.log"
-            inter_output_csv = "inter_hbond_pairs.csv"
-
-            # Parse the log file and get the DataFrame
-            inter_hbond_df = parse_hbond_log_to_dataframe(inter_log_file)
-
-            print(inter_hbond_df)
-            visualize_data_donor_acceptor(
-                xpm_file="inter_hb_matrix.xpm",
-                hbond_df=inter_hbond_df,
-                output_prefix="inter",
-            )
-
-            # --------------- Plot intra 2 ---------------
-            log_file = "intra_hb.log"
-            output_csv = "intra_hbond_pairs.csv"
-
-            # Parse the log file and get the DataFrame
-            hbond_df = parse_hbond_log_to_dataframe(log_file)
-
-            # Display the DataFrame
-            print("Extracted Donor-Acceptor Pairs DataFrame:")
-            print(hbond_df)
-
-            # Save the DataFrame to a CSV file
-            hbond_df.to_csv(output_csv, index=False)
-            print(f"\nDonor-Acceptor pairs have been saved to '{output_csv}'.")
-
-            visualize_data_donor_acceptor(
-                xpm_file="intra_hb_matrix.xpm",
-                hbond_df=hbond_df,
-                output_prefix="intra2",
-            )
-
-            data_matrix, meta_data = parse_xpm("intra_hb_matrix.xpm")
-
-            analysis_results = analyze_hydrogen_bonds(
-                data_matrix=data_matrix, metadata=meta_data
-            )
-
-            hbonds_per_index = analysis_results["hbonds_per_index"]
-            # Add 'count' column to hbond_df
-            hbond_df["count"] = hbonds_per_index
-
-            # For each donor, get the two most abundant hydrogen bonds
-            top_hbonds_df = (
-                hbond_df.groupby("donor")
-                .apply(lambda x: x.nlargest(2, "count"))
-                .reset_index(drop=True)
-            )
-
-            print("Top hydrogen bonds:")
-            print(top_hbonds_df)
-
-            # Path to your MOL2 file
-            os.chdir(run_gau_create_gmx_in_dir)
-            mol2_file_name = find_file_with_extension("mol2")
-            os.chdir(dest_dir)
-            mol2_file = os.path.join(run_gau_create_gmx_in_dir, mol2_file_name)
-
-            # Load the molecule
-            molecule = Chem.MolFromMol2File(mol2_file, removeHs=False)
-
-            if molecule is None:
-                raise ValueError(f"Failed to load molecule from {mol2_file}")
-
-            print("Molecule loaded successfully!")
-
-            # Set preference to use CoordGen
-            rdDepictor.SetPreferCoordGen(True)
-
-            # Generate 2D coordinates
-            rdDepictor.Compute2DCoords(molecule)
-
-            # Create custom atom labels
-            atom_counters = {}
-            atom_labels = {}
-
-            for atom in molecule.GetAtoms():
-                symbol = atom.GetSymbol()
-                idx = atom.GetIdx()
-
-                # Update the counter for this atom type
-                if symbol not in atom_counters:
-                    atom_counters[symbol] = 1
-                else:
-                    atom_counters[symbol] += 1
-
-                # Assign the custom label
-                atom_labels[idx] = f"{symbol}{atom_counters[symbol]}"
-
-            # Build a mapping from labels to atom indices
-            label_to_atom_idx = {label: idx for idx, label in atom_labels.items()}
-
-            # Now, get the donor and acceptor atom indices for highlighting
-            donor_atom_indices = []
-            acceptor_atom_indices = []
-
-            for _, row in hbond_df.iterrows():
-                donor_label = row["donor"]
-                acceptor_label = row["acceptor"]
-                donor_idx = label_to_atom_idx.get(donor_label)
-                acceptor_idx = label_to_atom_idx.get(acceptor_label)
-                if donor_idx is not None:
-                    donor_atom_indices.append(donor_idx)
-                if acceptor_idx is not None:
-                    acceptor_atom_indices.append(acceptor_idx)
-
-            # Remove duplicates
-            donor_atom_indices = list(set(donor_atom_indices))
-            acceptor_atom_indices = list(set(acceptor_atom_indices))
-
-            # Identify atoms that are both donors and acceptors
-            both_donor_acceptor_indices = set(donor_atom_indices) & set(
-                acceptor_atom_indices
-            )
-
-            # Update donor and acceptor lists to exclude atoms that are both
-            donor_only_indices = set(donor_atom_indices) - both_donor_acceptor_indices
-            acceptor_only_indices = (
-                set(acceptor_atom_indices) - both_donor_acceptor_indices
-            )
-
-            print("Donor only atom indices:", donor_only_indices)
-            print("Acceptor only atom indices:", acceptor_only_indices)
-            print("Both donor and acceptor atom indices:", both_donor_acceptor_indices)
-
-            # Collect hbond_pairs from top_hbonds_df for drawing dashed lines
-            hbond_pairs = []
-
-            for _, row in top_hbonds_df.iterrows():
-                donor_label = row["donor"]
-                acceptor_label = row["acceptor"]
-                donor_idx = label_to_atom_idx.get(donor_label)
-                acceptor_idx = label_to_atom_idx.get(acceptor_label)
-                if donor_idx is not None and acceptor_idx is not None:
-                    hbond_pairs.append((donor_idx, acceptor_idx))
-                else:
-                    print(
-                        f"Warning: Atom label {donor_label} or {acceptor_label} not found in molecule."
+                # Plotting
+                plt.figure(figsize=(8, 6))
+                plt.plot(
+                    time, num_hbonds, label="Hydrogen Bonds", color="darkblue", linewidth=2
+                )
+                if pairs_within_0_35_nm is not None:
+                    plt.plot(
+                        time,
+                        pairs_within_0_35_nm,
+                        label="Pairs within 0.35 nm",
+                        color="darkred",
+                        linewidth=2,
                     )
 
-            print("Hydrogen bond pairs for dashed lines:", hbond_pairs)
+                plt.title("Hydrogen Bonds Over Time")
+                plt.xlabel("Time (ns)")
+                plt.ylabel("Number")
+                plt.legend()
+                plt.grid(False)
 
-            # Combine all atom indices for highlighting
-            highlight_atoms = donor_only_indices.union(acceptor_only_indices).union(
-                both_donor_acceptor_indices
-            )
+                # Save the plot as SVG
+                output_svg = "inter_hb_num_over_time.pdf"
+                plt.savefig(output_svg, format="pdf")
+                plt.close()
 
-            # Define colors
-            # Donor only atoms: light blue
-            # Acceptor only atoms: light green
-            # Both donor and acceptor atoms: teal
+                print(f"Plot saved as {output_svg}")
 
-            highlightAtomColors = {}
+                # Plot and save hb donor acceptor distance distribution:
+                plot_hb_dist_xvg("inter_hb_dist.xvg", plot_file_name="inter_hb_distriution")
 
-            # Donor only atoms (light blue)
-            for idx in donor_only_indices:
-                highlightAtomColors[idx] = (0.6, 0.8, 1)  # Light blue
+                # ------- work in progress
 
-            # Acceptor only atoms (light green)
-            for idx in acceptor_only_indices:
-                highlightAtomColors[idx] = (0.6, 1, 0.6)  # Light green
+                inter_log_file = "inter_hb.log"
+                inter_output_csv = "inter_hbond_pairs.csv"
 
-            # Both donor and acceptor atoms (teal)
-            for idx in both_donor_acceptor_indices:
-                highlightAtomColors[idx] = (0.6, 0.9, 0.8)  # Teal color
+                # Parse the log file and get the DataFrame
+                inter_hbond_df = parse_hbond_log_to_dataframe(inter_log_file)
 
-            # Set SVG size
-            svg_size = 500
-
-            # Draw the molecule with highlighted atoms
-            drawer = rdMolDraw2D.MolDraw2DSVG(svg_size, svg_size)
-            opts = drawer.drawOptions()
-            opts.addAtomIndices = False
-            opts.addBondIndices = False
-            # Set font size
-            opts.baseFontSize = 0.3
-
-            # Assign custom atom labels individually
-            for idx, label in atom_labels.items():
-                opts.atomLabels[idx] = label
-
-            # Prepare the molecule for drawing
-            rdMolDraw2D.PrepareMolForDrawing(molecule)
-
-            # Draw the molecule
-            drawer.DrawMolecule(
-                molecule,
-                highlightAtoms=highlight_atoms,
-                highlightAtomColors=highlightAtomColors,
-            )
-            drawer.FinishDrawing()
-            svg = drawer.GetDrawingText()
-
-            # Extract drawing coordinates for each atom
-            draw_coords = {}
-            for atom_idx in range(molecule.GetNumAtoms()):
-                # Get the drawing coordinates (in pixels)
-                point = drawer.GetDrawCoords(atom_idx)
-                draw_coords[atom_idx] = (point.x, point.y)
-
-            # Add dashed lines for H-bonds
-            modified_svg = add_dashed_hbonds(svg, hbond_pairs, draw_coords)
-
-            # Save the modified SVG
-            with open("molecule_dashed_hbonds.svg", "w") as f:
-                f.write(modified_svg)
-
-            print(
-                "Modified SVG with dashed H-bonds saved as 'molecule_dashed_hbonds.svg'"
-            )
-
-            # Create legend SVG content
-            # Convert RGB tuples to hex codes
-            def rgb_to_hex(rgb_tuple):
-                return "#" + "".join(f"{int(255 * x):02X}" for x in rgb_tuple)
-
-            # Prepare the legend entries based on the data
-            legend_entries = []
-
-            # Include 'Donor' entry if there are donor-only atoms
-            if donor_only_indices:
-                legend_entries.append(
-                    {"label": "Donor (D)", "color": rgb_to_hex((0.6, 0.8, 1))}
-                )  # Light blue
-
-            # Include 'Acceptor' entry if there are acceptor-only atoms
-            if acceptor_only_indices:
-                legend_entries.append(
-                    {"label": "Acceptor (A)", "color": rgb_to_hex((0.6, 1, 0.6))}
-                )  # Light green
-
-            # Include 'D/A' entry if there are atoms that are both donors and acceptors
-            if both_donor_acceptor_indices:
-                legend_entries.append(
-                    {"label": "D/A", "color": rgb_to_hex((0.6, 0.9, 0.8))}
-                )  # Teal
-
-            # Include 'H-Bond' entry if there are any hydrogen bonds (dashed lines)
-            if hbond_pairs:
-                legend_entries.append(
-                    {"label": "H-Bond", "color": "lightgray", "dasharray": "5,5"}
+                print(inter_hbond_df)
+                visualize_data_donor_acceptor(
+                    xpm_file="inter_hb_matrix.xpm",
+                    hbond_df=inter_hbond_df,
+                    output_prefix="inter",
                 )
 
-            legend_x = 20  # X position of the legend
-            legend_y = 20  # Y position of the legend
-            legend_svg_content = create_legend(
-                legend_x, legend_y, legend_entries, font_size=14
-            )
+                # --------------- Plot intra 2 ---------------
+                log_file = "intra_hb.log"
+                output_csv = "intra_hbond_pairs.csv"
 
-            # Add legend to SVG content
-            modified_svg_with_legend = add_legend_to_svg(
-                modified_svg, legend_svg_content
-            )
+                # Parse the log file and get the DataFrame
+                hbond_df = parse_hbond_log_to_dataframe(log_file)
 
-            # Save the modified SVG with legend
-            with open("molecule_dashed_hbonds_with_legend.svg", "w") as f:
-                f.write(modified_svg_with_legend)
+                # Display the DataFrame
+                print("Extracted Donor-Acceptor Pairs DataFrame:")
+                print(hbond_df)
 
-            print(
-                "Modified SVG with dashed H-bonds and legend saved as 'molecule_dashed_hbonds_with_legend.svg'"
-            )
+                # Save the DataFrame to a CSV file
+                hbond_df.to_csv(output_csv, index=False)
+                print(f"\nDonor-Acceptor pairs have been saved to '{output_csv}'.")
 
-            # ---- Plot intra ----
-            visualize_data_donor_accpetor_pair(
-                xpm_file="intra_hb_matrix.xpm", hbond_df=hbond_df
-            )
-            # Load the hb_num.xvg file
-            xvg_filename = "intra_hb_num.xvg"  # Replace with your actual .xvg file name
-            data = load_hb_num_xvg(xvg_filename)
+                visualize_data_donor_acceptor(
+                    xpm_file="intra_hb_matrix.xpm",
+                    hbond_df=hbond_df,
+                    output_prefix="intra2",
+                )
 
-            # Check if data was loaded correctly
-            if data.size == 0:
-                raise ValueError(f"No data found in {xvg_filename}.")
+                data_matrix, meta_data = parse_xpm("intra_hb_matrix.xpm")
 
-            # Extract columns
-            time = data[:, 0]  # Time in ps
-            num_hbonds = data[:, 1]  # Number of Hydrogen Bonds (s0)
-            pairs_within_0_35_nm = (
-                data[:, 2] if data.shape[1] > 2 else None
-            )  # Pairs within 0.35 nm (s1)
+                analysis_results = analyze_hydrogen_bonds(
+                    data_matrix=data_matrix, metadata=meta_data
+                )
 
-            # Plotting
-            plt.figure(figsize=(8, 6))
-            plt.plot(
-                time, num_hbonds, label="Hydrogen Bonds", color="darkblue", linewidth=2
-            )
-            if pairs_within_0_35_nm is not None:
+                hbonds_per_index = analysis_results["hbonds_per_index"]
+                # Add 'count' column to hbond_df
+                hbond_df["count"] = hbonds_per_index
+
+                # For each donor, get the two most abundant hydrogen bonds
+                top_hbonds_df = (
+                    hbond_df.groupby("donor")
+                    .apply(lambda x: x.nlargest(2, "count"))
+                    .reset_index(drop=True)
+                )
+
+                print("Top hydrogen bonds:")
+                print(top_hbonds_df)
+
+                # Path to your MOL2 file
+                os.chdir(run_gau_create_gmx_in_dir)
+                mol2_file_name = find_file_with_extension("mol2")
+                os.chdir(dest_dir)
+                mol2_file = os.path.join(run_gau_create_gmx_in_dir, mol2_file_name)
+
+                # Load the molecule
+                molecule = Chem.MolFromMol2File(mol2_file, removeHs=False)
+
+                if molecule is None:
+                    raise ValueError(f"Failed to load molecule from {mol2_file}")
+
+                print("Molecule loaded successfully!")
+
+                # Set preference to use CoordGen
+                rdDepictor.SetPreferCoordGen(True)
+
+                # Generate 2D coordinates
+                rdDepictor.Compute2DCoords(molecule)
+
+                # Create custom atom labels
+                atom_counters = {}
+                atom_labels = {}
+
+                for atom in molecule.GetAtoms():
+                    symbol = atom.GetSymbol()
+                    idx = atom.GetIdx()
+
+                    # Update the counter for this atom type
+                    if symbol not in atom_counters:
+                        atom_counters[symbol] = 1
+                    else:
+                        atom_counters[symbol] += 1
+
+                    # Assign the custom label
+                    atom_labels[idx] = f"{symbol}{atom_counters[symbol]}"
+
+                # Build a mapping from labels to atom indices
+                label_to_atom_idx = {label: idx for idx, label in atom_labels.items()}
+
+                # Now, get the donor and acceptor atom indices for highlighting
+                donor_atom_indices = []
+                acceptor_atom_indices = []
+
+                for _, row in hbond_df.iterrows():
+                    donor_label = row["donor"]
+                    acceptor_label = row["acceptor"]
+                    donor_idx = label_to_atom_idx.get(donor_label)
+                    acceptor_idx = label_to_atom_idx.get(acceptor_label)
+                    if donor_idx is not None:
+                        donor_atom_indices.append(donor_idx)
+                    if acceptor_idx is not None:
+                        acceptor_atom_indices.append(acceptor_idx)
+
+                # Remove duplicates
+                donor_atom_indices = list(set(donor_atom_indices))
+                acceptor_atom_indices = list(set(acceptor_atom_indices))
+
+                # Identify atoms that are both donors and acceptors
+                both_donor_acceptor_indices = set(donor_atom_indices) & set(
+                    acceptor_atom_indices
+                )
+
+                # Update donor and acceptor lists to exclude atoms that are both
+                donor_only_indices = set(donor_atom_indices) - both_donor_acceptor_indices
+                acceptor_only_indices = (
+                    set(acceptor_atom_indices) - both_donor_acceptor_indices
+                )
+
+                print("Donor only atom indices:", donor_only_indices)
+                print("Acceptor only atom indices:", acceptor_only_indices)
+                print("Both donor and acceptor atom indices:", both_donor_acceptor_indices)
+
+                # Collect hbond_pairs from top_hbonds_df for drawing dashed lines
+                hbond_pairs = []
+
+                for _, row in top_hbonds_df.iterrows():
+                    donor_label = row["donor"]
+                    acceptor_label = row["acceptor"]
+                    donor_idx = label_to_atom_idx.get(donor_label)
+                    acceptor_idx = label_to_atom_idx.get(acceptor_label)
+                    if donor_idx is not None and acceptor_idx is not None:
+                        hbond_pairs.append((donor_idx, acceptor_idx))
+                    else:
+                        print(
+                            f"Warning: Atom label {donor_label} or {acceptor_label} not found in molecule."
+                        )
+
+                print("Hydrogen bond pairs for dashed lines:", hbond_pairs)
+
+                # Combine all atom indices for highlighting
+                highlight_atoms = donor_only_indices.union(acceptor_only_indices).union(
+                    both_donor_acceptor_indices
+                )
+
+                # Define colors
+                # Donor only atoms: light blue
+                # Acceptor only atoms: light green
+                # Both donor and acceptor atoms: teal
+
+                highlightAtomColors = {}
+
+                # Donor only atoms (light blue)
+                for idx in donor_only_indices:
+                    highlightAtomColors[idx] = (0.6, 0.8, 1)  # Light blue
+
+                # Acceptor only atoms (light green)
+                for idx in acceptor_only_indices:
+                    highlightAtomColors[idx] = (0.6, 1, 0.6)  # Light green
+
+                # Both donor and acceptor atoms (teal)
+                for idx in both_donor_acceptor_indices:
+                    highlightAtomColors[idx] = (0.6, 0.9, 0.8)  # Teal color
+
+                # Set SVG size
+                svg_size = 500
+
+                # Draw the molecule with highlighted atoms
+                drawer = rdMolDraw2D.MolDraw2DSVG(svg_size, svg_size)
+                opts = drawer.drawOptions()
+                opts.addAtomIndices = False
+                opts.addBondIndices = False
+                # Set font size
+                opts.baseFontSize = 0.3
+
+                # Assign custom atom labels individually
+                for idx, label in atom_labels.items():
+                    opts.atomLabels[idx] = label
+
+                # Prepare the molecule for drawing
+                rdMolDraw2D.PrepareMolForDrawing(molecule)
+
+                # Draw the molecule
+                drawer.DrawMolecule(
+                    molecule,
+                    highlightAtoms=highlight_atoms,
+                    highlightAtomColors=highlightAtomColors,
+                )
+                drawer.FinishDrawing()
+                svg = drawer.GetDrawingText()
+
+                # Extract drawing coordinates for each atom
+                draw_coords = {}
+                for atom_idx in range(molecule.GetNumAtoms()):
+                    # Get the drawing coordinates (in pixels)
+                    point = drawer.GetDrawCoords(atom_idx)
+                    draw_coords[atom_idx] = (point.x, point.y)
+
+                # Add dashed lines for H-bonds
+                modified_svg = add_dashed_hbonds(svg, hbond_pairs, draw_coords)
+
+                # Save the modified SVG
+                with open("molecule_dashed_hbonds.svg", "w") as f:
+                    f.write(modified_svg)
+
+                print(
+                    "Modified SVG with dashed H-bonds saved as 'molecule_dashed_hbonds.svg'"
+                )
+
+                # Create legend SVG content
+                # Convert RGB tuples to hex codes
+                def rgb_to_hex(rgb_tuple):
+                    return "#" + "".join(f"{int(255 * x):02X}" for x in rgb_tuple)
+
+                # Prepare the legend entries based on the data
+                legend_entries = []
+
+                # Include 'Donor' entry if there are donor-only atoms
+                if donor_only_indices:
+                    legend_entries.append(
+                        {"label": "Donor (D)", "color": rgb_to_hex((0.6, 0.8, 1))}
+                    )  # Light blue
+
+                # Include 'Acceptor' entry if there are acceptor-only atoms
+                if acceptor_only_indices:
+                    legend_entries.append(
+                        {"label": "Acceptor (A)", "color": rgb_to_hex((0.6, 1, 0.6))}
+                    )  # Light green
+
+                # Include 'D/A' entry if there are atoms that are both donors and acceptors
+                if both_donor_acceptor_indices:
+                    legend_entries.append(
+                        {"label": "D/A", "color": rgb_to_hex((0.6, 0.9, 0.8))}
+                    )  # Teal
+
+                # Include 'H-Bond' entry if there are any hydrogen bonds (dashed lines)
+                if hbond_pairs:
+                    legend_entries.append(
+                        {"label": "H-Bond", "color": "lightgray", "dasharray": "5,5"}
+                    )
+
+                legend_x = 20  # X position of the legend
+                legend_y = 20  # Y position of the legend
+                legend_svg_content = create_legend(
+                    legend_x, legend_y, legend_entries, font_size=14
+                )
+
+                # Add legend to SVG content
+                modified_svg_with_legend = add_legend_to_svg(
+                    modified_svg, legend_svg_content
+                )
+
+                # Save the modified SVG with legend
+                with open("molecule_dashed_hbonds_with_legend.svg", "w") as f:
+                    f.write(modified_svg_with_legend)
+
+                print(
+                    "Modified SVG with dashed H-bonds and legend saved as 'molecule_dashed_hbonds_with_legend.svg'"
+                )
+
+                # ---- Plot intra ----
+                visualize_data_donor_accpetor_pair(
+                    xpm_file="intra_hb_matrix.xpm", hbond_df=hbond_df
+                )
+                # Load the hb_num.xvg file
+                xvg_filename = "intra_hb_num.xvg"  # Replace with your actual .xvg file name
+                data = load_hb_num_xvg(xvg_filename)
+
+                # Check if data was loaded correctly
+                if data.size == 0:
+                    raise ValueError(f"No data found in {xvg_filename}.")
+
+                # Extract columns
+                time = data[:, 0]  # Time in ps
+                num_hbonds = data[:, 1]  # Number of Hydrogen Bonds (s0)
+                pairs_within_0_35_nm = (
+                    data[:, 2] if data.shape[1] > 2 else None
+                )  # Pairs within 0.35 nm (s1)
+
+                # Plotting
+                plt.figure(figsize=(8, 6))
                 plt.plot(
-                    time,
-                    pairs_within_0_35_nm,
-                    label="Pairs within 0.35 nm",
-                    color="darkred",
-                    linewidth=2,
+                    time, num_hbonds, label="Hydrogen Bonds", color="darkblue", linewidth=2
                 )
+                if pairs_within_0_35_nm is not None:
+                    plt.plot(
+                        time,
+                        pairs_within_0_35_nm,
+                        label="Pairs within 0.35 nm",
+                        color="darkred",
+                        linewidth=2,
+                    )
 
-            plt.title("Hydrogen Bonds Over Time")
-            plt.xlabel("Time (ps)")
-            plt.ylabel("Number")
-            plt.legend()
-            plt.grid(False)
+                plt.title("Hydrogen Bonds Over Time")
+                plt.xlabel("Time (ps)")
+                plt.ylabel("Number")
+                plt.legend()
+                plt.grid(False)
 
-            # Save the plot as SVG
-            output_svg = "intra_hb_num_over_time.pdf"
-            plt.savefig(output_svg, format="pdf")
-            plt.close()
+                # Save the plot as SVG
+                output_svg = "intra_hb_num_over_time.pdf"
+                plt.savefig(output_svg, format="pdf")
+                plt.close()
 
-            print(f"Plot saved as {output_svg}")
+                print(f"Plot saved as {output_svg}")
 
-            # Plot and save hb donor acceptor distance distribution:
-            plot_hb_dist_xvg("intra_hb_dist.xvg", plot_file_name="intra_hb_distriution")
+                # Plot and save hb donor acceptor distance distribution:
+                plot_hb_dist_xvg("intra_hb_dist.xvg", plot_file_name="intra_hb_distriution")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description=(
+            "Analyze hydrogen bonds for IP6 project. Provide the project root via --project."
+        )
+    )
+    parser.add_argument(
+        "--project",
+        "-p",
+        required=True,
+        help="Path to the project root directory (contains 'process').",
+    )
+    args = parser.parse_args()
+    main(os.path.abspath(args.project))

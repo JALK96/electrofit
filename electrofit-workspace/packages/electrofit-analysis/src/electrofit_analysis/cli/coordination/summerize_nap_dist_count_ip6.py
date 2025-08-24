@@ -2,22 +2,29 @@
 """
 summarize_nap_dist_count.py
 
-Walks through IP_* subdirectories under a given root, reading Na+–phosphate
-distance and ion count files from analyze_final_sim/NaP_dist_count/, computing
-mean values per phosphate, and producing summary plots for three groups of
-patterns (5 ones, 4 ones, 3 ones). Generates six vector PDFs:
+Walks through IP_* subdirectories under a derived root directory, reading
+Na+–phosphate distance and ion count files from analyze_final_sim/NaP_dist_count/,
+computing mean values per phosphate, and producing summary plots for three
+groups of patterns (5 ones, 4 ones, 3 ones). Generates six vector PDFs:
   - distance_5ones.pdf, distance_4ones.pdf, distance_3ones.pdf
   - count_5ones.pdf,   count_4ones.pdf,   count_3ones.pdf
   - coordcount_5ones.pdf,  coordcount_4ones.pdf, coordcount_3ones.pdf
 
-Usage:
-    python summarize_nap_dist_count.py /path/to/root /path/to/output_dir
+CLI Usage:
+    python summerize_nap_dist_count.py --project /path/to/project --out /path/to/output_dir
+
+Notes:
+    The script expects the analysis inputs under ROOT = PROJECT/process, i.e.,
+    it derives the "root" folder by appending "process" to the provided project
+    directory. The output directory is provided explicitly and its structure is
+    kept unchanged.
 
 Requires:
     matplotlib, numpy
 """
 
 import os
+import argparse
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -674,9 +681,29 @@ def main(root_dir, output_dir):
 
 
 if __name__ == "__main__":
-    import sys
+    parser = argparse.ArgumentParser(
+        description=(
+            "Summarize Na–P distances, counts, and coordination across IP_* patterns."
+        )
+    )
+    parser.add_argument(
+        "-p",
+        "--project",
+        required=True,
+        help="Path to the project directory; root_dir is computed as PROJECT/process.",
+    )
+    parser.add_argument(
+        "-o",
+        "--out",
+        "--output",
+        dest="output_dir",
+        required=True,
+        help="Output directory for summary PDFs and stats tables.",
+    )
+    args = parser.parse_args()
 
-    if len(sys.argv) != 3:
-        print("Usage: python summarize_nap_dist_count.py <root_dir> <output_dir>")
-        sys.exit(1)
-    main(sys.argv[1], sys.argv[2])
+    project_dir = os.path.abspath(args.project)
+    root_dir = os.path.join(project_dir, "process")
+    output_dir = os.path.abspath(args.output_dir)
+
+    main(root_dir, output_dir)

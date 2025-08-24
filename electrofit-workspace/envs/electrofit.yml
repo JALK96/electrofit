@@ -2,7 +2,7 @@
 name: electrofit
 channels:
   - conda-forge
-  - bioconda   # needed for snakemake
+  - bioconda   
 dependencies:
   # ---- Core runtime ----
   - python=3.12
@@ -10,27 +10,26 @@ dependencies:
 
   # ---- MD/chem stack ----
   - ambertools>=23,<25
+  - gromacs
   - openbabel>=3.1
   - mdtraj
   - numpy
   - pandas
   - matplotlib
   - acpype
+
+  # Toolchain/ABI helpers (prevents libstdc++ issues)
   - libstdcxx-ng
   - libgcc-ng
-  - gromacs
-  - pytest
 
+  # ---- Dev & test ----
+  - pytest
 
   # ---- CLI & workflow ----
   - typer
-  - snakemake-minimal>=8    # Snakemake engine (lighter than full 'snakemake')
-  - mamba                   # speeds up any conda actions Snakemake may do
+  - snakemake-minimal>=8
+  - mamba
 
-  # (future, not yet used in electrofit)
-  # - rsync
-  # - openssh
-
-  # ---- Electrofit itself
+  # ---- Local package(s) in editable mode ----
   - pip:
       - -e /home/johannal96/PhD.nobackup/electrofit/electrofit-workspace/packages/electrofit

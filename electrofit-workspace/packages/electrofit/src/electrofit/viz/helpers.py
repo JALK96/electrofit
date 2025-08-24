@@ -234,7 +234,7 @@ def plot_charges_by_atom_sym(
     equivalent_groups=None,
 ):
     """
-    Plot the charge distributions of atoms along with their average and initial charges,
+    Plot the charge distributions of atoms along with their average and initial charges for IP6 microstates,
     coloring the violin plots based on atom groups. If a second charges dictionary is provided,
     compare the two datasets in the same plot.
 
@@ -585,7 +585,7 @@ def plot_charges_by_atom_sym(
 
     # Save and close the plot
     plt.tight_layout()
-    figure_name = "charges.pdf" if atoms_dict2 is None else "charges_comparison.pdf"
+    figure_name = "charges_ip6.pdf" if atoms_dict2 is None else "charges_comparison_ip6.pdf"
     figure_path = os.path.join(base_dir, figure_name)
     plt.savefig(figure_path)
     plt.close(fig)  # Close the figure to free up memory

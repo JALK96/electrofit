@@ -71,87 +71,92 @@ def check_gaussian_convergence(gaussian_log_path):
 
 def run_command(command, cwd=None):
     """
-    Runs a shell command and handles errors, logging any new files or directories created.
+    Runs a shell command (list or string) with logging, error handling,
+    and reporting of new files/folders.
 
-    Parameters:
-    - command (str): The shell command to execute.
-    - cwd (str, optional): The working directory in which to execute the command.
+    Parameters
+    ----------
+    command : list[str] or str
+        Command to execute. Prefer a list of args (safer).
+    cwd : str or Path, optional
+        Working directory in which to execute the command.
 
-    Returns:
-    - output (str): Combined standard output from the command.
+    Returns
+    -------
+    str
+        Combined stdout and stderr output (as string).
 
-    Raises:
-    - subprocess.CalledProcessError: If the command exits with a non-zero status.
+    Raises
+    ------
+    subprocess.CalledProcessError
+        If the command exits with a non-zero status.
     """
+    # Normalize command format for logging and execution
+    if isinstance(command, list):
+        log_cmd = " ".join(command)     # nice human-readable log
+        shell = False                   # safe execution
+    elif isinstance(command, str):
+        log_cmd = command
+        shell = True                    # must use shell for string
+    else:
+        raise TypeError("command must be str or list, not %r" % type(command))
+
     try:
-        logging.info(f"Executing command: {command}")
+        logging.info(f"Executing command: {log_cmd}")
 
-        # Before running the command, list files and directories in cwd
-        if cwd:
-            before_items = set(os.listdir(cwd))
-        else:
-            before_items = set(os.listdir())
+        # Snapshot of directory before running
+        before_items = set(os.listdir(cwd or "."))
 
-        # Initialize Popen with stdout and stderr as pipes for real-time logging
+        # Launch process
         process = subprocess.Popen(
             command,
-            shell=True,
+            shell=shell,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
             cwd=cwd,
         )
 
-        # Collecting output and logging in real-time
-        output_lines = []
-        stderr_accum = []
-        for stdout_line in iter(process.stdout.readline, ""):
-            if stdout_line:
-                logging.info(stdout_line.strip())
-                output_lines.append(stdout_line)
-        for stderr_line in iter(process.stderr.readline, ""):
-            if stderr_line:
-                logging.debug(stderr_line.strip())
-                output_lines.append(stderr_line)
-                stderr_accum.append(stderr_line)
+        output_lines, stderr_accum = [], []
+        # Stream stdout
+        for line in iter(process.stdout.readline, ""):
+            if line:
+                logging.info(line.strip())
+                output_lines.append(line)
+        # Stream stderr
+        for line in iter(process.stderr.readline, ""):
+            if line:
+                logging.debug(line.strip())
+                output_lines.append(line)
+                stderr_accum.append(line)
 
-        # Ensure process has finished and capture the return code
         process.stdout.close()
         process.stderr.close()
         return_code = process.wait()
 
-        # Handle exit status
         if return_code != 0:
-            stderr_text = ''.join(stderr_accum).strip() or None
+            stderr_text = "".join(stderr_accum).strip() or None
             logging.error(
-                "Command exited with code %s: %s%s",
-                return_code,
-                command,
-                f" | stderr: {stderr_text[:400]}" if stderr_text else "",
+                f"Command exited with code {return_code}: {log_cmd}"
+                + (f" | stderr: {stderr_text[:400]}" if stderr_text else "")
             )
-            raise subprocess.CalledProcessError(return_code, command)
+            raise subprocess.CalledProcessError(return_code, log_cmd)
 
-        # After running the command, list files and directories in cwd
-        if cwd:
-            after_items = set(os.listdir(cwd))
-        else:
-            after_items = set(os.listdir())
-
-        # Determine new files/folders created
+        # Snapshot after running
+        after_items = set(os.listdir(cwd or "."))
         new_items = after_items - before_items
         if new_items:
-            logging.info(
-                f"New files/folders created by '{command}': {', '.join(new_items)}"
-            )
+            logging.info(f"New files/folders created: {', '.join(new_items)}")
         else:
-            logging.info(f"No new files/folders created by '{command}'.")
+            logging.info("No new files/folders created.")
 
         return "".join(output_lines)
 
-    except subprocess.CalledProcessError as e:
-        logging.error(f"Error executing command '{command}': {e.stderr}")
+    except subprocess.CalledProcessError:
         raise
-
+    except Exception as e:
+        logging.error(f"Unexpected error running {log_cmd}: {e}")
+        raise
 
 def run_and_log(func, *args, log_level=logging.INFO, **kwargs):
     """

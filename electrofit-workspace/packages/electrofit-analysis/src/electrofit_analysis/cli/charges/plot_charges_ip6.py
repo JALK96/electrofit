@@ -8,6 +8,7 @@ import pandas as pd
 
 # Import necessary modules from the project
 from electrofit.config.loader import load_config
+from electrofit.config.legacy import ConfigParser
 from electrofit.io.files import (
     adjust_atom_names,
     extract_charges_from_subdirectories,
@@ -20,10 +21,6 @@ from electrofit.viz.helpers import (
     plot_charges_by_atom_sym,
     plot_charges_by_symmetry,
 )
-
-PROJECT_PATH = os.environ.get("ELECTROFIT_PROJECT_PATH", os.getcwd())
-project_path = PROJECT_PATH
-print(f"Using project path: {project_path}")
 
 def calculate_symmetric_group_averages(charges_dict, equivalent_groups):
     """
@@ -168,7 +165,6 @@ def create_atom_color_mapping(atom_names, symmetry_groups):
         atom_to_color[atom] = color
 
     return atom_to_color
-
 
 def plot_histograms(
     df_original,
@@ -389,307 +385,292 @@ def plot_histograms(
     plt.savefig(filename)
     plt.close()
 
+def main(project_root: str, remove_outlier: bool = False) -> None:
+    """Run IP6 charge plots for all molecules under <project_root>/process.
 
+    Parameters
+    ----------
+    project_root : str
+        Electrofit project root directory.
+    remove_outlier : bool, optional
+        Apply 1.5*IQR outlier removal before computing averages and plots.
+    """
+    process_dir = os.path.join(project_root, "process")
+    if not os.path.isdir(process_dir):
+        print(f"process directory not found: {process_dir}")
+        return
 
-project_path = "/home/johannal96/PhD.nobackup/electrofit/electrofit-workspace/tests/integration"
-process_dir = "/home/johannal96/PhD.nobackup/electrofit/electrofit-workspace/tests/integration/process"
+    for sub_dir in sorted(os.listdir(process_dir)):
+        sub_dir_path = os.path.join(process_dir, sub_dir)
+        if not os.path.isdir(sub_dir_path):
+            print(f"Skipping '{sub_dir_path}' as it is not a directory.")
+            continue
 
+        base_dir = os.path.join(sub_dir_path, "extracted_conforms")
+        pis_dir = os.path.join(sub_dir_path, "run_gau_create_gmx_in")
 
-# ------ Interact --------------
-# Remove outlier functionality
-remove_outlier = False  # Set to True to perform outlier removal based on 1.5 IQR rule
-# ------ Interact --------------
-
-# Iterate over each subdirectory in the process directory
-for sub_dir in os.listdir(process_dir):
-    sub_dir_path = os.path.join(process_dir, sub_dir)
-
-    # Check if sub_dir is a directory
-    if not os.path.isdir(sub_dir_path):
-        print(f"Skipping '{sub_dir_path}' as it is not a directory.")
-        continue  # Skip to the next item in the loop
-
-    # Base directory containing the subdirectories with mol2 files
-    base_dir = os.path.join(process_dir, sub_dir, "extracted_conforms")
-
-    # Initial processing directory
-    pis_dir = os.path.join(process_dir, sub_dir, "run_gau_create_gmx_in")
-
-    # Acpype directory
-    abstract_ac_dir = os.path.join(pis_dir, "*.acpype")
-
-    # Use glob to find all matching files or directories
-    ac_files = glob.glob(abstract_ac_dir)
-
-    # Check if any .acpype directories/files are found
-    if not ac_files:
-        print(
-            f"No '.acpype' directories/files found in '{pis_dir}'. Skipping '{sub_dir_path}'."
-        )
-        continue  # Skip to the next subdirectory
-
-    print(f"Acpype files found in {pis_dir}: {ac_files}")
-
-    ac_dir = ac_files[0]
-
-    results_dir = os.path.join(process_dir, sub_dir, "results")
-    os.makedirs(results_dir, exist_ok=True)
-
-    # Create an additional subdirectory for plots
-    plots_dir = os.path.join(results_dir, "plots")
-    os.makedirs(plots_dir, exist_ok=True)
-
-    # Load configuration from TOML using the new loader.
-    # Context directory is the molecule process folder (process/<mol>),
-    # project_root is the repo root (PROJECT_PATH).
-    cfg = load_config(project_root=project_path, context_dir=sub_dir_path)
-
-    # Define molecule parameters from TOML (project section)
-    molecule_name = cfg.project.molecule_name or sub_dir
-    print(f"Processing: {molecule_name}")
-    charge = cfg.project.charge
-    print(f"Charge set to: {charge}")
-    atom_type = cfg.project.atom_type
-    print(f"Atom Type set to: {atom_type}")
-    adjust_sym = bool(cfg.project.adjust_symmetry)
-    print("Adjust Symmetry set to:", adjust_sym)
-    ignore_sym = bool(cfg.project.ignore_symmetry)
-    print("Ignore Symmetry set to:", ignore_sym)
-    calc_group_average = bool(cfg.project.calculate_group_average)
-    print("Calculate Group Average set to:", calc_group_average)
-
-    # Determine the mol2 file to use
-    mol2_source_file_path = None
-    ac_entries = os.listdir(ac_dir)
-    if atom_type:
-        mol2_file_pattern = f"*{atom_type}.mol2"
-        for file_name in ac_entries:
-            if fnmatch.fnmatch(file_name, mol2_file_pattern):
-                mol2_source_file_path = os.path.join(ac_dir, file_name)
-                break
-    # Fallback heuristics if atom_type not provided or not found
-    if mol2_source_file_path is None:
-        # Prefer AM1-BCC GAFF2 if present
-        for cand in ac_entries:
-            if cand.endswith("_bcc_gaff2.mol2"):
-                mol2_source_file_path = os.path.join(ac_dir, cand)
-                break
-    if mol2_source_file_path is None:
-        # Next prefer a file named exactly like the pattern base (e.g., IP_xxxxxx.mol2)
-        expected = f"{sub_dir}.mol2"
-        if expected in ac_entries:
-            mol2_source_file_path = os.path.join(ac_dir, expected)
-    if mol2_source_file_path is None:
-        # Finally take the first .mol2 file found
-        mol2s = [f for f in ac_entries if f.endswith(".mol2")]
-        if mol2s:
-            mol2_source_file_path = os.path.join(ac_dir, mol2s[0])
-
-    if mol2_source_file_path is None:
-        print(
-            f"No suitable .mol2 file found in '{ac_dir}'. Skipping."
-        )
-        continue
-
-    # Extract the initial charges
-    initial_charges_dict = adjust_atom_names(
-        parse_charges_from_mol2(mol2_source_file_path)
-    )
-
-    # Extract charges from all subdirectories
-    atoms_dict = extract_charges_from_subdirectories(base_dir, results_dir)
-
-    # Plotting charges
-    if adjust_sym:
-        os.chdir(pis_dir)
-        equiv_group_path = os.path.join(pis_dir, find_file_with_extension("json"))
-        equiv_group = load_symmetry_groups(equiv_group_path)
-
-        # Plot the charges and average charges
-        plot_charges_by_symmetry(
-            atoms_dict, initial_charges_dict, plots_dir, equiv_group
-        )
-        plot_charges_by_atom_sym(atoms_dict, initial_charges_dict, plots_dir)
-    else:
-        # Plot the charges by atom
-        plot_charges_by_atom(atoms_dict, initial_charges_dict, plots_dir)
-
-    # Convert atoms_dict to DataFrame for plotting histograms
-    charges_data = {}
-    for key, value in atoms_dict.items():
-        charges_data[key] = value["charges"]
-    df = pd.DataFrame(charges_data)
-
-    # Create atom-to-color mapping if adjust_sym is True
-    if adjust_sym:
-        # Load symmetry groups
-        symmetric_groups = equiv_group  # Dictionary of symmetry groups
-        # Create a set of symmetric atoms
-        symmetric_atoms = set()
-        for group in symmetric_groups.values():
-            symmetric_atoms.update(group)
-        symmetric_atoms.update(symmetric_groups.keys())
-        # Create atom-to-color mapping
-        atom_to_color = create_atom_color_mapping(df.columns.tolist(), symmetric_groups)
-    else:
-        symmetric_atoms = set()
-        atom_to_color = {atom: "darkblue" for atom in df.columns}
-
-    # Plot histograms before removing outliers and save to plots_dir
-    plot_histograms(
-        df_original=df,
-        df_adjusted=df,
-        title="Charge Distribution",
-        filename=os.path.join(plots_dir, "hist.pdf"),
-        atom_to_color=atom_to_color,
-        symmetric_atoms=symmetric_atoms,
-    )
-
-    # ---------------------- Remove outlier --------------------
-
-    if remove_outlier:
-        print("Remove Outliers ...")
-
-        # Function to get outlier mask based on IQR
-        def get_outlier_mask(series):
-            Q1 = series.quantile(0.25)
-            Q3 = series.quantile(0.75)
-            IQR = Q3 - Q1
-            is_outlier = (series < (Q1 - 1.5 * IQR)) | (series > (Q3 + 1.5 * IQR))
-            return is_outlier
-
-        # Initialize a boolean mask for all rows (conformers), default False
-        outlier_mask = pd.Series(False, index=df.index)
-
-        # Identify outliers for each atom and update the mask
-        for column in df.columns:
-            series = df[column]
-            is_outlier = get_outlier_mask(series)
-            outlier_mask = outlier_mask | is_outlier  # Combine masks using logical OR
-
-        # Remove rows (conformers) where any charge is an outlier
-        df_no_outliers = df[~outlier_mask].reset_index(drop=True)
-
-        # Calculate new average charges after outlier removal
-        adjusted_average_charges = df_no_outliers.mean().to_dict()
-
-        # ------------------ New Section for Group Average Charges ------------------
-
-        if calc_group_average and adjust_sym:
-            # Calculate group average charges
-            cleaned_atoms_dict = {}
-            for atom in df_no_outliers.columns:
-                cleaned_atoms_dict[atom] = {
-                    "charges": df_no_outliers[atom].tolist(),
-                    "average_charge": adjusted_average_charges[atom],
-                }
-
-            updated_charges_dict = calculate_symmetric_group_averages(
-                cleaned_atoms_dict, symmetric_groups
+        ac_files = glob.glob(os.path.join(pis_dir, "*.acpype"))
+        if not ac_files:
+            print(
+                f"No '.acpype' directories/files found in '{pis_dir}'. Skipping '{sub_dir_path}'."
             )
+            continue
+        print(f"Acpype files found in {pis_dir}: {ac_files}")
+        ac_dir = ac_files[0]
 
-            # Prepare the adjusted average charges for plotting
-            adjusted_average_charges = {
-                atom: data["average_charge"]
-                for atom, data in updated_charges_dict.items()
-            }
+        results_dir = os.path.join(sub_dir_path, "results")
+        os.makedirs(results_dir, exist_ok=True)
+        plots_dir = os.path.join(results_dir, "plots")
+        os.makedirs(plots_dir, exist_ok=True)
 
-            # Plot histograms with group average charges and overlay original distributions
-            plot_histograms(
-                df_original=df,
-                df_adjusted=df_no_outliers,
-                title="Charge Distribution with Group Average Charges",
-                filename=os.path.join(
-                    plots_dir, "hist_group_average_clipped_charges.pdf"
-                ),
-                adjusted_average_charges=adjusted_average_charges,
-                symmetric_atoms=symmetric_atoms,
-                atom_to_color=atom_to_color,
-                symmetric_groups=symmetric_groups,  # Pass the symmetric groups
-                combine_original_data=True,
-                remove_outlier=True,
-            )
-
-            # Plot charges by symmetry using the updated charges
-            plot_charges_by_symmetry(
-                updated_charges_dict, initial_charges_dict, plots_dir, equiv_group
-            )
-
-        elif adjust_sym:
-            # Plot histograms with adjusted average charges (without group averaging) and overlay original distributions
-            plot_histograms(
-                df_original=df,
-                df_adjusted=df_no_outliers,
-                title="Clipped Charge Distribution with Symmetry and Clipped Average Charges",
-                filename=os.path.join(plots_dir, "hist_average_clipped_charges.pdf"),
-                adjusted_average_charges=adjusted_average_charges,
-                atom_to_color=atom_to_color,
-                symmetric_atoms=symmetric_atoms,
-                remove_outlier=True,
-            )
-
+        # Prefer TOML in process/<mol>/results; fallback to legacy .ef in base_dir
+        toml_path = os.path.join(results_dir, "electrofit.toml")
+        if os.path.isfile(toml_path):
+            cfg = load_config(project_root=project_root, context_dir=sub_dir_path)
+            molecule_name = cfg.project.molecule_name or sub_dir
+            print(f"Processing: {molecule_name}")
+            charge = cfg.project.charge
+            print(f"Charge set to: {charge}")
+            atom_type = cfg.project.atom_type
+            print(f"AtomType set to: {atom_type}")
+            adjust_sym = bool(cfg.project.adjust_symmetry)
+            print("AdjustSymmetry set to:", adjust_sym)
+            ignore_sym = bool(cfg.project.ignore_symmetry)
+            print("IgnoreSymmetry set to:", ignore_sym)
+            calc_group_average = bool(cfg.project.calculate_group_average)
+            print("CalculateGroupAverage set to:", calc_group_average)
         else:
-            # Plot histograms with adjusted average charges (without group averaging) and overlay original distributions
-            plot_histograms(
-                df_original=df,
-                df_adjusted=df_no_outliers,
-                title="Clipped Charge Distribution with no Symmetry and Clipped Average Charges",
-                filename=os.path.join(plots_dir, "hist_average_clipped_charges.pdf"),
-                adjusted_average_charges=adjusted_average_charges,
-                atom_to_color=atom_to_color,
-                remove_outlier=True,
-            )
+            # Legacy .ef fallback
+            cwd0 = os.getcwd()
+            try:
+                os.chdir(base_dir)
+                ef_name = find_file_with_extension("ef")
+            finally:
+                os.chdir(cwd0)
+            if not ef_name:
+                print(f"No TOML at {toml_path} and no .ef in {base_dir}. Skipping.")
+                continue
+            config_file_path = os.path.join(base_dir, ef_name)
+            config = ConfigParser(config_file_path)
+            molecule_name = config.MoleculeName
+            print(f"Processing: {molecule_name}")
+            charge = config.Charge
+            print(f"Charge set to: {charge}")
+            atom_type = config.AtomType
+            print(f"AtomType set to: {atom_type}")
+            adjust_sym = config.AdjustSymmetry
+            print("AdjustSymmetry set to:", adjust_sym)
+            ignore_sym = config.IgnoreSymmetry
+            print("IgnoreSymmetry set to:", ignore_sym)
+            calc_group_average = config.CalculateGroupAverage
+            print("CalculateGroupAverage set to:", calc_group_average)
 
-            # Plot the charges by atom using the cleaned data
-            cleaned_atoms_dict = {}
-            for atom in df_no_outliers.columns:
-                cleaned_atoms_dict[atom] = {
-                    "charges": df_no_outliers[atom].tolist(),
-                    "average_charge": adjusted_average_charges[atom],
-                }
-            plot_charges_by_atom(cleaned_atoms_dict, initial_charges_dict, plots_dir)
-    # ---------------------- Remove outlier --------------------
+        # Determine the mol2 file to use
+        mol2_source_file_path = None
+        ac_entries = os.listdir(ac_dir)
+        if atom_type:
+            mol2_file_pattern = f"*{atom_type}.mol2"
+            for file_name in ac_entries:
+                if fnmatch.fnmatch(file_name, mol2_file_pattern):
+                    mol2_source_file_path = os.path.join(ac_dir, file_name)
+                    break
+        if mol2_source_file_path is None:
+            for cand in ac_entries:
+                if cand.endswith("_bcc_gaff2.mol2"):
+                    mol2_source_file_path = os.path.join(ac_dir, cand)
+                    break
+        if mol2_source_file_path is None:
+            expected = f"{sub_dir}.mol2"
+            if expected in ac_entries:
+                mol2_source_file_path = os.path.join(ac_dir, expected)
+        if mol2_source_file_path is None:
+            mol2s = [f for f in ac_entries if f.endswith(".mol2")]
+            if mol2s:
+                mol2_source_file_path = os.path.join(ac_dir, mol2s[0])
+        if mol2_source_file_path is None:
+            print(f"No suitable .mol2 file found in '{ac_dir}'. Skipping.")
+            continue
 
-    else:
-        if calc_group_average and adjust_sym:
-            # Compute average of symmetric atoms
-            updated_charges_dict, combind_charges_dict = (
-                combine_and_calculate_symmetric_group_averages(
-                    atoms_dict, symmetric_groups
+        initial_charges_dict = adjust_atom_names(
+            parse_charges_from_mol2(mol2_source_file_path)
+        )
+
+        # Extract charges across conformers
+        atoms_dict = extract_charges_from_subdirectories(base_dir, results_dir)
+
+        # Plotting charges
+        equiv_group = None
+        if adjust_sym:
+            try:
+                os.chdir(pis_dir)
+                eq_file = find_file_with_extension("json")
+            finally:
+                os.chdir(cwd0)
+            if eq_file:
+                equiv_group = load_symmetry_groups(os.path.join(pis_dir, eq_file))
+                plot_charges_by_symmetry(
+                    atoms_dict, initial_charges_dict, plots_dir, equiv_group
                 )
-            )
+                plot_charges_by_atom_sym(atoms_dict, initial_charges_dict, plots_dir)
+            else:
+                print(f"No symmetry JSON in {pis_dir}; plotting without symmetry.")
+                plot_charges_by_atom(atoms_dict, initial_charges_dict, plots_dir)
+                adjust_sym = False  # fall back
+        else:
+            plot_charges_by_atom(atoms_dict, initial_charges_dict, plots_dir)
 
-            # Prepare the adjusted average charges for plotting
-            group_average_charges = {
-                atom: data["average_charge"]
-                for atom, data in updated_charges_dict.items()
-            }
+        # Build DataFrame for histograms
+        charges_data = {k: v["charges"] for k, v in atoms_dict.items()}
+        df = pd.DataFrame(charges_data)
 
-            # Plot histograms with group average charges and overlay original distributions
-            plot_histograms(
-                df_original=df,
-                df_adjusted=df,
-                title="Charge Distribution with Group Average Charges",
-                filename=os.path.join(plots_dir, "hist_group_average_charges.pdf"),
-                adjusted_average_charges=group_average_charges,
-                symmetric_atoms=symmetric_atoms,
-                atom_to_color=atom_to_color,
-                symmetric_groups=symmetric_groups,  # Pass the symmetric groups
-                combine_original_data=False,
-            )
+        # Color mapping
+        if adjust_sym and equiv_group is not None:
+            symmetric_groups = equiv_group
+            symmetric_atoms = set()
+            for group in symmetric_groups.values():
+                symmetric_atoms.update(group)
+            symmetric_atoms.update(symmetric_groups.keys())
+            atom_to_color = create_atom_color_mapping(df.columns.tolist(), symmetric_groups)
+        else:
+            symmetric_groups = {}
+            symmetric_atoms = set()
+            atom_to_color = {atom: "darkblue" for atom in df.columns}
 
-            # Plot charges by symmetry using the updated charges
-            # Saves the average charges in updated_charges_dict to average_charges.chg
-            plot_charges_by_symmetry(
-                updated_charges_dict, initial_charges_dict, plots_dir, equiv_group
-            )
+        # Base histograms
+        plot_histograms(
+            df_original=df,
+            df_adjusted=df,
+            title="Charge Distribution",
+            filename=os.path.join(plots_dir, "hist.pdf"),
+            atom_to_color=atom_to_color,
+            symmetric_atoms=symmetric_atoms,
+        )
 
-            # Note: This plot only works for IP6 Configs
-            plot_charges_by_atom_sym(
-                atoms_dict,
-                initial_charges_dict,
-                plots_dir,
-                combind_charges_dict,
-                equivalent_groups=symmetric_groups,
-            )
-        # ---------------------------------------------------------------------------
+        # Outlier handling and additional plots
+        if remove_outlier:
+            print("Remove Outliers ...")
+
+            def get_outlier_mask(series: pd.Series) -> pd.Series:
+                Q1 = series.quantile(0.25)
+                Q3 = series.quantile(0.75)
+                IQR = Q3 - Q1
+                return (series < (Q1 - 1.5 * IQR)) | (series > (Q3 + 1.5 * IQR))
+
+            outlier_mask = pd.Series(False, index=df.index)
+            for column in df.columns:
+                outlier_mask |= get_outlier_mask(df[column])
+
+            df_no_outliers = df[~outlier_mask].reset_index(drop=True)
+            adjusted_average_charges = df_no_outliers.mean().to_dict()
+
+            if calc_group_average and adjust_sym and equiv_group is not None:
+                cleaned_atoms_dict = {
+                    atom: {
+                        "charges": df_no_outliers[atom].tolist(),
+                        "average_charge": adjusted_average_charges[atom],
+                    }
+                    for atom in df_no_outliers.columns
+                }
+                updated_charges_dict = calculate_symmetric_group_averages(
+                    cleaned_atoms_dict, symmetric_groups
+                )
+                adjusted_average_charges = {
+                    atom: data["average_charge"] for atom, data in updated_charges_dict.items()
+                }
+                plot_histograms(
+                    df_original=df,
+                    df_adjusted=df_no_outliers,
+                    title="Charge Distribution with Group Average Charges",
+                    filename=os.path.join(plots_dir, "hist_group_average_clipped_charges.pdf"),
+                    adjusted_average_charges=adjusted_average_charges,
+                    symmetric_atoms=symmetric_atoms,
+                    atom_to_color=atom_to_color,
+                    symmetric_groups=symmetric_groups,
+                    combine_original_data=True,
+                    remove_outlier=True,
+                )
+                plot_charges_by_symmetry(
+                    updated_charges_dict, initial_charges_dict, plots_dir, equiv_group
+                )
+            elif adjust_sym and equiv_group is not None:
+                plot_histograms(
+                    df_original=df,
+                    df_adjusted=df_no_outliers,
+                    title="Clipped Charge Distribution with Symmetry and Clipped Average Charges",
+                    filename=os.path.join(plots_dir, "hist_average_clipped_charges.pdf"),
+                    adjusted_average_charges=adjusted_average_charges,
+                    atom_to_color=atom_to_color,
+                    symmetric_atoms=symmetric_atoms,
+                    remove_outlier=True,
+                )
+            else:
+                plot_histograms(
+                    df_original=df,
+                    df_adjusted=df_no_outliers,
+                    title="Clipped Charge Distribution with no Symmetry and Clipped Average Charges",
+                    filename=os.path.join(plots_dir, "hist_average_clipped_charges.pdf"),
+                    adjusted_average_charges=adjusted_average_charges,
+                    atom_to_color=atom_to_color,
+                    remove_outlier=True,
+                )
+                cleaned_atoms_dict = {
+                    atom: {
+                        "charges": df_no_outliers[atom].tolist(),
+                        "average_charge": adjusted_average_charges[atom],
+                    }
+                    for atom in df_no_outliers.columns
+                }
+                plot_charges_by_atom(cleaned_atoms_dict, initial_charges_dict, plots_dir)
+        else:
+            if calc_group_average and adjust_sym and equiv_group is not None:
+                updated_charges_dict, combind_charges_dict = (
+                    combine_and_calculate_symmetric_group_averages(
+                        atoms_dict, symmetric_groups
+                    )
+                )
+                group_average_charges = {
+                    atom: data["average_charge"] for atom, data in updated_charges_dict.items()
+                }
+                plot_histograms(
+                    df_original=df,
+                    df_adjusted=df,
+                    title="Charge Distribution with Group Average Charges",
+                    filename=os.path.join(plots_dir, "hist_group_average_charges.pdf"),
+                    adjusted_average_charges=group_average_charges,
+                    symmetric_atoms=symmetric_atoms,
+                    atom_to_color=atom_to_color,
+                    symmetric_groups=symmetric_groups,
+                    combine_original_data=False,
+                )
+                plot_charges_by_symmetry(
+                    updated_charges_dict, initial_charges_dict, plots_dir, equiv_group
+                )
+                plot_charges_by_atom_sym(
+                    atoms_dict,
+                    initial_charges_dict,
+                    plots_dir,
+                    combind_charges_dict,
+                    equivalent_groups=symmetric_groups,
+                )
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Plot charge distributions for IP6 project directories."
+    )
+    parser.add_argument(
+        "--project",
+        type=str,
+        required=True,
+        help="Path to the electrofit project root (contains 'process/').",
+    )
+    parser.add_argument(
+        "--remove-outlier",
+        action="store_true",
+        help="Apply 1.5*IQR outlier removal before plotting.",
+    )
+
+    args = parser.parse_args()
+    main(args.project, remove_outlier=args.remove_outlier)
